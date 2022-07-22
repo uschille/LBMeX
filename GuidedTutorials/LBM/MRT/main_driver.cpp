@@ -68,9 +68,6 @@ void main_driver(const char* argv) {
   pp.query("ncorr", ncorr);
   pp.query("comp", comp);
 
-  // default one ghost/halo layer
-  int nghost = 1;
-  
   // make Box and Geomtry
   IntVect dom_lo(0, 0, 0);
   IntVect dom_hi(nx-1, nx-1, nx-1);
@@ -89,18 +86,19 @@ void main_driver(const char* argv) {
 
   DistributionMapping dm(ba);
 
+  // default two halo layers to accommodate push-outs from first halo layer
+  int nghost = 2;
+
   // make MultiFabs
   MultiFab fold(ba, dm, ncomp, nghost);
   MultiFab fnew(ba, dm, ncomp, nghost);
-  MultiFab moments(ba, dm, ncomp, 0);
-  MultiFab hydro(ba, dm, nHydroVars, 0);
-  MultiFab hydroEq(ba, dm, nHydroVars, 0);
-
-  MultiFab *pfold = &fold;
-  MultiFab *pfnew = &fnew;
+  MultiFab moments(ba, dm, ncomp, nghost);
+  MultiFab noise(ba, dm, ncomp, nghost);
+  MultiFab hydro(ba, dm, nHydroVars, nghost);
+  MultiFab hydroEq(ba, dm, nHydroVars, nghost);
 
   // set up references to arrays
-  auto const & f = pfold->arrays();    // LB populations
+  auto const & f = fold.arrays();      // LB populations
   auto const & m = moments.arrays();   // LB moments
   auto const & h = hydro.arrays();     // hydrodynamic fields
   auto const & hEq = hydroEq.arrays(); // equilibrium fields
@@ -161,9 +159,9 @@ void main_driver(const char* argv) {
 
   // INITIALIZE: set up sinusoidal shear wave u_y(x)=A*sin(k*x)
   Real time = 0.0;
-  ParallelFor(*pfold, IntVect(0), [=] AMREX_GPU_DEVICE(int nbx, int x, int y, int z) {
+  ParallelFor(fold, IntVect(0), [=] AMREX_GPU_DEVICE(int nbx, int x, int y, int z) {
     const Real uy = A*std::sin(2.*M_PI*x/nx);
-    const RealVect u = {0., uy, 0. };
+    const RealVect u = { 0., uy, 0. };
     for (int i=0; i<ncomp; ++i) {
       m[nbx](x,y,z,i) = mequilibrium(density, u)(i);
       f[nbx](x,y,z,i) = fequilibrium(density, u)(i);
@@ -193,22 +191,9 @@ void main_driver(const char* argv) {
   Print() << "LB initialized\n";
 
   // TIMESTEP
-  for (int step=1; step <= nsteps; ++step) {
+  for (int step=1; step<=nsteps; ++step) {
 
-    pfold->FillBoundary(geom.periodicity());
-
-    for (MFIter mfi(*pfold); mfi.isValid(); ++mfi) {
-      const Box& valid_box = mfi.validbox();
-      const Array4<Real>& fOld = pfold->array(mfi);
-      const Array4<Real>& fNew = pfnew->array(mfi);
-      const Array4<Real>& mom = moments.array(mfi);
-      const Array4<Real>& hyd = hydro.array(mfi);
-      const Array4<Real>& hydEq = hydroEq.array(mfi);
-      ParallelForRNG(valid_box, [=] AMREX_GPU_DEVICE(int x, int y, int z, RandomEngine const& engine) {
-        stream_collide(x, y, z, fOld, fNew, mom, hyd, hydEq, engine);
-      });
-    }
-    std::swap(pfold,pfnew);
+    LBM_timestep(geom, fold, fnew, moments, noise, hydro, hydroEq);
 
     UpdateTimeData(mfData, hydro, comp, ncorr);
     if (step >= ncorr) TimeCorrelation(mfData, mfCorr, ncorr, step+1);

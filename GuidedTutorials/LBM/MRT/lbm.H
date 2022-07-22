@@ -42,13 +42,27 @@ Array1D<Real,0,ncomp> thermalize_moments(int x, int y, int z, const Array4<Real>
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-void collide(int x, int y, int z, const Array4<Real>& f, const Array4<Real>& msite, const Array4<Real>& hsite, const Array4<Real>& hEqsite, RandomEngine const& engine) {
+Array1D<Real,0,ncomp> thermalize_moments(int x, int y, int z, const Array4<Real>& m, const Array4<Real>& xi) {
+  Array1D<Real,0,ncomp> r = {};
+  for (int i=ncons; i<ncomp; ++i) {
+    r(i) = xi(x,y,z,i);
+    m(x,y,z,i) += r(i);
+  }
+  return r;
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+void collide(int x, int y, int z, const Array4<Real>& f, const Array4<Real>& msite, const Array4<Real>& noise, const Array4<Real>& hsite, const Array4<Real>& hEqsite, RandomEngine const& engine) {
   const Real gamma = 1. - 1./tau;
   Array1D<Real,0,ncomp> m, h, hEq, r;
   // collision step
   m = moments(x, y, z, f, msite);
   relax_moments(x, y, z, msite);
+#ifdef OLD_NOISE
   r = thermalize_moments(x, y, z, msite, engine);
+#else
+  r = thermalize_moments(x, y, z, msite, noise);
+#endif
   // record hydrodynamic variables
   h = hydrovars(m);
   r = hydrovars(r);
@@ -62,16 +76,507 @@ void collide(int x, int y, int z, const Array4<Real>& f, const Array4<Real>& msi
   populations(x, y, z, f, msite);
 }
 
-// pull scheme
+// stream and collide (pull scheme)
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-void stream_collide(int x, int y, int z, const Array4<Real>& fOld, const Array4<Real>& fNew,  const Array4<Real>& m, const Array4<Real>& h, const Array4<Real>& hEq, RandomEngine const& engine) {
+void stream_collide(int x, int y, int z, const Array4<Real>& fOld, const Array4<Real>& fNew, const Array4<Real>& m, const Array4<Real>& noise, const Array4<Real>& h, const Array4<Real>& hEq, RandomEngine const& engine) {
   for (int i=0; i<ncomp; ++i) { // pull populations from neighbors
     int xm = x - c[i][0];
     int ym = y - c[i][1];
     int zm = z - c[i][2];
     fNew(x,y,z,i) = fOld(xm,ym,zm,i);
   }
-  collide(x, y, z, fNew, m, h, hEq, engine); // collide populations on current site
+  collide(x, y, z, fNew, m, noise, h, hEq, engine); // collide populations on current site
+}
+
+// collide and stream (push scheme)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+void collide_stream(int x, int y, int z, const Array4<Real>& fOld,  const Array4<Real>& fNew, const Array4<Real>& m, const Array4<Real>& noise, const Array4<Real>& h, const Array4<Real>& hEq, RandomEngine const& engine) {
+  collide(x, y, z, fOld, m, noise, h, hEq, engine); // collide populations on current site
+  for (int i=0; i<ncomp; ++i) { // push populations to neighbors
+    int xp = x + c[i][0];
+    int yp = y + c[i][1];
+    int zp = z + c[i][2];
+    fNew(xp,yp,zp,i) = fOld(x,y,z,i);
+  }
+}
+
+// Cholesky decomposition of matrix A
+// result is stored in lower triangle of A
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+void cholesky_decomp(GpuArray<Real,nnoise*nnoise>& A) {
+  const int n = nnoise;
+  GpuArray<Real,n> p;
+  Real sum;
+  bool positive_definite = true;
+
+  // adjust Cholesky to include all columns? [uschill 07/26/2022]
+
+  for (int i=0; i<n; ++i) {
+    for (int j=0; j<n; ++j) {
+      sum = A[i*n+j];
+      for (int k=i-1; k>=0; --k) {
+	sum -= A[i*n+k]*A[j*n+k];
+      }
+      if (i==j) {
+	if (sum>0) {
+	  p[i] = std::sqrt(sum);
+	} else {
+	  p[i] = 0.0;
+	  positive_definite = false;
+	}
+      } else {
+	if (positive_definite) {
+	  A[j*n+i] = sum/p[i];
+	} else {
+	  A[j*n+i] = 0.0;
+	}
+      }
+    }
+  }
+  for (int i=0; i<n; ++i) {
+    for (int j=i+1; j<n; ++j) {
+      A[i*n+j] = 0.0;
+    }
+    A[i*n+i] = p[i];
+  }
+}
+
+#if 0
+// generate a pure sine wave in k-space
+inline void create_kspace_sin(const Geometry& geom,
+			      const MultiFab& noise_onegrid,
+			      const Vector<std::unique_ptr<BaseFab<GpuComplex<Real>>>>& spectral_field) {
+  const Box domain = geom.Domain();
+  for (MFIter mfiter(noise_onegrid); mfiter.isValid(); ++mfiter) {
+    IntVect fft_size = domain.length();
+    fft_size[0] = fft_size[0]/2 + 1;
+    Box fft_box = Box(IntVect(0), fft_size - IntVect(1));
+    Array4<GpuComplex<Real>> const& xi = (*spectral_field[0]).array();
+    ParallelFor(fft_box, [=] AMREX_GPU_DEVICE(int kx, int ky, int kz) {
+      int kxloc = (kx == 0) ? 0 : domain.length(0) - kx;
+      int kyloc = (ky == 0) ? 0 : domain.length(1) - ky;
+      int kzloc = (kz == 0) ? 0 : domain.length(2) - kz;
+      if (   (kx == 0)
+	  && (ky == 1)
+	  && (kz == 1) ) {
+	xi(kx,ky,kz).m_real = 1.0;
+	xi(kx,ky,kz).m_imag = 0.0;
+      } else {
+	xi(kx,ky,kz).m_real = 0.0;
+	xi(kx,ky,kz).m_imag = 0.0;
+      }
+      if (kx > domain.length(0)/2) {
+	Print() << "This should never execute sin" << std::endl;
+	xi(kx,ky,kz).m_real = xi(kxloc,kyloc,kzloc).real();
+	xi(kx,ky,kz).m_imag = xi(kxloc,kyloc,kzloc).imag();
+      }
+    });
+  }
+}
+#endif
+
+#if 0
+// generate uncorrelated white noise in k-space
+// requires whole domain without domain decomposition
+inline void kspace_white_noise(const Geometry& geom,
+			       MultiFab& kspace_noise_real_onegrid,
+			       MultiFab& kspace_noise_imag_onegrid) {
+  const Box domain = geom.Domain();
+  for (MFIter mfi(kspace_noise_real_onegrid); mfi.isValid(); ++mfi) {
+    const Box& box = mfi.fabbox();
+    const Array4<Real>& xi_real = kspace_noise_real_onegrid.array(mfi);
+    const Array4<Real>& xi_imag = kspace_noise_imag_onegrid.array(mfi);
+    // construct noise in k-space
+    ParallelForRNG(box, [=] AMREX_GPU_DEVICE(int kx, int ky, int kz, RandomEngine const& engine) {
+      int kxloc = (kx == 0) ? 0 : domain.length(0) - kx;
+      int kyloc = (ky == 0) ? 0 : domain.length(1) - ky;
+      int kzloc = (kz == 0) ? 0 : domain.length(2) - kz;
+      // symmetry points are purely real
+      if (((kx == 0) || (kx == domain.length(0) - kx))
+	  && ((ky == 0) || (ky == domain.length(1) - ky))
+	  && ((kz == 0) || (kz == domain.length(2) - kz))) {
+	xi_real(kx,ky,kz) = RandomNormal(0., 1., engine);
+	xi_imag(kx,ky,kz) = RandomNormal(0., 0., engine);
+      } else {
+	// complex conjugate symmetries
+	if ((kx > domain.length(0)/2)
+	    || ((ky > domain.length(1)/2) && (kx == kxloc))
+	    || ((kz > domain.length(2)/2) && (ky == kyloc) && (kx == kxloc))) {
+	  xi_real(kx,ky,kz) =  xi_real(kxloc,kyloc,kzloc);
+	  xi_imag(kx,ky,kz) = -xi_imag(kxloc,kyloc,kzloc);
+	} else {
+	  // complex Gaussian random variables with zero mean and variance 0.5
+	  xi_real(kx,ky,kz) = RandomNormal(0., std::sqrt(0.5), engine);
+	  xi_imag(kx,ky,kz) = RandomNormal(0., std::sqrt(0.5), engine);
+	}
+      }
+    });
+  }
+}
+#endif
+
+// generate k-space noise for all non-conserved moments
+// the required symmetries are not included here because of grid decomposition
+// (this is to allow parallel generation of noise)
+// the symmetries are handled when copying to one whole grid
+inline void generate_kspace_noise(const Geometry& geom,
+				  MultiFab& kspace_noise_real,
+				  MultiFab& kspace_noise_imag) {
+  const Box domain = geom.Domain();
+  const Real gamma = 1. - 1./tau;
+
+  // include density? [uschill 07/26/2022]
+
+  // generate noise in whole box because of grid decomposition
+  // (generating noise without grid decomposition may be faster)
+  for (MFIter mfi(kspace_noise_real); mfi.isValid(); ++mfi) {
+    const Box& box = mfi.validbox();
+    const Array4<Real>& xi_real = kspace_noise_real.array(mfi);
+    const Array4<Real>& xi_imag = kspace_noise_imag.array(mfi);
+    // construct noise in k-space
+    ParallelForRNG(box, [=] AMREX_GPU_DEVICE(int kx, int ky, int kz, RandomEngine const& engine) {
+      if (kx <= domain.length(0)/2) { // need only half of k-space for c2r FFT
+	GpuArray<Real,nnoise*nnoise> C = {};
+	GpuArray<GpuComplex<Real>,nnoise> r = {};
+	for (int i=0; i<nnoise; ++i) {
+	  // construct noise covariance matrix
+	  C[i*nnoise+i] = b[i+ncons]*temperature/cs2*(1.-gamma*gamma);
+	  // symmetry points are purely real
+	  if (((kx == 0) || (kx == domain.length(0) - kx))
+	      && ((ky == 0) || (ky == domain.length(1) - ky))
+	      && ((kz == 0) || (kz == domain.length(2) - kz))) {
+	    r[i] = { RandomNormal(0., 1., engine),
+		     RandomNormal(0., 0., engine) };
+	  } else {
+	    // complex Gaussian random variables with zero mean and variance 0.5
+	    r[i] = { RandomNormal(0., std::sqrt(0.5), engine),
+		     RandomNormal(0., std::sqrt(0.5), engine) };
+	  }
+	}
+
+	// need to generate the correct symmetries here? [uschill 07/25/2022]
+	// possibly the case if C(k) != C(-k) [uschill 07/27/2022]
+
+	// Cholesky decomposition of noise covariance matrix
+	cholesky_decomp(C);
+
+	// compute correlated noise vector from Gaussian random variables
+	for (int i=0; i<nnoise; ++i) {
+	  GpuComplex<Real> xi = { 0, 0 };
+	  for (int j=0; j<=i; ++j) {
+	    xi += C[i*nnoise+j]*r[j];
+	  }
+	  xi_real(kx,ky,kz,i+ncons) = xi.real();
+	  xi_imag(kx,ky,kz,i+ncons) = xi.imag();
+	}
+      }
+    });
+  }
+
+}
+
+#if 1
+inline void check_kspace_symmetries(const Geometry& geom,
+				    const MultiFab& noise_onegrid,
+				    const Vector<std::unique_ptr<BaseFab<GpuComplex<Real>>>>& spectral_field) {
+  const Box domain = geom.Domain();
+  IntVect fft_size = domain.length();
+  fft_size[0] = fft_size[0]/2 + 1;
+  Box fft_box = Box(IntVect(0), fft_size - IntVect(1));
+  Array4<GpuComplex<Real>> const& xi = (*spectral_field[0]).array();
+  for (MFIter mfi(noise_onegrid); mfi.isValid(); ++mfi) {
+    ParallelFor(fft_box, [=] AMREX_GPU_DEVICE(int kx, int ky, int kz) {
+      bool symmetric = true;
+      int kxloc = (kx == 0) ? 0 : domain.length(0) - kx;
+      int kyloc = (ky == 0) ? 0 : domain.length(1) - ky;
+      int kzloc = (kz == 0) ? 0 : domain.length(2) - kz;
+      // symmetry points are purely real
+      if (((kx == 0) || (kx == domain.length(0) - kx))
+	  && ((ky == 0) || (ky == domain.length(1) - ky))
+	  && ((kz == 0) || (kz == domain.length(2) - kz))) {
+	symmetric &= (xi(kx,ky,kz).imag() == 0);
+	if (!symmetric) {
+	  Print() << "symmetry violation! ("
+		  << kx << "," << ky << "," << kz << ") "
+		  << xi(kx,ky,kz).imag() << " "
+	          << symmetric << " " << (xi(kx,ky,kz).imag() == 0.)
+		  << std::endl;
+	  exit(0);
+	}
+      }
+      if (kx > domain.length(0)/2) {
+	Print() << "This should never execute" << std::endl;
+	symmetric &= ((xi(kx,ky,kz).real() ==  xi(kxloc,kyloc,kzloc).real())
+		   && (xi(kx,ky,kz).imag() == -xi(kxloc,kyloc,kzloc).imag()));
+	if (!symmetric) {
+	  Print() << "symmetry violation! ("
+		  << kx << "," << ky << "," << kz << ")"
+		  << std::endl;
+	  exit(0);
+	}
+      } else {
+	if ((ky > domain.length(1)/2) && (kx == kxloc)) {
+	  symmetric &= ((xi(kx,ky,kz).real() ==  xi(kxloc,kyloc,kzloc).real())
+		     && (xi(kx,ky,kz).imag() == -xi(kxloc,kyloc,kzloc).imag()));
+	  if (!symmetric) {
+	    Print() << "symmetry violation! ("
+		    << kx << "," << ky << "," << kz << ") ("
+	            << kxloc << "," << kyloc << "," << kzloc << ")"
+	            << " " << xi(kx,ky,kz).real() << " " << xi(kxloc,kyloc,kzloc).real()
+		    << " " << xi(kx,ky,kz).imag() << " " << xi(kxloc,kyloc,kzloc).imag()
+		    << std::endl;
+	    exit(0);
+	  }
+	} else {
+	  if ((kz > domain.length(2)/2) && (ky == kyloc) && (kx == kxloc)) {
+	    symmetric &= ((xi(kx,ky,kz).real() ==  xi(kxloc,kyloc,kzloc).real())
+		       && (xi(kx,ky,kz).imag() == -xi(kxloc,kyloc,kzloc).imag()));
+	    if (!symmetric) {
+	      Print() << "symmetry violation! ("
+		      << kx << "," << ky << "," << kz << ") ("
+		      << kxloc << "," << kyloc << "," << kzloc << ")"
+		      << " " << xi(kx,ky,kz).real() << " " << xi(kxloc,kyloc,kzloc).real()
+		      << " " << xi(kx,ky,kz).imag() << " " << xi(kxloc,kyloc,kzloc).imag()
+		      << std::endl;
+	      exit(0);
+	    }
+	  } // if ((kz > domain.length(2)/2) ...
+	} // if ((ky > domain.length(1)/2) ...
+      } // if ((kx > domain.length(0)/2) ...
+    });
+  }
+  return;
+}
+#endif
+
+inline void compute_ifft(const Geometry& geom, MultiFab& realspace_noise,
+			 const MultiFab& kspace_noise_real,
+			 const MultiFab& kspace_noise_imag) {
+
+#ifdef AMREX_USE_CUDA
+    Print() << "Using cuFFT\n";
+    using FFTplan = cufftHandle;
+    using FFTcomplex = cuDoubleComplex;
+#else
+    Print() << "Using FFTW\n";
+    using FFTplan = fftw_plan;
+    using FFTcomplex = fftw_complex;
+#endif
+
+    // BoxArray and DistributionMapping for whole domain without decomposition
+    Box domain = geom.Domain();
+    BoxArray ba_onegrid(domain);
+    DistributionMapping dm_onegrid(ba_onegrid);
+
+    // FFT needs the whole grid without grid decomposition
+    MultiFab noise_onegrid(ba_onegrid, dm_onegrid, 1, 0);
+    MultiFab kspace_noise_real_onegrid(ba_onegrid, dm_onegrid, 1, 0);
+    MultiFab kspace_noise_imag_onegrid(ba_onegrid, dm_onegrid, 1, 0);
+
+    // number of sites for normalization of FFT
+    long npts = domain.length(0)*domain.length(1)*domain.length(2);
+    Real sqrtnpts = std::sqrt(npts);
+
+    // Box for the complex conjugate spectral field (x-size is halved plus one)
+    IntVect fft_size = domain.length();
+    IntVect fft_adjust = { fft_size[0]/2 - 1, 0, 0 };
+    Box fft_box = Box(IntVect(0), fft_size-fft_adjust-IntVect(1));
+
+    // container to store the complex k-space noise for inverse FFT
+    Vector<std::unique_ptr<BaseFab<GpuComplex<Real>>>> spectral_field;
+
+    // is this a memory leak? [uschill 07/24/2022]
+    spectral_field.emplace_back(new BaseFab<GpuComplex<Real>>(fft_box,1,The_Device_Arena()));
+
+    // for CUDA builds we only need to build the plan once; track whether we did
+    bool built_plan = false;
+    Vector<FFTplan> fftw_plans;
+    FFTplan plan;
+
+    for (int k=ncons; k<ncomp; ++k) {
+
+      // first copy the k-th conponent of the noise to one grid
+      // may be faster to generate the noise here? [uschill 07/27/2022]
+      kspace_noise_real_onegrid.ParallelCopy(kspace_noise_real,k,0,1);
+      kspace_noise_imag_onegrid.ParallelCopy(kspace_noise_imag,k,0,1);
+
+      // create the FFT plans
+      if (!built_plan) {
+	for (MFIter mfi(noise_onegrid); mfi.isValid(); ++mfi) {
+
+#ifdef AMREX_USE_CUDA
+	  cufftResult result = cufftPlan3d(&plan, fft_size[2], fft_size[1], fft_size[0], CUFFT_C2R);
+	  if (result != CUFFT_SUCCESS) {
+	    amrex::AllPrint() << " cufftplan3d forward failed! Error: "
+			      << cufftErrorToString(result) << "\n";
+	  }
+#else
+	  plan = fftw_plan_dft_c2r_3d(fft_size[2], fft_size[1], fft_size[0],
+				      reinterpret_cast<FFTcomplex*>
+				      (spectral_field.back()->dataPtr()),
+				      noise_onegrid[mfi].dataPtr(),
+				      FFTW_ESTIMATE);
+#endif
+	  fftw_plans.push_back(plan);
+	}
+	built_plan = true;
+      }
+
+      ParallelDescriptor::Barrier(); // is this needed? [uschill 07/25/2022]
+
+      // copy the complex noise to the spectral field for complex-to-real FFT
+      // this takes care of the required k-space symmetries
+      for (MFIter mfi(noise_onegrid); mfi.isValid(); ++mfi) {
+	Array4<Real> const& xi_real = kspace_noise_real_onegrid.array(mfi);
+	Array4<Real> const& xi_imag = kspace_noise_imag_onegrid.array(mfi);
+	Array4<GpuComplex<Real>> const& xi = (*spectral_field[0]).array();
+	ParallelFor(fft_box, [=] AMREX_GPU_DEVICE(int kx, int ky, int kz) {
+	  //if (kx <= domain.length(0)/2)
+	  {
+	    // regular points
+	    xi(kx,ky,kz).m_real = xi_real(kx,ky,kz);
+	    xi(kx,ky,kz).m_imag = xi_imag(kx,ky,kz);
+	    // symmetry points (corners of first quadrant) are purely real
+	    //if (((kx == 0) || (kx == domain.length(0) - kx))
+	    //	&& ((ky == 0) || (ky == domain.length(1) - ky))
+	    //	&& ((kz == 0) || (kz == domain.length(2) - kz))) {
+	    //  xi(kx,ky,kz).m_imag = 0;
+	    //}
+	    // complex conjugate symmetries
+	    int kxloc = (kx == 0) ? 0 : domain.length(0) - kx;
+	    int kyloc = (ky == 0) ? 0 : domain.length(1) - ky;
+	    int kzloc = (kz == 0) ? 0 : domain.length(2) - kz;
+	    if (kx > domain.length(0)/2) {
+	      Print() << "This should never execute" << std::endl;
+	      xi(kx,ky,kz).m_real =  xi_real(kxloc,kyloc,kzloc);
+	      xi(kx,ky,kz).m_imag = -xi_imag(kxloc,kyloc,kzloc);
+	    }
+	    if  ( ( (ky > domain.length(1)/2) && (kx == kxloc) )
+		  || ( (kz > domain.length(2)/2) && (ky == kyloc) && (kx == kxloc) ) ) {
+	      xi(kx,ky,kz).m_real =  xi_real(kxloc,kyloc,kzloc);
+	      xi(kx,ky,kz).m_imag = -xi_imag(kxloc,kyloc,kzloc);
+	    }
+	  }
+	});
+      }
+
+      //ParallelDescriptor::Barrier();
+      //check_kspace_symmetries(geom,noise_onegrid,spectral_field);
+
+      // inverse FFT (complex to real)
+      for (MFIter mfi(noise_onegrid); mfi.isValid(); ++mfi) {
+	int i = mfi.LocalIndex();
+#ifdef AMREX_USE_CUDA
+	cufftSetStream(forward_plan[i], amrex::Gpu::gpuStream());
+	cufftResult result = cufftExecC2R(forward_plan[i],
+					  reinterpret_case<FFTcomplex*>
+					  (field[i]->dataPtr()),
+					  noise_onegrid[mfi].dataPtr());
+	if (result != CUFFT_SUCCESS) {
+	  amrex::AllPrint() << " forward transform using cufftExec failed! Error: "
+			    << cufftErrorToString(result) << "\n";
+	}
+#else
+	fftw_execute(fftw_plans[i]);
+#endif
+      }
+
+      // copy the real-space noise back to the k-th component of the MultiFab
+      realspace_noise.ParallelCopy(noise_onegrid,0,k,1);
+      // normalization from FFT
+      realspace_noise.mult(1./sqrtnpts,k,1);
+
+    }
+
+    // destroy fft plans
+    for (int i=0; i<fftw_plans.size(); ++i) {
+#ifdef AMREX_USE_CUDA
+      cufftDestroy(fftw_plans[i]);
+#else
+      fftw_destroy_plan(fftw_plans[i]);
+#endif
+    }
+
+}
+
+// LB thermalization procedure for spatially correlated, non-diagonal noise
+inline void generate_fluctuations(const Geometry& geom,
+				  const MultiFab& moments,
+				  MultiFab& noise) {
+  BoxArray ba = noise.boxArray();
+  DistributionMapping dm = noise.DistributionMap();
+  MultiFab kspace_noise_real(ba, dm, ncomp, 0);
+  MultiFab kspace_noise_imag(ba, dm, ncomp, 0);
+
+  // generate noise in k-space
+  generate_kspace_noise(geom, kspace_noise_real, kspace_noise_imag);
+
+  // note that the k-space noise is generated without the required symmetries
+  // (this is to allow for parallel generation of noise)
+  // the k-space symmetries are handled when copying in compute_ifft
+
+  // inverse Fourier transform noise vector to real space
+  compute_ifft(geom, noise, kspace_noise_real, kspace_noise_imag);
+
+}
+
+// apply fluctuating lattice Boltzmann equation for whole lattice
+inline void collide_stream(const Geometry& geom,
+			   MultiFab& fold, MultiFab& fnew,
+			   MultiFab& moments, MultiFab& noise,
+			   MultiFab& hydro, MultiFab& hydroEq) {
+  const int halo = 1;
+
+  fold.FillBoundary(geom.periodicity());
+  noise.FillBoundary(geom.periodicity());
+
+  for (MFIter mfi(fold); mfi.isValid(); ++mfi) {
+    const Box& valid_box = mfi.growntilebox(halo);
+    const Array4<Real>& fOld = fold.array(mfi);
+    const Array4<Real>& fNew = fnew.array(mfi);
+    const Array4<Real>& mom = moments.array(mfi);
+    const Array4<Real>& xi = noise.array(mfi);
+    const Array4<Real>& hyd = hydro.array(mfi);
+    const Array4<Real>& hydEq = hydroEq.array(mfi);
+    ParallelForRNG(valid_box, [=] AMREX_GPU_DEVICE(int x, int y, int z, RandomEngine const& engine) {
+      collide_stream(x, y, z, fOld, fNew, mom, xi, hyd, hydEq, engine);
+    });
+  }
+
+  std::swap(fold,fnew);
+
+}
+
+// calculate hydrodynamic moments for whole lattice
+inline void hydrovars(MultiFab& f, MultiFab& m, MultiFab& hydrovs, MultiFab& hydroEq) {
+  auto const & fa = f.arrays();
+  auto const & ma = m.arrays();
+  auto const & ha = hydrovs.arrays();
+  auto const & haEq = hydroEq.arrays();
+  ParallelFor(hydrovs, IntVect(0), [=] AMREX_GPU_DEVICE(int nbx, int x, int y, int z) {
+    Array1D<Real,0,ncomp> mv, hv, hEq;
+    mv = moments(x, y, z, fa[nbx], ma[nbx]);
+    hv = hydrovars(mv);
+    hEq = hydrovars(mequilibrium(hv(0), { hv(1), hv(2), hv(3) }));
+    for (int i=0; i<10; ++i) {
+      ha[nbx](x,y,z,i) = hv(i);
+      haEq[nbx](x,y,z,i) = hEq(i);
+    }
+  });
+}
+
+// LB timestep for whole lattice
+inline void LBM_timestep(const Geometry& geom,
+			 MultiFab& fold, MultiFab& fnew,
+			 MultiFab& moments, MultiFab& noise,
+			 MultiFab& hydro, MultiFab& hydroEq) {
+
+#ifndef OLD_NOISE
+  generate_fluctuations(geom, moments, noise);
+#endif
+
+  collide_stream(geom, fold, fnew, moments, noise, hydro, hydroEq);
+
 }
 
 #endif
