@@ -15,6 +15,8 @@ AMREX_GPU_MANAGED Real Gamma = 1.0;
 
 AMREX_GPU_MANAGED Real temperature = 0.0;
 
+#include "LBM_fluctuations.H"
+
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 RealVect gradient(int x, int y, int z, const Array4<Real>& field, int icomp) {
   RealVect gradient = { 0.0, 0.0, 0.0 };
@@ -364,70 +366,11 @@ void collide_stream(int x, int y, int z,
   stream_push(x, y, z, fOld, gOld, fNew, gNew); // push populations to neighbors
 }
 
-// calculate hydrodynamic moments for whole lattice
-inline void LBM_hydrovars(MultiFab& mf, MultiFab& mg, MultiFab& hydrovs) {
-  auto const & f = mf.arrays();
-  auto const & g = mg.arrays();
-  auto const & h = hydrovs.arrays();
-  ParallelFor(hydrovs, IntVect(0), [=] AMREX_GPU_DEVICE(int nbx, int x, int y, int z) {
-    hydrovars(x, y, z, f[nbx], g[nbx], h[nbx]);
-  });
-}
-
-// LB thermalization procedure for spatially correlated, non-diagonal noise
-inline void LBM_thermalization(MultiFab& noise, MultiFab& hydrovs,
-			       const Array1D<Real,0,nvel> mf,
-			       const Array1D<Real,0,nvel> mg) {
-  const int halo = 1; // need to push from first halo layer into domain
-  const int ncons = 1 + AMREX_SPACEDIM;
-  const int nnoise = nvel - ncons;
-  const Real gamma_r = 1. - 1./tau_r;
-  const Real gamma_p = 1. - 1./tau_p;
-  const Real rho = mf(0);
-  const Real phi = mg(0);
-
-  for (MFIter mfi(noise); mfi.isValid(); ++mfi) {
-    const Box& valid_box = mfi.growntilebox(halo);
-    const Array4<Real>& xi = noise.array(mfi);
-
-    /* construct noise in k-space */
-    ParallelForRNG(valid_box, [=] AMREX_GPU_DEVICE(int kx, int ky, int kz, RandomEngine const& engine) {
-
-      /* construct noise covariance matrix */
-      Array2D<Real,0,0,2*nnoise,2*nnoise> C = {}, L = {};
-      Array1D<Real,0,2*nnoise> r = {};
-      for (int i=0, j=nnoise; i<nnoise; ++i, ++j) {
-	C(i,i) = b[i+ncons]*rho*temperature/cs2*(1.-gamma_r*gamma_r);
-	C(j,j) = b[i+ncons]*phi*temperature/cs2*(1.-gamma_p*gamma_p);
-	r(i) = RandomNormal(0., 1., engine);
-	r(j) = RandomNormal(0., 1., engine);
-      }
-
-      /* Cholesky decomposition of noise covariance matrix */
-      //L = cholesky_decomp(C);
-
-      /* compute correlated noise vector from Gaussian random variables */
-      for (int i=0, k=nnoise; i<nnoise; ++i, ++k) {
-	xi(kx,ky,kz,i+ncons) = 0.0;
-	xi(kx,ky,kz,k+2*ncons) = 0.0;
-	for (int j=0, l=nnoise; j<nnoise; ++j, ++l) {
-	  xi(kx,ky,kz,i+ncons) += L(i,j)*r(i);
-	  xi(kx,ky,kz,k+2*ncons) += L(k,l)*r(l);
-	}
-      }
-    });
-  }
-
-  /* inverse Fourier transform noise vector to real space */
-  //xi = ifft(xi)
-
-}
-
-// LB timestep for whole lattice
-inline void LBM_timestep(const Geometry& geom,
-			 MultiFab& fold, MultiFab& gold,
-			 MultiFab& fnew, MultiFab& gnew,
-			 MultiFab& hydrovs) {
+// apply fluctuating lattice Boltzmann equation for whole lattice
+inline void collide_stream(const Geometry& geom,
+			   MultiFab& fold, MultiFab& gold,
+			   MultiFab& fnew, MultiFab& gnew,
+			   MultiFab& hydrovs) {
   const int halo = 1; // need to push from first halo layer into domain
   fold.FillBoundary(geom.periodicity());
   gold.FillBoundary(geom.periodicity());
@@ -445,7 +388,27 @@ inline void LBM_timestep(const Geometry& geom,
   }
   MultiFab::Swap(fold, fnew, 0, 0, nvel, 0);
   MultiFab::Swap(gold, gnew, 0, 0, nvel, 0);
-  LBM_hydrovars(fold, gold, hydrovs);
+}
+
+// calculate hydrodynamic moments for whole lattice
+inline void hydrovars(MultiFab& mf, MultiFab& mg, MultiFab& hydrovs) {
+  auto const & f = mf.arrays();
+  auto const & g = mg.arrays();
+  auto const & h = hydrovs.arrays();
+  ParallelFor(hydrovs, IntVect(0), [=] AMREX_GPU_DEVICE(int nbx, int x, int y, int z) {
+    hydrovars(x, y, z, f[nbx], g[nbx], h[nbx]);
+  });
+}
+
+// LB timestep for whole lattice
+inline void LBM_timestep(const Geometry& geom,
+			 MultiFab& fold, MultiFab& gold,
+			 MultiFab& fnew, MultiFab& gnew,
+			 MultiFab& fnoise, MultiFab& gnoise,
+			 MultiFab& hydrovs) {
+  generate_fluctuations(geom, fnoise, gnoise);
+  collide_stream(geom, fold, gold, fnew, gnew, hydrovs);
+  hydrovars(fold, gold, hydrovs);
 }
 
 // homogeneous mixture of C1 and C2 with random concentration fluctuations
@@ -467,7 +430,7 @@ inline void LBM_init_mixture(MultiFab& mf,
       }
     });
   }
-  LBM_hydrovars(mf, mg, hydrovs);
+  hydrovars(mf, mg, hydrovs);
 }
 
 // flat interface between C1 and C2
@@ -505,7 +468,7 @@ inline void LBM_init_flat_interface(const Geometry& geom,
     }
 
   });
-  LBM_hydrovars(mf, mg, hydrovs);
+  hydrovars(mf, mg, hydrovs);
 }
 
 // binary droplet of C1 and C2
@@ -541,7 +504,7 @@ inline void LBM_init_droplet(const Real r,
     }
 
   });
-  LBM_hydrovars(mf, mg, hydrovs);
+  hydrovars(mf, mg, hydrovs);
 }
 
 #endif
