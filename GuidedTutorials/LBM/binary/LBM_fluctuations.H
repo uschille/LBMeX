@@ -9,12 +9,34 @@
 #endif
 #include <AMReX_GpuComplex.H>
 
+#include "LBM_d3q19.H"
+
+AMREX_GPU_MANAGED Real Lambda[nvel][nvel] = {
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r },
+};
+
 // Cholesky decomposition of matrix A
 // result is stored in lower triangle of A
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-void cholesky_decomp(GpuArray<Real,nnoise*nnoise>& A) {
-  const int n = nnoise;
-  GpuArray<Real,n> p;
+void cholesky_decomp(GpuArray<Real,nvel*nvel>& A, const int n) {
+  GpuArray<Real,nvel> p;
   Real sum;
   bool positive_definite = true;
 
@@ -124,6 +146,123 @@ inline void kspace_white_noise(const Geometry& geom,
 }
 #endif
 
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+Real structure_factor(int kx, int ky, int kz) {
+  const Real rho0 = 1.0;
+  const Real S = rho0*temperature/cs2;
+  return S;
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+GpuArray<Real,nvel*nvel> population_correlations(int kx, int ky, int kz) {
+  GpuArray<Real,nvel*nvel> F;
+  GpuArray<Real,nvel> fbar;
+  const Real S = structure_factor(kx,ky,kz);
+  const Real rho0 = 1.0;
+  const Real mu = S/rho0;
+  for (int i=0; i<nvel; ++i) {
+    fbar[i] = w[i]*rho0;
+  }
+  for (int i=0; i<nvel; ++i) {
+    for (int j=0; j<nvel; ++j) {
+      F[i*nvel+j] = (S/rho0 - mu)/rho0*fbar[i]*fbar[j];
+    }
+    F[i*nvel+i] += mu*fbar[i];
+  }
+  return F;
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+GpuArray<Real,nvel*nvel> moment_correlations(GpuArray<Real,nvel*nvel> F) {
+  GpuArray<Real,nvel*nvel> G;
+  for (int i=0; i<nvel; ++i) {
+    for (int j=0; j<nvel; ++j) {
+      G[i*nvel+j] = 0.0;
+      for (int k=0; k<nvel; ++k) {
+	for (int l=0; l<nvel; ++l) {
+	  G[i*nvel+j] += e[i][k]*F[k*nvel+l]*e[j][l];
+	}
+      }
+    }
+  }
+  return G;
+}
+
+// construct noise covariance matrix
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+GpuArray<Real,nvel*nvel> noise_covariance(GpuArray<Real,nvel*nvel> const& G) {
+  GpuArray<Real,nvel*nvel> Xi;
+  for (int i=0; i<nvel; ++i) {
+    for (int j=0; j<nvel; ++j) {
+      Xi[i*nvel+j] = G[i*nvel+j];
+      for (int k=0; k<nvel; ++k) {
+	for (int l=0; l<nvel; ++l) {
+	  Xi[i*nvel+j] -= Lambda[i][k]*G[k*nvel+l]*Lambda[j][l];
+	}
+      }
+    }
+  }
+  return Xi;
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+GpuArray<Real,nvel*nvel> noise_covariance(int kx, int ky, int kz) {
+  const Real gamma = 1. - 1./tau_r;
+  const GpuArray<Real,nvel*nvel> F = population_correlations(kx,ky,kz);
+  const GpuArray<Real,nvel*nvel> G = moment_correlations(F);
+  const GpuArray<Real,nvel*nvel> C = noise_covariance(G);
+//for (int i=0; i<nnoise; ++i) {
+//  // construct noise covariance matrix
+//  C[i*nnoise+i] = b[i+ncons]*temperature/cs2*(1.-gamma*gamma);
+//}
+  return C;
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+GpuArray<GpuComplex<Real>,nnoise> kspace_white_noise(int kx, int ky, int kz, const Box& domain, RandomEngine const& engine) {
+  GpuArray<GpuComplex<Real>,nnoise> r = {};
+  for (int i=0; i<nnoise; ++i) {
+    // symmetry points are purely real
+    if (((kx == 0) || (kx == domain.length(0) - kx))
+	&& ((ky == 0) || (ky == domain.length(1) - ky))
+	&& ((kz == 0) || (kz == domain.length(2) - kz))) {
+      r[i] = { RandomNormal(0., 1., engine),
+	       RandomNormal(0., 0., engine) };
+    } else {
+      // complex Gaussian random variables with zero mean and variance 0.5
+      r[i] = { RandomNormal(0., std::sqrt(0.5), engine),
+	       RandomNormal(0., std::sqrt(0.5), engine) };
+    }
+  }
+  return r;
+}
+
+// compute correlated noise vector from Gaussian random variables
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+GpuArray<GpuComplex<Real>,nnoise> correlated_noise(int kx, int ky, int kz,
+						   const Box& domain,
+						   const RandomEngine& engine) {
+  GpuArray<GpuComplex<Real>,nnoise> r = {}, xi = {};
+  GpuArray<Real,nvel*nvel> C = {};
+
+  // Cholesky decomposition of noise covariance matrix
+  C = noise_covariance(kx,ky,kz);
+  cholesky_decomp(C,nvel);
+
+  // need to generate the correct symmetries here? [uschill 07/25/2022]
+  // possibly the case if C(k) != C(-k) [uschill 07/27/2022]
+  r = kspace_white_noise(kx,ky,kz,domain,engine);
+
+  // compute correlated noise vector from Gaussian random variables
+  for (int i=0; i<nnoise; ++i) {
+    xi[i] = { 0, 0 };
+    for (int j=0; j<=i; ++j) {
+      xi[i] += C[(i+ncons)*nvel+(j+ncons)]*r[j];
+    }
+  }
+  return xi;
+}
+
 // generate k-space noise for all non-conserved moments
 // the required symmetries are not included here because of grid decomposition
 // (this is to allow parallel generation of noise)
@@ -145,38 +284,14 @@ inline void generate_kspace_noise(const Geometry& geom,
     // construct noise in k-space
     ParallelForRNG(box, [=] AMREX_GPU_DEVICE(int kx, int ky, int kz, RandomEngine const& engine) {
       if (kx <= domain.length(0)/2) { // need only half of k-space for c2r FFT
-	GpuArray<Real,nnoise*nnoise> C = {};
-	GpuArray<GpuComplex<Real>,nnoise> r = {};
+	GpuArray<GpuComplex<Real>,nnoise> xi = {};
+
+	// compute correlated noise in k-space
+	xi = correlated_noise(kx,ky,kz,domain,engine);
+
 	for (int i=0; i<nnoise; ++i) {
-	  // construct noise covariance matrix
-	  C[i*nnoise+i] = b[i+ncons]*temperature/cs2*(1.-gamma*gamma);
-	  // symmetry points are purely real
-	  if (((kx == 0) || (kx == domain.length(0) - kx))
-	      && ((ky == 0) || (ky == domain.length(1) - ky))
-	      && ((kz == 0) || (kz == domain.length(2) - kz))) {
-	    r[i] = { RandomNormal(0., 1., engine),
-		     RandomNormal(0., 0., engine) };
-	  } else {
-	    // complex Gaussian random variables with zero mean and variance 0.5
-	    r[i] = { RandomNormal(0., std::sqrt(0.5), engine),
-		     RandomNormal(0., std::sqrt(0.5), engine) };
-	  }
-	}
-
-	// need to generate the correct symmetries here? [uschill 07/25/2022]
-	// possibly the case if C(k) != C(-k) [uschill 07/27/2022]
-
-	// Cholesky decomposition of noise covariance matrix
-	cholesky_decomp(C);
-
-	// compute correlated noise vector from Gaussian random variables
-	for (int i=0; i<nnoise; ++i) {
-	  GpuComplex<Real> xi = { 0, 0 };
-	  for (int j=0; j<=i; ++j) {
-	    xi += C[i*nnoise+j]*r[j];
-	  }
-	  xi_real(kx,ky,kz,i+ncons) = xi.real();
-	  xi_imag(kx,ky,kz,i+ncons) = xi.imag();
+	  xi_real(kx,ky,kz,i+ncons) = xi[i].real();
+	  xi_imag(kx,ky,kz,i+ncons) = xi[i].imag();
 	}
       }
     });
