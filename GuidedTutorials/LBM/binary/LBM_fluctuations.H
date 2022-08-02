@@ -11,31 +11,87 @@
 
 #include "LBM_d3q19.H"
 
-AMREX_GPU_MANAGED Real Lambda[nvel][nvel] = {
-  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-  { 0, 0, 0, 0, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-  { 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-  { 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-  { 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-  { 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0, 0, 0, 0 },
-  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0, 0, 0 },
-  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0, 0 },
-  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0 },
-  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0 },
-  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0 },
-  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0 },
-  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0 },
-  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r },
+const int ndof = 2*nvel;
+
+AMREX_GPU_MANAGED Real Lambda[ndof][ndof] = {
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.-1./tau_r },
 };
 
 // Cholesky decomposition of matrix A
 // result is stored in lower triangle of A
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-void cholesky_decomp(GpuArray<Real,nvel*nvel>& A, const int n) {
+void cholesky_decomp(GpuArray<Real,ndof*ndof>& A, const int n) {
   GpuArray<Real,nvel> p;
   Real sum;
   bool positive_definite = true;
@@ -154,33 +210,55 @@ Real structure_factor(int kx, int ky, int kz) {
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-GpuArray<Real,nvel*nvel> population_correlations(int kx, int ky, int kz) {
-  GpuArray<Real,nvel*nvel> F;
-  GpuArray<Real,nvel> fbar;
-  const Real S = structure_factor(kx,ky,kz);
+GpuArray<Real,ndof*ndof> population_correlations(int kx, int ky, int kz) {
+  GpuArray<Real,ndof*ndof> F = {};
+  GpuArray<Real,nvel> fbar, gbar;
   const Real rho0 = 1.0;
-  const Real mu = S/rho0;
+  const Real mu0 = 0.0; // \todo
+  const Real S_r = structure_factor(kx,ky,kz);
+  const Real S_p = 0.0; // \todo
+  const Real mu = S_r/rho0;
   for (int i=0; i<nvel; ++i) {
     fbar[i] = w[i]*rho0;
+    gbar[i] = w[i]*Gamma*mu0;
   }
+  /* density sector */
   for (int i=0; i<nvel; ++i) {
     for (int j=0; j<nvel; ++j) {
-      F[i*nvel+j] = (S/rho0 - mu)/rho0*fbar[i]*fbar[j];
+      F[i*ndof+j] = (S_r/rho0 - mu)/rho0*fbar[i]*fbar[j];
     }
-    F[i*nvel+i] += mu*fbar[i];
+    F[i*ndof+i] += mu*fbar[i];
+  }
+  /* order parameter sector */
+  for (int i=nvel; i<ndof; ++i) {
+    for (int j=nvel; j<ndof; ++j) {
+    }
+    F[i*ndof+i] += S_p*gbar[i-nvel];
   }
   return F;
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-GpuArray<Real,nvel*nvel> moment_correlations(GpuArray<Real,nvel*nvel> F) {
-  GpuArray<Real,nvel*nvel> G;
+GpuArray<Real,ndof*ndof> moment_correlations(GpuArray<Real,ndof*ndof> F) {
+  GpuArray<Real,ndof*ndof> G = {};
+  // density sector
   for (int i=0; i<nvel; ++i) {
     for (int j=0; j<nvel; ++j) {
-      G[i*nvel+j] = 0.0;
+      G[i*ndof+j] = 0.0;
       for (int k=0; k<nvel; ++k) {
 	for (int l=0; l<nvel; ++l) {
-	  G[i*nvel+j] += e[i][k]*F[k*nvel+l]*e[j][l];
+	  G[i*ndof+j] += e[i][k]*F[k*ndof+l]*e[j][l];
+	}
+      }
+    }
+  }
+  // order parameter sector
+  for (int i=nvel; i<ndof; ++i) {
+    for (int j=nvel; j<ndof; ++j) {
+      G[i*ndof+j] = 0.0;
+      for (int k=0; k<nvel; ++k) {
+	for (int l=0; l<nvel; ++l) {
+	  G[i*ndof+j] += e[i][k]*F[(k+nvel)*ndof+(l+nvel)]*e[j][l];
 	}
       }
     }
@@ -190,14 +268,14 @@ GpuArray<Real,nvel*nvel> moment_correlations(GpuArray<Real,nvel*nvel> F) {
 
 // construct noise covariance matrix
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-GpuArray<Real,nvel*nvel> noise_covariance(GpuArray<Real,nvel*nvel> const& G) {
-  GpuArray<Real,nvel*nvel> Xi;
-  for (int i=0; i<nvel; ++i) {
-    for (int j=0; j<nvel; ++j) {
-      Xi[i*nvel+j] = G[i*nvel+j];
-      for (int k=0; k<nvel; ++k) {
-	for (int l=0; l<nvel; ++l) {
-	  Xi[i*nvel+j] -= Lambda[i][k]*G[k*nvel+l]*Lambda[j][l];
+GpuArray<Real,ndof*ndof> noise_covariance(GpuArray<Real,ndof*ndof> const& G) {
+  GpuArray<Real,ndof*ndof> Xi;
+  for (int i=0; i<ndof; ++i) {
+    for (int j=0; j<ndof; ++j) {
+      Xi[i*ndof+j] = G[i*ndof+j];
+      for (int k=0; k<ndof; ++k) {
+	for (int l=0; l<ndof; ++l) {
+	  Xi[i*ndof+j] -= Lambda[i][k]*G[k*ndof+l]*Lambda[j][l];
 	}
       }
     }
@@ -206,15 +284,10 @@ GpuArray<Real,nvel*nvel> noise_covariance(GpuArray<Real,nvel*nvel> const& G) {
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-GpuArray<Real,nvel*nvel> noise_covariance(int kx, int ky, int kz) {
-  const Real gamma = 1. - 1./tau_r;
-  const GpuArray<Real,nvel*nvel> F = population_correlations(kx,ky,kz);
-  const GpuArray<Real,nvel*nvel> G = moment_correlations(F);
-  const GpuArray<Real,nvel*nvel> C = noise_covariance(G);
-//for (int i=0; i<nnoise; ++i) {
-//  // construct noise covariance matrix
-//  C[i*nnoise+i] = b[i+ncons]*temperature/cs2*(1.-gamma*gamma);
-//}
+GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz) {
+  const GpuArray<Real,ndof*ndof> F = population_correlations(kx,ky,kz);
+  const GpuArray<Real,ndof*ndof> G = moment_correlations(F);
+  const GpuArray<Real,ndof*ndof> C = noise_covariance(G);
   return C;
 }
 
@@ -242,12 +315,12 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 GpuArray<GpuComplex<Real>,nnoise> correlated_noise(int kx, int ky, int kz,
 						   const Box& domain,
 						   const RandomEngine& engine) {
-  GpuArray<GpuComplex<Real>,nnoise> r = {}, xi = {};
-  GpuArray<Real,nvel*nvel> C = {};
+  GpuArray<GpuComplex<Real>,nnoise> r, xi;
+  GpuArray<Real,ndof*ndof> C;
 
   // Cholesky decomposition of noise covariance matrix
   C = noise_covariance(kx,ky,kz);
-  cholesky_decomp(C,nvel);
+  cholesky_decomp(C,ndof);
 
   // need to generate the correct symmetries here? [uschill 07/25/2022]
   // possibly the case if C(k) != C(-k) [uschill 07/27/2022]
