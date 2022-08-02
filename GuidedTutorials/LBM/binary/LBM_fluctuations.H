@@ -292,19 +292,23 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz) {
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-GpuArray<GpuComplex<Real>,nnoise> kspace_white_noise(int kx, int ky, int kz, const Box& domain, RandomEngine const& engine) {
-  GpuArray<GpuComplex<Real>,nnoise> r = {};
-  for (int i=0; i<nnoise; ++i) {
+GpuArray<GpuComplex<Real>,ndof> kspace_white_noise(int kx, int ky, int kz, const Box& domain, RandomEngine const& engine) {
+  GpuArray<GpuComplex<Real>,ndof> r = {};
+  for (int i=ncons; i<nvel; ++i) {
     // symmetry points are purely real
     if (((kx == 0) || (kx == domain.length(0) - kx))
 	&& ((ky == 0) || (ky == domain.length(1) - ky))
 	&& ((kz == 0) || (kz == domain.length(2) - kz))) {
       r[i] = { RandomNormal(0., 1., engine),
 	       RandomNormal(0., 0., engine) };
+      r[nvel+i] = { RandomNormal(0., 1., engine),
+		    RandomNormal(0., 0., engine) };
     } else {
       // complex Gaussian random variables with zero mean and variance 0.5
       r[i] = { RandomNormal(0., std::sqrt(0.5), engine),
 	       RandomNormal(0., std::sqrt(0.5), engine) };
+      r[nvel+i] = { RandomNormal(0., std::sqrt(0.5), engine),
+		    RandomNormal(0., std::sqrt(0.5), engine) };
     }
   }
   return r;
@@ -312,10 +316,10 @@ GpuArray<GpuComplex<Real>,nnoise> kspace_white_noise(int kx, int ky, int kz, con
 
 // compute correlated noise vector from Gaussian random variables
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-GpuArray<GpuComplex<Real>,nnoise> correlated_noise(int kx, int ky, int kz,
+GpuArray<GpuComplex<Real>,ndof> correlated_noise(int kx, int ky, int kz,
 						   const Box& domain,
 						   const RandomEngine& engine) {
-  GpuArray<GpuComplex<Real>,nnoise> r, xi;
+  GpuArray<GpuComplex<Real>,ndof> r, xi;
   GpuArray<Real,ndof*ndof> C;
 
   // Cholesky decomposition of noise covariance matrix
@@ -327,10 +331,10 @@ GpuArray<GpuComplex<Real>,nnoise> correlated_noise(int kx, int ky, int kz,
   r = kspace_white_noise(kx,ky,kz,domain,engine);
 
   // compute correlated noise vector from Gaussian random variables
-  for (int i=0; i<nnoise; ++i) {
+  for (int i=0; i<ndof; ++i) {
     xi[i] = { 0, 0 };
     for (int j=0; j<=i; ++j) {
-      xi[i] += C[(i+ncons)*nvel+(j+ncons)]*r[j];
+      xi[i] += C[(i)*nvel+(j)]*r[j];
     }
   }
   return xi;
@@ -357,14 +361,16 @@ inline void generate_kspace_noise(const Geometry& geom,
     // construct noise in k-space
     ParallelForRNG(box, [=] AMREX_GPU_DEVICE(int kx, int ky, int kz, RandomEngine const& engine) {
       if (kx <= domain.length(0)/2) { // need only half of k-space for c2r FFT
-	GpuArray<GpuComplex<Real>,nnoise> xi = {};
+	GpuArray<GpuComplex<Real>,ndof> xi = {};
 
 	// compute correlated noise in k-space
 	xi = correlated_noise(kx,ky,kz,domain,engine);
 
-	for (int i=0; i<nnoise; ++i) {
-	  xi_real(kx,ky,kz,i+ncons) = xi[i].real();
-	  xi_imag(kx,ky,kz,i+ncons) = xi[i].imag();
+	for (int i=ncons; i<nvel; ++i) {
+	  xi_real(kx,ky,kz,i) = xi[i].real();
+	  xi_imag(kx,ky,kz,i) = xi[i].imag();
+	  xi_real(kx,ky,kz,nvel+i) = xi[nvel+i].real();
+	  xi_imag(kx,ky,kz,nvel+i) = xi[nvel+i].imag();
 	}
       }
     });
