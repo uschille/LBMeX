@@ -1,0 +1,13 @@
+# ignore build artifacts
+tmp_build_dir/
+main3d*.ex
+
+# ignore debugging artifacts
+Backtrace.?
+
+# ignore data artifacts
+plt*/
+
+# ignore Python artifacts
+.idea/
+.ipynb_checkpoints/
