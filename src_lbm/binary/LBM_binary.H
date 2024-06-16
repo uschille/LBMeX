@@ -15,6 +15,14 @@ AMREX_GPU_MANAGED Real Gamma = 1.0;
 
 AMREX_GPU_MANAGED Real temperature = 0.0;
 
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+Real pressure(Real rho, Real phi);
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+Array1D<Real,0,2> chemical_potentials(const Array1D<Real,0,2>& fields,
+				  const Array1D<RealVect,0,2>& gradients,
+				  const Array1D<Real,0,2>& laplacians);
+
 #include "LBM_fluctuations.H"
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
@@ -278,7 +286,6 @@ void relax_moments(int x, int y, int z,
 		   Array1D<Real,0,nvel>& mg,
 		   const Array4<Real>& h) {
 
-
   const Array1D<Real,0,2> fields = { h(x,y,z,0), h(x,y,z,1) };
   const RealVect u = { h(x,y,z,2), h(x,y,z,3), h(x,y,z,4) };
 
@@ -323,18 +330,31 @@ void thermalize_moments(Array1D<Real,0,nvel>& mf,
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+void thermalize_moments(int x, int y, int z,
+      Array1D<Real,0,nvel>& mf, Array1D<Real,0,nvel>& mg,
+      Array1D<Real,0,ndof>& noise) {
+  for (int i=0; i<nvel; ++i) {
+    mf(i) += noise(i);
+    mg(i) += noise(nvel+i);
+  }
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 void collide(int x, int y, int z,
 	     const Array4<Real>& f,
 	     const Array4<Real>& g,
 	     const Array4<Real>& h,
-	     RandomEngine const& engine) {
+       const Array4<Real>& noise) {
   Array1D<Real,0,nvel> mf, mg;
+  Array1D<Real,0,ndof> xi;
+
+  for (int i=0; i<nvel; ++i) xi(i) = noise(x,y,z,i);
 
   mf = moments(x,y,z,f);
   mg = moments(x,y,z,g);
 
   relax_moments(x,y,z,mf,mg,h);
-  thermalize_moments(mf,mg,engine);
+  thermalize_moments(x,y,z,mf,mg,xi);
 
   populations(x,y,z,f,mf);
   populations(x,y,z,g,mg);
@@ -361,8 +381,9 @@ void collide_stream(int x, int y, int z,
 		    const Array4<Real>& fOld,  const Array4<Real>& gOld,
 		    const Array4<Real>& fNew,  const Array4<Real>& gNew,
 		    const Array4<Real>& h,
+        const Array4<Real>& noise,
 		    RandomEngine const& rng) {
-  collide(x, y, z, fOld, gOld, h, rng); // collide populations on current site
+  collide(x, y, z, fOld, gOld, h, noise); // collide populations on current site
   stream_push(x, y, z, fOld, gOld, fNew, gNew); // push populations to neighbors
 }
 
@@ -370,7 +391,7 @@ void collide_stream(int x, int y, int z,
 inline void collide_stream(const Geometry& geom,
 			   MultiFab& fold, MultiFab& gold,
 			   MultiFab& fnew, MultiFab& gnew,
-			   MultiFab& hydrovs) {
+			   MultiFab& hydrovs, MultiFab& noise) {
   const int halo = 1; // need to push from first halo layer into domain
   fold.FillBoundary(geom.periodicity());
   gold.FillBoundary(geom.periodicity());
@@ -381,9 +402,10 @@ inline void collide_stream(const Geometry& geom,
     const Array4<Real>& fNew = fnew.array(mfi);
     const Array4<Real>& gNew = gnew.array(mfi);
     const Array4<Real>& h = hydrovs.array(mfi);
+    const Array4<Real>& xi = noise.array(mfi);
     const Box& valid_box = mfi.growntilebox(halo);
     ParallelForRNG(valid_box, [=] AMREX_GPU_DEVICE(int x, int y, int z, RandomEngine const& engine) {
-      collide_stream(x, y, z, fOld, gOld, fNew, gNew, h, engine);
+      collide_stream(x, y, z, fOld, gOld, fNew, gNew, h, xi, engine);
     });
   }
   MultiFab::Swap(fold, fnew, 0, 0, nvel, 0);
@@ -404,10 +426,9 @@ inline void hydrovars(MultiFab& mf, MultiFab& mg, MultiFab& hydrovs) {
 inline void LBM_timestep(const Geometry& geom,
 			 MultiFab& fold, MultiFab& gold,
 			 MultiFab& fnew, MultiFab& gnew,
-			 MultiFab& fnoise, MultiFab& gnoise,
-			 MultiFab& hydrovs) {
-  generate_fluctuations(geom, fnoise, gnoise);
-  collide_stream(geom, fold, gold, fnew, gnew, hydrovs);
+			 MultiFab& hydrovs, MultiFab& noise) {
+  generate_fluctuations(geom, hydrovs, noise);
+  collide_stream(geom, fold, gold, fnew, gnew, hydrovs, noise);
   hydrovars(fold, gold, hydrovs);
 }
 

@@ -107,11 +107,10 @@ void main_driver(const char* argv) {
   // set up MultiFabs
   MultiFab fold(ba, dm, nvel, nghost);
   MultiFab fnew(ba, dm, nvel, nghost);
-  MultiFab fnoise(ba, dm, nvel, nghost);
   MultiFab gold(ba, dm, nvel, nghost);
   MultiFab gnew(ba, dm, nvel, nghost);
-  MultiFab gnoise(ba, dm, nvel, nghost);
   MultiFab hydrovs(ba, dm, nhydro, nghost);
+  MultiFab noise(ba, dm, 2*nvel, nghost);
 
   // set up variable names for output
   const Vector<std::string> var_names = VariableNames(nhydro);
@@ -125,7 +124,7 @@ void main_driver(const char* argv) {
 
   // TIMESTEP
   for (int step=1; step <= nsteps; ++step) {
-    LBM_timestep(geom, fold, gold, fnew, gnew, fnoise, gnoise, hydrovs);
+    LBM_timestep(geom, fold, gold, fnew, gnew, hydrovs, noise);
     if (plot_int > 0 && step%plot_int ==0)
       WriteOutput(step, hydrovs, var_names, geom);
     Print() << "LB step " << step << "\n";
