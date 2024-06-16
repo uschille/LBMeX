@@ -623,4 +623,75 @@ inline void generate_fluctuations(const Geometry& geom,
 
 }
 
+void noise_covariance() {
+  // Noise covariance of the modes in k-space
+  Xi[   4,    4] = 2*T*\hat{\rho}_0*k_B*lambda_b*(5 - 9*pow(c_s(k), 2));
+  Xi[   4,   16] = 6*T*\hat{\rho}_0*k_B*lambda_b*(3*pow(c_s(k), 2) - 1);
+  Xi[   4, Q+ 0] = -3*T*\hat{\phi}_0*pow(k, 2)*k_B*kappa*lambda_b/(\hat{\rho}_0*mu_C);
+  Xi[   4, Q+ 4] = 3*T*\hat{\phi}_0*pow(k, 2)*k_B*kappa*lambda_b*(-3*Gamma_phi*\hat{\mu}_0 + \hat{\phi}_0)/(\hat{\phi}_0*\hat{\rho}_0*mu_C);
+  Xi[   4, Q+16] = 3*T*\hat{\phi}_0*pow(k, 2)*k_B*kappa*lambda_b*(3*Gamma_phi*\hat{\mu}_0 - \hat{\phi}_0)/(\hat{\phi}_0*\hat{\rho}_0*mu_C);
+  Xi[   5,    5] = (8.0/3.0)*T*\hat{\rho}_0*k_B*lambda_s;
+  Xi[   6,    6] = 8*T*\hat{\rho}_0*k_B*lambda_s;
+  Xi[   7,    7] = (2.0/3.0)*T*\hat{\rho}_0*k_B*lambda_s;Xi[274] = 0;
+  Xi[   8,    8] = (2.0/3.0)*T*\hat{\rho}_0*k_B*lambda_s;
+  Xi[   9,    0] = (2.0/3.0)*T*\hat{\rho}_0*k_B*lambda_s;
+  Xi[  10,   10] = 4*T*\hat{\rho}_0*k_B*lambda_o;
+  Xi[  11,   11] = 4*T*\hat{\rho}_0*k_B*lambda_o;
+  Xi[  12,   12] = 4*T*\hat{\rho}_0*k_B*lambda_o;
+  Xi[  13,   13] = (4.0/3.0)*T*\hat{\rho}_0*k_B*lambda_o;
+  Xi[  14,   14] = (4.0/3.0)*T*\hat{\rho}_0*k_B*lambda_o;
+  Xi[  15,   15] = (4.0/3.0)*T*\hat{\rho}_0*k_B*lambda_o;
+  Xi[  16,    4] = 6*T*\hat{\rho}_0*k_B*lambda_b*(3*pow(c_s(k), 2) - 1);
+  Xi[  16,   16] = 18*T*\hat{\rho}_0*k_B*lambda_b*(1 - pow(c_s(k), 2));
+  Xi[  16, Q+ 0] = 3*T*\hat{\phi}_0*pow(k, 2)*k_B*kappa*lambda_b/(\hat{\rho}_0*mu_C);
+  Xi[  16, Q+ 4] = 3*T*\hat{\phi}_0*pow(k, 2)*k_B*kappa*lambda_b*(3*Gamma_phi*\hat{\mu}_0 - \hat{\phi}_0)/(\hat{\phi}_0*\hat{\rho}_0*mu_C);
+  Xi[  16, Q+16] = 3*T*\hat{\phi}_0*pow(k, 2)*k_B*kappa*lambda_b*(-3*Gamma_phi*\hat{\mu}_0 + \hat{\phi}_0)/(\hat{\phi}_0*\hat{\rho}_0*mu_C);
+  Xi[  17,   17] = (8.0/3.0)*T*\hat{\rho}_0*k_B*lambda_b;
+  Xi[  18,   18] = 8*T*\hat{\rho}_0*k_B*lambda_b;
+  Xi[Q+ 0,    4] = -3*T*\hat{\phi}_0*pow(k, 2)*k_B*kappa*lambda_b/(\hat{\rho}_0*mu_C);
+  Xi[Q+ 0,   16] = 3*T*\hat{\phi}_0*pow(k, 2)*k_B*kappa*lambda_b/(\hat{\rho}_0*mu_C);
+  Xi[Q+ 0, Q+ 1] = I*T*k_B*k_x*(-Gamma_phi*\hat{\mu}_0 + pow(\hat{\phi}_0, 3)*mu_C)/(\hat{\phi}_0*\hat{\rho}_0*mu_C);
+  Xi[Q+ 0, Q+ 2] = I*T*k_B*k_y*(-Gamma_phi*\hat{\mu}_0 + pow(\hat{\phi}_0, 3)*mu_C)/(\hat{\phi}_0*\hat{\rho}_0*mu_C);
+  Xi[Q+ 0, Q+ 3] = I*T*k_B*k_z*(-Gamma_phi*\hat{\mu}_0 + pow(\hat{\phi}_0, 3)*mu_C)/(\hat{\phi}_0*\hat{\rho}_0*mu_C);
+  Xi[Q+ 0, Q+ 4] = 3*Gamma_phi*T*\hat{\mu}_0*k_B*lambda_b/(\hat{\phi}_0*\hat{\rho}_0*mu_C);
+  Xi[Q+ 0, Q+16] = -3*Gamma_phi*T*\hat{\mu}_0*k_B*lambda_b/(\hat{\phi}_0*\hat{\rho}_0*mu_C);
+  Xi[Q+ 1, Q+ 0] = I*T*k_B*k_x*(Gamma_phi*\hat{\mu}_0 - pow(\hat{\phi}_0, 3)*mu_C)/(\hat{\phi}_0*\hat{\rho}_0*mu_C);
+  Xi[Q+ 1, Q+ 4] = I*T*k_B*k_x*(3*pow(Gamma_phi, 2)*pow(\hat{\mu}_0, 2) - 3*Gamma_phi*\hat{\mu}_0*pow(\hat{\phi}_0, 3)*mu_C - Gamma_phi*\hat{\mu}_0*\hat{\phi}_0 + pow(\hat{\phi}_0, 4)*mu_C)/(pow(\hat{\phi}_0, 2)*\hat{\rho}_0*mu_C);
+  Xi[Q+ 1, Q+16] = I*T*k_B*k_x*(-3*pow(Gamma_phi, 2)*pow(\hat{\mu}_0, 2) + 3*Gamma_phi*\hat{\mu}_0*pow(\hat{\phi}_0, 3)*mu_C + Gamma_phi*\hat{\mu}_0*\hat{\phi}_0 - pow(\hat{\phi}_0, 4)*mu_C)/(pow(\hat{\phi}_0, 2)*\hat{\rho}_0*mu_C);
+  Xi[Q+ 2, Q+ 0] = I*T*k_B*k_y*(Gamma_phi*\hat{\mu}_0 - pow(\hat{\phi}_0, 3)*mu_C)/(\hat{\phi}_0*\hat{\rho}_0*mu_C);
+  Xi[Q+ 2, Q+ 4] = I*T*k_B*k_y*(3*pow(Gamma_phi, 2)*pow(\hat{\mu}_0, 2) - 3*Gamma_phi*\hat{\mu}_0*pow(\hat{\phi}_0, 3)*mu_C - Gamma_phi*\hat{\mu}_0*\hat{\phi}_0 + pow(\hat{\phi}_0, 4)*mu_C)/(pow(\hat{\phi}_0, 2)*\hat{\rho}_0*mu_C);
+  Xi[Q+ 2, Q+16] = I*T*k_B*k_y*(-3*pow(Gamma_phi, 2)*pow(\hat{\mu}_0, 2) + 3*Gamma_phi*\hat{\mu}_0*pow(\hat{\phi}_0, 3)*mu_C + Gamma_phi*\hat{\mu}_0*\hat{\phi}_0 - pow(\hat{\phi}_0, 4)*mu_C)/(pow(\hat{\phi}_0, 2)*\hat{\rho}_0*mu_C);
+  Xi[Q+ 3, Q+ 0] = I*T*k_B*k_z*(Gamma_phi*\hat{\mu}_0 - pow(\hat{\phi}_0, 3)*mu_C)/(\hat{\phi}_0*\hat{\rho}_0*mu_C);
+  Xi[Q+ 3, Q+ 4] = I*T*k_B*k_z*(3*pow(Gamma_phi, 2)*pow(\hat{\mu}_0, 2) - 3*Gamma_phi*\hat{\mu}_0*pow(\hat{\phi}_0, 3)*mu_C - Gamma_phi*\hat{\mu}_0*\hat{\phi}_0 + pow(\hat{\phi}_0, 4)*mu_C)/(pow(\hat{\phi}_0, 2)*\hat{\rho}_0*mu_C);
+  Xi[Q+ 3, Q+16] = I*T*k_B*k_z*(-3*pow(Gamma_phi, 2)*pow(\hat{\mu}_0, 2) + 3*Gamma_phi*\hat{\mu}_0*pow(\hat{\phi}_0, 3)*mu_C + Gamma_phi*\hat{\mu}_0*\hat{\phi}_0 - pow(\hat{\phi}_0, 4)*mu_C)/(pow(\hat{\phi}_0, 2)*\hat{\rho}_0*mu_C);
+  Xi[Q+ 4,    4] = 3*T*\hat{\phi}_0*pow(k, 2)*k_B*kappa*lambda_b*(-3*Gamma_phi*\hat{\mu}_0 + \hat{\phi}_0)/(\hat{\phi}_0*\hat{\rho}_0*mu_C);
+  Xi[Q+ 4,   16] = 3*T*\hat{\phi}_0*pow(k, 2)*k_B*kappa*lambda_b*(3*Gamma_phi*\hat{\mu}_0 - \hat{\phi}_0)/(\hat{\phi}_0*\hat{\rho}_0*mu_C);
+  Xi[Q+ 4, Q+ 0] = 3*Gamma_phi*T*\hat{\mu}_0*k_B*lambda_b/(\hat{\phi}_0*\hat{\rho}_0*mu_C);
+  Xi[Q+ 4, Q+ 1] = I*T*k_B*k_x*(-3*pow(Gamma_phi, 2)*pow(\hat{\mu}_0, 2) + 3*Gamma_phi*\hat{\mu}_0*pow(\hat{\phi}_0, 3)*mu_C + Gamma_phi*\hat{\mu}_0*\hat{\phi}_0 - pow(\hat{\phi}_0, 4)*mu_C)/(pow(\hat{\phi}_0, 2)*\hat{\rho}_0*mu_C);
+  Xi[Q+ 4, Q+ 2] = I*T*k_B*k_y*(-3*pow(Gamma_phi, 2)*pow(\hat{\mu}_0, 2) + 3*Gamma_phi*\hat{\mu}_0*pow(\hat{\phi}_0, 3)*mu_C + Gamma_phi*\hat{\mu}_0*\hat{\phi}_0 - pow(\hat{\phi}_0, 4)*mu_C)/(pow(\hat{\phi}_0, 2)*\hat{\rho}_0*mu_C);
+  Xi[Q+ 4, Q+ 3] = I*T*k_B*k_z*(-3*pow(Gamma_phi, 2)*pow(\hat{\mu}_0, 2) + 3*Gamma_phi*\hat{\mu}_0*pow(\hat{\phi}_0, 3)*mu_C + Gamma_phi*\hat{\mu}_0*\hat{\phi}_0 - pow(\hat{\phi}_0, 4)*mu_C)/(pow(\hat{\phi}_0, 2)*\hat{\rho}_0*mu_C);
+  Xi[Q+ 4, Q+ 4] = 2*T*k_B*lambda_b*(9*pow(Gamma_phi, 2)*pow(\hat{\mu}_0, 2) - 9*Gamma_phi*\hat{\mu}_0*pow(\hat{\phi}_0, 3)*mu_C - 3*Gamma_phi*\hat{\mu}_0*\hat{\phi}_0 + 5*pow(\hat{\phi}_0, 4)*mu_C)/(pow(\hat{\phi}_0, 2)*\hat{\rho}_0*mu_C);
+  Xi[Q+ 4, Q+16] = 6*T*k_B*lambda_b*(-3*pow(Gamma_phi, 2)*pow(\hat{\mu}_0, 2) + 3*Gamma_phi*\hat{\mu}_0*pow(\hat{\phi}_0, 3)*mu_C + Gamma_phi*\hat{\mu}_0*\hat{\phi}_0 - pow(\hat{\phi}_0, 4)*mu_C)/(pow(\hat{\phi}_0, 2)*\hat{\rho}_0*mu_C);
+  Xi[Q+ 5, Q+ 5] = (8.0/3.0)*T*pow(\hat{\phi}_0, 2)*k_B*lambda_s/\hat{\rho}_0;
+  Xi[Q+ 6, Q+ 6] = 8*T*pow(\hat{\phi}_0, 2)*k_B*lambda_s/\hat{\rho}_0;
+  Xi[Q+ 7, Q+ 7] = (2.0/3.0)*T*pow(\hat{\phi}_0, 2)*k_B*lambda_s/\hat{\rho}_0;
+  Xi[Q+ 8, Q+ 8] = (2.0/3.0)*T*pow(\hat{\phi}_0, 2)*k_B*lambda_s/\hat{\rho}_0;
+  Xi[Q+ 9, Q+ 9] = (2.0/3.0)*T*pow(\hat{\phi}_0, 2)*k_B*lambda_s/\hat{\rho}_0;
+  Xi[Q+10, Q+10] = 4*T*pow(\hat{\phi}_0, 2)*k_B*lambda_o/\hat{\rho}_0;
+  Xi[Q+11, Q+11] = 4*T*pow(\hat{\phi}_0, 2)*k_B*lambda_o/\hat{\rho}_0;
+  Xi[Q+12, Q+12] = 4*T*pow(\hat{\phi}_0, 2)*k_B*lambda_o/\hat{\rho}_0;
+  Xi[Q+13, Q+13] = (4.0/3.0)*T*pow(\hat{\phi}_0, 2)*k_B*lambda_o/\hat{\rho}_0;
+  Xi[Q+14, Q+14] = (4.0/3.0)*T*pow(\hat{\phi}_0, 2)*k_B*lambda_o/\hat{\rho}_0;
+  Xi[Q+15, Q+15] = (4.0/3.0)*T*pow(\hat{\phi}_0, 2)*k_B*lambda_o/\hat{\rho}_0;
+  Xi[Q+16,    4] = 3*T*\hat{\phi}_0*pow(k, 2)*k_B*kappa*lambda_b*(3*Gamma_phi*\hat{\mu}_0 - \hat{\phi}_0)/(\hat{\phi}_0*\hat{\rho}_0*mu_C);
+  Xi[Q+16,   16] = 3*T*\hat{\phi}_0*pow(k, 2)*k_B*kappa*lambda_b*(-3*Gamma_phi*\hat{\mu}_0 + \hat{\phi}_0)/(\hat{\phi}_0*\hat{\rho}_0*mu_C);
+  Xi[Q+16, Q+ 0] = -3*Gamma_phi*T*\hat{\mu}_0*k_B*lambda_b/(\hat{\phi}_0*\hat{\rho}_0*mu_C);
+  Xi[Q+16, Q+ 1] = I*T*k_B*k_x*(3*pow(Gamma_phi, 2)*pow(\hat{\mu}_0, 2) - 3*Gamma_phi*\hat{\mu}_0*pow(\hat{\phi}_0, 3)*mu_C - Gamma_phi*\hat{\mu}_0*\hat{\phi}_0 + pow(\hat{\phi}_0, 4)*mu_C)/(pow(\hat{\phi}_0, 2)*\hat{\rho}_0*mu_C);
+  Xi[Q+16, Q+ 2] = I*T*k_B*k_y*(3*pow(Gamma_phi, 2)*pow(\hat{\mu}_0, 2) - 3*Gamma_phi*\hat{\mu}_0*pow(\hat{\phi}_0, 3)*mu_C - Gamma_phi*\hat{\mu}_0*\hat{\phi}_0 + pow(\hat{\phi}_0, 4)*mu_C)/(pow(\hat{\phi}_0, 2)*\hat{\rho}_0*mu_C);
+  Xi[Q+16, Q+ 3] = I*T*k_B*k_z*(3*pow(Gamma_phi, 2)*pow(\hat{\mu}_0, 2) - 3*Gamma_phi*\hat{\mu}_0*pow(\hat{\phi}_0, 3)*mu_C - Gamma_phi*\hat{\mu}_0*\hat{\phi}_0 + pow(\hat{\phi}_0, 4)*mu_C)/(pow(\hat{\phi}_0, 2)*\hat{\rho}_0*mu_C);
+  Xi[Q+16, Q+ 4] = 6*T*k_B*lambda_b*(-3*pow(Gamma_phi, 2)*pow(\hat{\mu}_0, 2) + 3*Gamma_phi*\hat{\mu}_0*pow(\hat{\phi}_0, 3)*mu_C + Gamma_phi*\hat{\mu}_0*\hat{\phi}_0 - pow(\hat{\phi}_0, 4)*mu_C)/(pow(\hat{\phi}_0, 2)*\hat{\rho}_0*mu_C);
+  Xi[Q+16, Q+16] = 6*T*k_B*lambda_b*(3*pow(Gamma_phi, 2)*pow(\hat{\mu}_0, 2) - 3*Gamma_phi*\hat{\mu}_0*pow(\hat{\phi}_0, 3)*mu_C - Gamma_phi*\hat{\mu}_0*\hat{\phi}_0 + 3*pow(\hat{\phi}_0, 4)*mu_C)/(pow(\hat{\phi}_0, 2)*\hat{\rho}_0*mu_C);
+  Xi[Q+17, Q+17] = (8.0/3.0)*T*pow(\hat{\phi}_0, 2)*k_B*lambda_b/\hat{\rho}_0;
+  Xi[Q+18, Q+18] = 8*T*pow(\hat{\phi}_0, 2)*k_B*lambda_b/\hat{\rho}_0;
+}
 #endif
