@@ -1,2 +1,3 @@
 CEXE_headers += LBM_d3q19.H
 CEXE_headers += LBM_binary.H
+CEXE_headers += LBM_fluctuations.H
