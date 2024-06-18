@@ -4,6 +4,7 @@
 #include <AMReX_Print.H>
 #include <AMReX_ParmParse.H>
 #include <AMReX_PlotFileUtil.H>
+#include "StructFact.H"
 
 using namespace amrex;
 
@@ -64,8 +65,9 @@ void main_driver(const char* argv) {
   int nsteps = 100;
   int plot_int = 10;
 
-  // default droplet radius (% of box size)
-  Real radius = 0.3;
+  // default init_cond 
+  int init_cond = 0;
+  Real radius = 0.3; //(% of box size)
 
   // input parameters
   ParmParse pp;
@@ -76,9 +78,10 @@ void main_driver(const char* argv) {
   pp.query("lambda", lambda);
   pp.query("T", T);
   pp.query("kappa", kappa);
+  pp.query("init_cond", init_cond);
   pp.query("R", radius);
   pp.query("temperature", temperature);
-  pp.query("R", radius);
+  // pp.query("R", radius);
 
   // set up Box and Geomtry
   IntVect dom_lo(0, 0, 0);
@@ -115,18 +118,35 @@ void main_driver(const char* argv) {
   // set up variable names for output
   const Vector<std::string> var_names = VariableNames(nhydro);
 
+  int nStructVars = hydrovs.nComp();
+
+  Vector<Real> var_scaling(nStructVars*(nStructVars+1)/2);
+  for (int d=0; d<var_scaling.size(); ++d) {
+    if (temperature>0) var_scaling[d] = temperature; else var_scaling[d] = 1.;
+  }
+
+  StructFact structFact(ba, dm, var_names, var_scaling);
+
   // INITIALIZE
-  LBM_init_droplet(radius, geom, fold, gold, hydrovs);
+  if (init_cond == 0){LBM_init_mixture(fold, gold, hydrovs);}
+  else if (init_cond == 1){LBM_init_flat_interface(geom, fold, gold, hydrovs);}
+  else if (init_cond == 2){LBM_init_droplet(radius, geom, fold, gold, hydrovs);}
+  
   // Write a plotfile of the initial data if plot_int > 0
   if (plot_int > 0)
     WriteOutput(0, hydrovs, var_names, geom);
+    // structFact.FortStructure(hydrovs, geom);
+    // structFact.WritePlotFile(0, 0., geom, "plt_SF");
   Print() << "LB initialized\n";
 
   // TIMESTEP
   for (int step=1; step <= nsteps; ++step) {
     LBM_timestep(geom, fold, gold, fnew, gnew, hydrovs, noise);
+    // structFact.FortStructure(hydrovs, geom);
     if (plot_int > 0 && step%plot_int ==0)
       WriteOutput(step, hydrovs, var_names, geom);
+      // time = static_cast<Real>(step);
+      // structFact.WritePlotFile(step, time, geom, "plt_SF");
     Print() << "LB step " << step << "\n";
   }
 
