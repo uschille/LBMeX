@@ -15,9 +15,23 @@ inline void WriteOutput(int step,
 			const Vector<std::string>& var_names,
 			const Geometry& geom) {
   const Real time = step;
-  const std::string& pltfile = amrex::Concatenate("plt",step,5);
+  const std::string& pltfile = amrex::Concatenate("hydro_plt_",step,5);
   WriteSingleLevelPlotfile(pltfile, hydrovs, var_names, geom, time, step);
 }
+
+inline void WriteDist(int step, 
+      const MultiFab& fold,
+      const MultiFab& gold, 
+      const Vector<std::string>& var_names,
+      const Geometry& geom){
+      
+      const Real time = step;
+      std::string pltfile = amrex::Concatenate("f_plt_",step,5);
+      WriteSingleLevelPlotfile(pltfile, fold, var_names, geom, time, step);
+
+      pltfile = amrex::Concatenate("g_plt_",step,5);
+      WriteSingleLevelPlotfile(pltfile, gold, var_names, geom, time, step);
+      }
 
 inline Vector<std::string> VariableNames(const int numVars) {
   // set variable names for output
@@ -48,6 +62,19 @@ inline Vector<std::string> VariableNames(const int numVars) {
     name = "m";
     name += std::to_string(cnt);
     var_names[cnt++] = name;
+  }
+  return var_names;
+}
+
+inline Vector<std::string> distribution_Variable_names() {
+  // output names
+  Vector<std::string> var_names(nvel);
+  std::string name;
+
+  for (int i = 0; i < nvel; i++){
+    name = "e";
+    name += std::to_string(i);
+    var_names[i] = name;  
   }
   return var_names;
 }
@@ -117,6 +144,7 @@ void main_driver(const char* argv) {
 
   // set up variable names for output
   const Vector<std::string> var_names = VariableNames(nhydro);
+  const Vector<std::string> distribution_var_names = distribution_Variable_names();
 
   int nStructVars = hydrovs.nComp();
 
@@ -133,22 +161,26 @@ void main_driver(const char* argv) {
   else if (init_cond == 2){LBM_init_droplet(radius, geom, fold, gold, hydrovs);}
   
   // Write a plotfile of the initial data if plot_int > 0
-  if (plot_int > 0)
+  if (plot_int > 0) {
     WriteOutput(0, hydrovs, var_names, geom);
-    // structFact.FortStructure(hydrovs, geom);
-    // structFact.WritePlotFile(0, 0., geom, "plt_SF");
+    WriteDist(0, fold, gold, distribution_var_names, geom);
+    structFact.FortStructure(hydrovs, geom);
+    structFact.WritePlotFile(0, 0., geom, "SF_plt_");
+  }
   Print() << "LB initialized\n";
 
   // TIMESTEP
   for (int step=1; step <= nsteps; ++step) {
     LBM_timestep(geom, fold, gold, fnew, gnew, hydrovs, noise);
-    // structFact.FortStructure(hydrovs, geom);
-    if (plot_int > 0 && step%plot_int ==0)
+    structFact.FortStructure(hydrovs, geom);
+    if (plot_int > 0 && step%plot_int ==0){
       WriteOutput(step, hydrovs, var_names, geom);
-      // time = static_cast<Real>(step);
-      // structFact.WritePlotFile(step, time, geom, "plt_SF");
+      WriteDist(step, fold, gold, distribution_var_names, geom);
+    }
     Print() << "LB step " << step << "\n";
   }
+
+  structFact.WritePlotFile(nsteps, nsteps, geom, "SF_plt_");
 
   // Call the timer again and compute the maximum difference between the start time 
   // and stop time over all processors
