@@ -87,24 +87,14 @@ void hydrovars(int x, int y, int z,
 	       const Array4<Real>& f,
 	       const Array4<Real>& g,
 	       const Array4<Real>& h) {
-  Real rho, phi, j[3];
-  rho = phi = j[0] = j[1] = j[2] = 0.0;
-  for (int i=0; i<nvel; ++i) {
-    Real fi, gi;
-    fi = f(x,y,z,i);
-    gi = g(x,y,z,i);
-    rho  += fi;
-    phi  += gi;
-    j[0] += fi*c[i][0];
-    j[1] += fi*c[i][1];
-    j[2] += fi*c[i][2];
+  const Array1D<Real,0,nvel> mf = moments(x,y,z,f);
+  const Array1D<Real,0,nvel> mg = moments(x,y,z,g);
+  h(x,y,z,0) = mf(0);
+  h(x,y,z,1) = mg(0);
+  for (int i=1; i<nvel; ++i) {
+    h(x,y,z,1+i) = mf(i);
+    h(x,y,z,nvel+1+i) = mg(i);
   }
-  h(x,y,z,0) = rho;
-  h(x,y,z,1) = phi;
-  h(x,y,z,2) = j[0]/rho;
-  h(x,y,z,3) = j[1]/rho;
-  h(x,y,z,4) = j[2]/rho;
-  h(x,y,z,5) = pressure(rho,phi);
 }
 
 #if 0 // equilibrium populations not necessary for MRT

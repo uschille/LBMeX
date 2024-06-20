@@ -139,11 +139,11 @@ void main_driver(const char* argv) {
   MultiFab fnew(ba, dm, nvel, nghost);
   MultiFab gold(ba, dm, nvel, nghost);
   MultiFab gnew(ba, dm, nvel, nghost);
-  MultiFab hydrovs(ba, dm, nhydro, nghost);
+  MultiFab hydrovs(ba, dm, 2*nvel, nghost);
   MultiFab noise(ba, dm, 2*nvel, nghost);
 
   // set up variable names for output
-  const Vector<std::string> var_names = VariableNames(nhydro);
+  const Vector<std::string> var_names = VariableNames(2*nvel);
   const Vector<std::string> distribution_var_names = distribution_Variable_names();
 
   int nStructVars = hydrovs.nComp();
