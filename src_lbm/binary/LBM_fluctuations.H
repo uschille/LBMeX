@@ -239,10 +239,11 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz) { // TODO: add
 
   Real k[3] = { (Real)kx, (Real)ky, (Real)kz };
   Real k2 = k[0]*k[0]+k[1]*k[1]+k[2]*k[2];
-  Real cs2 = pressure(rho0, phi0)/rho0 + rho0*kappa*k2;
+  Real cs2 = T + rho0*kappa*k2;
 
   // Noise covariance of the modes in k-space
   GpuArray<Real,ndof*ndof> Xi = {};
+  for (int i=0; i<ndof; ++i) Xi[i] = 0.;
 
   // diagonal part
   Xi[(   4)*ndof+(   4)] = 2.*rho0*kT*lambda_b*(5. - 9.*cs2);
