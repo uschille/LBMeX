@@ -180,7 +180,7 @@ void main_driver(const char* argv) {
     Print() << "LB step " << step << "\n";
   }
 
-  structFact.WritePlotFile(nsteps, nsteps, geom, "SF_plt_");
+  structFact.WritePlotFile(nsteps, nsteps, geom, "SF_plt");
 
   // Call the timer again and compute the maximum difference between the start time 
   // and stop time over all processors

@@ -647,6 +647,8 @@ inline void generate_fluctuations(const Geometry& geom,
   MultiFab kspace_noise_real(ba, dm, ndof, 0);
   MultiFab kspace_noise_imag(ba, dm, ndof, 0);
 
+  kspace_noise_real.setVal(0.);
+  kspace_noise_imag.setVal(0.);
   // TODO: check if this takes care of ndof entries!?
 
   // generate noise in k-space
