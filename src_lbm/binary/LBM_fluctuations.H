@@ -24,33 +24,35 @@ void cholesky_decomp(GpuArray<Real,ndof*ndof>& A, const int n) {
 
   // adjust Cholesky to include all columns? [uschill 07/26/2022]
 
-  for (int i=0; i<n; ++i) {
-    for (int j=0; j<n; ++j) {
+  // Cholesky-Banachiewicz algorithm
+  for (int i=2*ncons; i<n; ++i) {
+    for (int j=2*ncons; j<=i; ++j) {
       sum = A[i*n+j];
-      for (int k=i-1; k>=0; --k) {
-	sum -= A[i*n+k]*A[j*n+k];
+      for (int k=j-1; k>=2*ncons; --k) {
+	      sum -= A[i*n+k]*A[j*n+k];
       }
       if (i==j) {
-	if (sum>0) {
-	  p[i] = std::sqrt(sum);
-	} else {
-	  p[i] = 0.0;
-	  positive_definite = false;
-	}
+	      if (sum>DBL_EPSILON) {
+	        p[i] = std::sqrt(sum);
+	      } else {
+	        p[i] = 0.0;
+	        positive_definite = false;
+          //Print() << "Row " << i << " matrix not positive definite!\n";
+	      }
       } else {
-	if (positive_definite) {
-	  A[j*n+i] = sum/p[i];
-	} else {
-	  A[j*n+i] = 0.0;
-	}
+	      if (positive_definite) {
+	        A[i*n+j] = sum/p[j];
+	      } else {
+	        A[i*n+j] = 0.0;
+	      }
       }
     }
   }
   for (int i=0; i<n; ++i) {
+    A[i*n+i] = p[i];
     for (int j=i+1; j<n; ++j) {
       A[i*n+j] = 0.0;
     }
-    A[i*n+i] = p[i];
   }
 }
 
@@ -265,18 +267,18 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz) { // TODO: add
   Xi[(Q+ 4)*ndof+(Q+ 4)] = 2.*kT*lambda_b*(9.*pow(Gamma, 2)*pow(mu0, 2) - 9.*Gamma*mu0*pow(phi0, 3)*mu_phi - 3.*Gamma*mu0*phi0 + 5.*pow(phi0, 4)*mu_phi)/(pow(phi0, 2)*rho0*mu_phi);
   Xi[(Q+ 5)*ndof+(Q+ 5)] = (8./3.)*kT*pow(phi0, 2)*lambda_s/rho0;
   Xi[(Q+ 6)*ndof+(Q+ 6)] = 8.*kT*pow(phi0, 2)*lambda_s/rho0;
-  Xi[(Q+ 7)*ndof+(Q+ 7)] = (2./3.)*T*pow(phi0, 2)*lambda_s/rho0;
-  Xi[(Q+ 8)*ndof+(Q+ 8)] = (2./3.)*T*pow(phi0, 2)*lambda_s/rho0;
-  Xi[(Q+ 9)*ndof+(Q+ 9)] = (2./3.)*T*pow(phi0, 2)*lambda_s/rho0;
-  Xi[(Q+10)*ndof+(Q+10)] = 4.*T*pow(phi0, 2)*lambda_o/rho0;
-  Xi[(Q+11)*ndof+(Q+11)] = 4.*T*pow(phi0, 2)*lambda_o/rho0;
-  Xi[(Q+12)*ndof+(Q+12)] = 4.*T*pow(phi0, 2)*lambda_o/rho0;
-  Xi[(Q+13)*ndof+(Q+13)] = (4./3.)*T*pow(phi0, 2)*lambda_o/rho0;
-  Xi[(Q+14)*ndof+(Q+14)] = (4./3.)*T*pow(phi0, 2)*lambda_o/rho0;
-  Xi[(Q+15)*ndof+(Q+15)] = (4./3.)*T*pow(phi0, 2)*lambda_o/rho0;
-  Xi[(Q+16)*ndof+(Q+16)] = 6.*T*lambda_b*(3*pow(Gamma, 2)*pow(mu0, 2) - 3.*Gamma*mu0*pow(phi0, 3)*mu_phi - Gamma*mu0*phi0 + 3.*pow(phi0, 4)*mu_phi)/(pow(phi0, 2)*rho0*mu_phi);
-  Xi[(Q+17)*ndof+(Q+17)] = (8./3.)*T*pow(phi0, 2)*lambda_b/rho0;
-  Xi[(Q+18)*ndof+(Q+18)] = 8.*T*pow(phi0, 2)*lambda_b/rho0;
+  Xi[(Q+ 7)*ndof+(Q+ 7)] = (2./3.)*kT*pow(phi0, 2)*lambda_s/rho0;
+  Xi[(Q+ 8)*ndof+(Q+ 8)] = (2./3.)*kT*pow(phi0, 2)*lambda_s/rho0;
+  Xi[(Q+ 9)*ndof+(Q+ 9)] = (2./3.)*kT*pow(phi0, 2)*lambda_s/rho0;
+  Xi[(Q+10)*ndof+(Q+10)] = 4.*kT*pow(phi0, 2)*lambda_o/rho0;
+  Xi[(Q+11)*ndof+(Q+11)] = 4.*kT*pow(phi0, 2)*lambda_o/rho0;
+  Xi[(Q+12)*ndof+(Q+12)] = 4.*kT*pow(phi0, 2)*lambda_o/rho0;
+  Xi[(Q+13)*ndof+(Q+13)] = (4./3.)*kT*pow(phi0, 2)*lambda_o/rho0;
+  Xi[(Q+14)*ndof+(Q+14)] = (4./3.)*kT*pow(phi0, 2)*lambda_o/rho0;
+  Xi[(Q+15)*ndof+(Q+15)] = (4./3.)*kT*pow(phi0, 2)*lambda_o/rho0;
+  Xi[(Q+16)*ndof+(Q+16)] = 6.*kT*lambda_b*(3*pow(Gamma, 2)*pow(mu0, 2) - 3.*Gamma*mu0*pow(phi0, 3)*mu_phi - Gamma*mu0*phi0 + 3.*pow(phi0, 4)*mu_phi)/(pow(phi0, 2)*rho0*mu_phi);
+  Xi[(Q+17)*ndof+(Q+17)] = (8./3.)*kT*pow(phi0, 2)*lambda_b/rho0;
+  Xi[(Q+18)*ndof+(Q+18)] = 8.*kT*pow(phi0, 2)*lambda_b/rho0;
 
   // rho-rho sector
   Xi[(   8)*ndof+(  20)] = 6.*rho0*kT*lambda_b*(3.*cs2 - 1.);
@@ -372,7 +374,7 @@ GpuArray<GpuComplex<Real>,ndof> correlated_noise(int kx, int ky, int kz,
   for (int i=0; i<ndof; ++i) {
     xi[i] = { 0, 0 };
     for (int j=0; j<=i; ++j) {
-      xi[i] += C[(i)*ndof+(j)]*r[j];
+      xi[i] += C[i*ndof+j]*r[j];
     }
   }
   return xi;
@@ -533,7 +535,9 @@ inline void compute_ifft(const Geometry& geom, MultiFab& realspace_noise,
     Vector<FFTplan> fftw_plans;
     FFTplan plan;
 
-    for (int k=ncons; k<ndof; ++k) {
+    for (int j=0; j<2; ++j)
+    for (int i=ncons; i<ndof; ++i) {
+      int k = (j*nvel)+i;
 
       // first copy the k-th conponent of the noise to one grid
       // may be faster to generate the noise here? [uschill 07/27/2022]
@@ -622,11 +626,13 @@ inline void compute_ifft(const Geometry& geom, MultiFab& realspace_noise,
       }
 
       // copy the real-space noise back to the k-th component of the MultiFab
-      realspace_noise.ParallelCopy(noise_onegrid,0,k,1);
+      //realspace_noise.ParallelCopy(noise_onegrid,0,k,1); something fishy with this one
       // normalization from FFT
-      realspace_noise.mult(1./sqrtnpts,k,1);
+      //realspace_noise.mult(1./sqrtnpts,k,1);
 
     }
+
+    return;
 
     // destroy fft plans
     for (int i=0; i<fftw_plans.size(); ++i) {

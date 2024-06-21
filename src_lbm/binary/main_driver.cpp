@@ -8,6 +8,7 @@
 using namespace amrex;
 
 #include "LBM_binary.H"
+#include "tests.H"
 
 inline void WriteOutput(int step,
 			const MultiFab& hydrovs,
@@ -114,6 +115,8 @@ void main_driver(const char* argv) {
   // set up variable names for output
   const Vector<std::string> var_names = VariableNames(2*nvel);
 
+  cholesky_test();
+
   // INITIALIZE
   LBM_init_mixture(fold, gold, hydrovs);
   // Write a plotfile of the initial data if plot_int > 0
@@ -124,8 +127,11 @@ void main_driver(const char* argv) {
   // TIMESTEP
   for (int step=1; step <= nsteps; ++step) {
     LBM_timestep(geom, fold, gold, fnew, gnew, hydrovs, noise);
-    if (plot_int > 0 && step%plot_int ==0)
+    if (plot_int > 0 && step%plot_int ==0) {
       WriteOutput(step, hydrovs, var_names, geom);
+      const std::string& pltfile = amrex::Concatenate("plt_noise",step,5);
+      WriteSingleLevelPlotfile(pltfile, noise, var_names, geom, (Real)step, step);
+    }
     Print() << "LB step " << step << "\n";
   }
 

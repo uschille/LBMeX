@@ -308,8 +308,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 void thermalize_moments(int x, int y, int z,
       Array1D<Real,0,nvel>& mf, Array1D<Real,0,nvel>& mg,
       Array1D<Real,0,ndof>& noise) {
-  for (int i=4; i<nvel; ++i) {
-    mf(i) += noise(i);
+  for (int i=ncons; i<nvel; ++i) {
+    mf(i) += noise(ncons+i);
     mg(i) += noise(nvel+i);
   }
 }
@@ -323,13 +323,13 @@ void collide(int x, int y, int z,
   Array1D<Real,0,nvel> mf, mg;
   Array1D<Real,0,ndof> xi;
 
-  for (int i=0; i<nvel; ++i) xi(i) = noise(x,y,z,i);
-
   mf = moments(x,y,z,f);
   mg = moments(x,y,z,g);
 
   relax_moments(x,y,z,mf,mg,h);
-  thermalize_moments(x,y,z,mf,mg,xi);
+
+  //for (int i=0; i<ndof; ++i) xi(i) = noise(x,y,z,i);
+  //thermalize_moments(x,y,z,mf,mg,xi);
 
   populations(x,y,z,f,mf);
   populations(x,y,z,g,mg);
@@ -370,6 +370,7 @@ inline void collide_stream(const Geometry& geom,
   const int halo = 1; // need to push from first halo layer into domain
   fold.FillBoundary(geom.periodicity());
   gold.FillBoundary(geom.periodicity());
+  noise.FillBoundary(geom.periodicity());
   hydrovs.FillBoundary(geom.periodicity());
   for (MFIter mfi(fold); mfi.isValid(); ++mfi) {
     const Array4<Real>& fOld = fold.array(mfi);
