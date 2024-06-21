@@ -6,10 +6,10 @@
 AMREX_GPU_MANAGED Real tau_r = 0.7886751345948129; // tau=0.5*(1.+1./sqrt(3.)) minimizes spurious currents according to Swift et al.
 AMREX_GPU_MANAGED Real tau_p = 1.0;
 
-AMREX_GPU_MANAGED Real kappa = 0.01;
+AMREX_GPU_MANAGED Real kappa = 0.0;
 
 AMREX_GPU_MANAGED Real lambda = 1.1;
-AMREX_GPU_MANAGED Real T = 0.5;
+AMREX_GPU_MANAGED Real T = 0.6;
 
 AMREX_GPU_MANAGED Real Gamma = 1.0;
 
@@ -82,21 +82,7 @@ Real pressure(Real rho, Real phi) {
   return p0;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-void hydrovars(int x, int y, int z,
-	       const Array4<Real>& f,
-	       const Array4<Real>& g,
-	       const Array4<Real>& h) {
-  const Array1D<Real,0,nvel> mf = moments(x,y,z,f);
-  const Array1D<Real,0,nvel> mg = moments(x,y,z,g);
-  h(x,y,z,0) = mf(0);
-  h(x,y,z,nvel) = mg(0);
-  for (int i=1; i<nvel; ++i) {
-    h(x,y,z,i) = mf(i);
-    h(x,y,z,nvel+i) = mg(i);
-  }
-}
-
+>>>>>>> 04c020c (fix indexing for storing all moments)
 #if 0 // equilibrium populations not necessary for MRT
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 Array1D<Real,0,nvel> fequilibrium(const Array1D<Real,0,2>& fields,
@@ -323,7 +309,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 void thermalize_moments(int x, int y, int z,
       Array1D<Real,0,nvel>& mf, Array1D<Real,0,nvel>& mg,
       Array1D<Real,0,ndof>& noise) {
-  for (int i=0; i<nvel; ++i) {
+  for (int i=4; i<nvel; ++i) {
     mf(i) += noise(i);
     mg(i) += noise(nvel+i);
   }
@@ -402,6 +388,24 @@ inline void collide_stream(const Geometry& geom,
   MultiFab::Swap(gold, gnew, 0, 0, nvel, 0);
 }
 
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+void hydrovars(int x, int y, int z,
+	       const Array4<Real>& f,
+	       const Array4<Real>& g,
+	       const Array4<Real>& h) {
+  const Array1D<Real,0,nvel> mf = moments(x,y,z,f);
+  const Array1D<Real,0,nvel> mg = moments(x,y,z,g);
+  h(x,y,z,0) = mf(0);
+  h(x,y,z,1) = mg(0);
+  for (int i=1; i<nvel; ++i) {
+    h(x,y,z,i+1) = mf(i);
+    h(x,y,z,nvel+i) = mg(i);
+  }
+  for (int i=1; i<4; ++i) {
+    h(x,y,z,i) = mf(i)/mf(0);
+  }
+}
+
 // calculate hydrodynamic moments for whole lattice
 inline void hydrovars(MultiFab& mf, MultiFab& mg, MultiFab& hydrovs) {
   auto const & f = mf.arrays();
@@ -434,10 +438,10 @@ inline void LBM_init_mixture(MultiFab& mf,
     const Array4<Real>& g = mg.array(mfi);
     ParallelForRNG(valid_box, [=] AMREX_GPU_DEVICE(int x, int y, int z, RandomEngine const& engine) {
       const Real rho = C1 + C2;
-      const Real phi = (C1-C2)+0.01*RandomNormal(0., 1., engine);
+      const Real phi = (C1-C2)+0.001*RandomNormal(0., 1., engine);
       for (int i=0; i<nvel; i++) {
-	f(x,y,z,i) = w[i]*rho;
-	g(x,y,z,i) = w[i]*phi;
+        f(x,y,z,i) = w[i]*rho;
+        g(x,y,z,i) = w[i]*phi;
       }
     });
   }
