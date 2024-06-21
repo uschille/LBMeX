@@ -24,7 +24,7 @@ inline Vector<std::string> VariableNames(const int numVars) {
   std::string name;
   int cnt = 0;
   // rho, phi, psi
-  var_names[cnt++] = "rho";
+  var_names[cnt++] = "density";
   var_names[cnt++] = "phi";
   // velx, vely, velz
   for (int d=0; d<AMREX_SPACEDIM; d++) {
@@ -34,8 +34,8 @@ inline Vector<std::string> VariableNames(const int numVars) {
   }
   var_names[cnt++] = "p_bulk";
   // pxx, pxy, pxz, pyy, pyz, pzz
-  for (int i=0; i<AMREX_SPACEDIM, cnt<numVars; ++i) {
-    for (int j=i; j<AMREX_SPACEDIM, cnt<numVars; ++j) {
+  for (int i=0; i<AMREX_SPACEDIM; ++i) {
+    for (int j=i; j<AMREX_SPACEDIM; ++j) {
       name = "p";
       name += (120+i);
       name += (120+j);
@@ -64,21 +64,16 @@ void main_driver(const char* argv) {
   int nsteps = 100;
   int plot_int = 10;
 
-  // default droplet radius (% of box size)
-  Real radius = 0.3;
-
   // input parameters
   ParmParse pp;
   pp.query("nx", nx);
   pp.query("max_grid_size", max_grid_size);
   pp.query("nsteps", nsteps);
   pp.query("plot_int", plot_int);
+  pp.query("kappa", kappa);
   pp.query("lambda", lambda);
   pp.query("T", T);
-  pp.query("kappa", kappa);
-  pp.query("R", radius);
   pp.query("temperature", temperature);
-  pp.query("R", radius);
 
   // set up Box and Geomtry
   IntVect dom_lo(0, 0, 0);
@@ -116,7 +111,7 @@ void main_driver(const char* argv) {
   const Vector<std::string> var_names = VariableNames(2*nvel);
 
   // INITIALIZE
-  LBM_init_droplet(radius, geom, fold, gold, hydrovs);
+  LBM_init_mixture(fold, gold, hydrovs);
   // Write a plotfile of the initial data if plot_int > 0
   if (plot_int > 0)
     WriteOutput(0, hydrovs, var_names, geom);
