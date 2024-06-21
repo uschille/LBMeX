@@ -47,7 +47,6 @@ inline Vector<std::string> VariableNames(const int numVars) {
     name += (120+d);
     var_names[cnt++] = name;
   }
-  var_names[cnt++] = "p_bulk";
   // pxx, pxy, pxz, pyy, pyz, pzz
   for (int i=0; i<AMREX_SPACEDIM; ++i) {
     for (int j=i; j<AMREX_SPACEDIM; ++j) {
@@ -58,9 +57,14 @@ inline Vector<std::string> VariableNames(const int numVars) {
     }
   }
   // kinetic moments
+  for (; cnt<nvel+1;) {
+    name = "mf";
+    name += std::to_string(cnt-1);
+    var_names[cnt++] = name;
+  }
   for (; cnt<numVars;) {
-    name = "m";
-    name += std::to_string(cnt);
+    name = "mg";
+    name += std::to_string(cnt-nvel);
     var_names[cnt++] = name;
   }
   return var_names;
@@ -150,7 +154,6 @@ void main_driver(const char* argv) {
 
   // INITIALIZE
   LBM_init_mixture(fold, gold, hydrovs);
-
   // Write a plotfile of the initial data if plot_int > 0
   if (plot_int > 0) {
     WriteOutput(0, hydrovs, var_names, geom);
