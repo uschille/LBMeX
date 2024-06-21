@@ -4,6 +4,8 @@
 #include <AMReX_Print.H>
 #include <AMReX_ParmParse.H>
 #include <AMReX_PlotFileUtil.H>
+#include <AMReX_VisMF.H>
+
 #include "StructFact.H"
 
 using namespace amrex;
@@ -168,6 +170,8 @@ void main_driver(const char* argv) {
     LBM_timestep(geom, fold, gold, fnew, gnew, hydrovs, noise);
     // structFact.FortStructure(hydrovs, geom);
     if (plot_int > 0 && step%plot_int ==0){
+      std::string noiseplt = amrex::Concatenate("noise_plt_",step,5);
+      VisMF::Write(noise, noiseplt);
       WriteOutput(step, hydrovs, var_names, geom);
       // WriteDist(step, fold, gold, distribution_var_names, geom);
     }
