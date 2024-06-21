@@ -153,7 +153,7 @@ void main_driver(const char* argv) {
     if (temperature>0) var_scaling[d] = temperature; else var_scaling[d] = 1.;
   }
 
-  StructFact structFact(ba, dm, var_names, var_scaling);
+  // StructFact structFact(ba, dm, var_names, var_scaling);
 
   // INITIALIZE
   if (init_cond == 0){LBM_init_mixture(fold, gold, hydrovs);}
@@ -163,24 +163,24 @@ void main_driver(const char* argv) {
   // Write a plotfile of the initial data if plot_int > 0
   if (plot_int > 0) {
     WriteOutput(0, hydrovs, var_names, geom);
-    WriteDist(0, fold, gold, distribution_var_names, geom);
-    structFact.FortStructure(hydrovs, geom);
-    structFact.WritePlotFile(0, 0., geom, "SF_plt_");
+    // WriteDist(0, fold, gold, distribution_var_names, geom);
+    // structFact.FortStructure(hydrovs, geom);
+    // structFact.WritePlotFile(0, 0., geom, "SF_plt_");
   }
   Print() << "LB initialized\n";
 
   // TIMESTEP
   for (int step=1; step <= nsteps; ++step) {
     LBM_timestep(geom, fold, gold, fnew, gnew, hydrovs, noise);
-    structFact.FortStructure(hydrovs, geom);
+    // structFact.FortStructure(hydrovs, geom);
     if (plot_int > 0 && step%plot_int ==0){
       WriteOutput(step, hydrovs, var_names, geom);
-      WriteDist(step, fold, gold, distribution_var_names, geom);
+      // WriteDist(step, fold, gold, distribution_var_names, geom);
     }
     Print() << "LB step " << step << "\n";
   }
 
-  structFact.WritePlotFile(nsteps, nsteps, geom, "SF_plt");
+  // structFact.WritePlotFile(nsteps, nsteps, geom, "SF_plt");
 
   // Call the timer again and compute the maximum difference between the start time 
   // and stop time over all processors
