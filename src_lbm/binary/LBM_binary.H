@@ -82,7 +82,6 @@ Real pressure(Real rho, Real phi) {
   return p0;
 }
 
-
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 void hydrovars(int x, int y, int z,
 	       const Array4<Real>& f,
@@ -101,7 +100,6 @@ void hydrovars(int x, int y, int z,
   }
 }
 
->>>>>>> e6a5f61 (Fixed indexes in hydrovars to allow running)
 #if 0 // equilibrium populations not necessary for MRT
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 Array1D<Real,0,nvel> fequilibrium(const Array1D<Real,0,2>& fields,
