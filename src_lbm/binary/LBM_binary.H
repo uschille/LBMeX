@@ -402,11 +402,7 @@ void hydrovars(int x, int y, int z,
     h(x,y,z,nvel+i) = mg(i);
   }
   for (int i=1; i<4; ++i) {
-<<<<<<< HEAD
-    h(x,y,z,i) = mf(i)/mf(0);
-=======
     h(x,y,z,i+1) = mf(i)/mf(0);
->>>>>>> uschill-dev
   }
 }
 

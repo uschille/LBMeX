@@ -154,10 +154,6 @@ void main_driver(const char* argv) {
 
   // INITIALIZE
   LBM_init_mixture(fold, gold, hydrovs);
-<<<<<<< HEAD
-
-=======
->>>>>>> uschill-dev
   // Write a plotfile of the initial data if plot_int > 0
   if (plot_int > 0) {
     WriteOutput(0, hydrovs, var_names, geom);
