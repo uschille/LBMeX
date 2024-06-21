@@ -82,25 +82,7 @@ Real pressure(Real rho, Real phi) {
   return p0;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-void hydrovars(int x, int y, int z,
-	       const Array4<Real>& f,
-	       const Array4<Real>& g,
-	       const Array4<Real>& h) {
-  const Array1D<Real,0,nvel> mf = moments(x,y,z,f);
-  const Array1D<Real,0,nvel> mg = moments(x,y,z,g);
-  h(x,y,z,0) = mf(0);
-  h(x,y,z,1) = mg(0);
-  for (int i=1; i<nvel; ++i) {
-    h(x,y,z,i+1) = mf(i);
-    h(x,y,z,nvel+i) = mg(i);
-  }
-  for (int i=1; i<4; ++i) {
-    h(x,y,z,i) = mf(i)/mf(0);
-  }
-}
 
->>>>>>> 8f227d3 (fix indexing for storing all moments)
 #if 0 // equilibrium populations not necessary for MRT
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 Array1D<Real,0,nvel> fequilibrium(const Array1D<Real,0,2>& fields,
@@ -420,7 +402,11 @@ void hydrovars(int x, int y, int z,
     h(x,y,z,nvel+i) = mg(i);
   }
   for (int i=1; i<4; ++i) {
+<<<<<<< HEAD
     h(x,y,z,i) = mf(i)/mf(0);
+=======
+    h(x,y,z,i+1) = mf(i)/mf(0);
+>>>>>>> uschill-dev
   }
 }
 
