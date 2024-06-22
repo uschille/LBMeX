@@ -536,7 +536,7 @@ inline void compute_ifft(const Geometry& geom, MultiFab& realspace_noise,
     FFTplan plan;
 
     for (int j=0; j<2; ++j)
-    for (int i=ncons; i<ndof; ++i) {
+    for (int i=ncons; i<nvel; ++i) {
       int k = (j*nvel)+i;
 
       // first copy the k-th conponent of the noise to one grid
@@ -626,13 +626,11 @@ inline void compute_ifft(const Geometry& geom, MultiFab& realspace_noise,
       }
 
       // copy the real-space noise back to the k-th component of the MultiFab
-      //realspace_noise.ParallelCopy(noise_onegrid,0,k,1); something fishy with this one
+      realspace_noise.ParallelCopy(noise_onegrid,0,k,1);
       // normalization from FFT
-      //realspace_noise.mult(1./sqrtnpts,k,1);
+      realspace_noise.mult(1./sqrtnpts,k,1);
 
     }
-
-    return;
 
     // destroy fft plans
     for (int i=0; i<fftw_plans.size(); ++i) {
