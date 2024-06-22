@@ -10,15 +10,6 @@ using namespace amrex;
 #include "LBM_binary.H"
 #include "tests.H"
 
-inline void WriteOutput(int step,
-			const MultiFab& hydrovs,
-			const Vector<std::string>& var_names,
-			const Geometry& geom) {
-  const Real time = step;
-  const std::string& pltfile = amrex::Concatenate("plt",step,5);
-  WriteSingleLevelPlotfile(pltfile, hydrovs, var_names, geom, time, step);
-}
-
 inline Vector<std::string> VariableNames(const int numVars) {
   // set variable names for output
   Vector<std::string> var_names(numVars);
@@ -56,7 +47,18 @@ inline Vector<std::string> VariableNames(const int numVars) {
   return var_names;
 }
 
+inline void WriteOutput(int step,
+			const MultiFab& hydrovs,
+			const Geometry& geom) {
+  // set up variable names for output
+  const Vector<std::string> var_names = VariableNames(2*nvel);
+  const std::string& pltfile = amrex::Concatenate("plt",step,5);
+  WriteSingleLevelPlotfile(pltfile, hydrovs, var_names, geom, Real(step), step);
+}
+
 void main_driver(const char* argv) {
+
+  cholesky_test();
 
   // store the current time so we can later compute total run time.
   Real strt_time = ParallelDescriptor::second();
@@ -101,9 +103,6 @@ void main_driver(const char* argv) {
   // need two halo layers for gradients
   int nghost = 2;
 
-  // number of hydrodynamic fields to output
-  int nhydro = 6;
-
   // set up MultiFabs
   MultiFab fold(ba, dm, nvel, nghost);
   MultiFab fnew(ba, dm, nvel, nghost);
@@ -112,26 +111,16 @@ void main_driver(const char* argv) {
   MultiFab hydrovs(ba, dm, 2*nvel, nghost);
   MultiFab noise(ba, dm, 2*nvel, nghost);
 
-  // set up variable names for output
-  const Vector<std::string> var_names = VariableNames(2*nvel);
-
-  cholesky_test();
-
   // INITIALIZE
   LBM_init_mixture(fold, gold, hydrovs);
   // Write a plotfile of the initial data if plot_int > 0
-  if (plot_int > 0)
-    WriteOutput(0, hydrovs, var_names, geom);
+  if (plot_int > 0) WriteOutput(0, hydrovs, geom);
   Print() << "LB initialized\n";
 
   // TIMESTEP
   for (int step=1; step <= nsteps; ++step) {
     LBM_timestep(geom, fold, gold, fnew, gnew, hydrovs, noise);
-    if (plot_int > 0 && step%plot_int ==0) {
-      WriteOutput(step, hydrovs, var_names, geom);
-      const std::string& pltfile = amrex::Concatenate("plt_noise",step,5);
-      WriteSingleLevelPlotfile(pltfile, noise, var_names, geom, (Real)step, step);
-    }
+    if (plot_int > 0 && step%plot_int ==0) WriteOutput(step, hydrovs, geom);
     Print() << "LB step " << step << "\n";
   }
 
