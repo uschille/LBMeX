@@ -328,8 +328,8 @@ void collide(int x, int y, int z,
 
   relax_moments(x,y,z,mf,mg,h);
 
-  //for (int i=0; i<ndof; ++i) xi(i) = noise(x,y,z,i);
-  //thermalize_moments(x,y,z,mf,mg,xi);
+  for (int i=0; i<ndof; ++i) xi(i) = noise(x,y,z,i);
+  thermalize_moments(x,y,z,mf,mg,xi);
 
   populations(x,y,z,f,mf);
   populations(x,y,z,g,mg);
