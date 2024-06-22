@@ -309,8 +309,8 @@ void thermalize_moments(int x, int y, int z,
       Array1D<Real,0,nvel>& mf, Array1D<Real,0,nvel>& mg,
       Array1D<Real,0,ndof>& noise) {
   for (int i=ncons; i<nvel; ++i) {
-    mf(i) += noise(ncons+i);
-    mg(i) += noise(nvel+i);
+    mf(i) += (1. - 0.5/tau_r) * noise(ncons+i);
+    mg(i) += (1. - 0.5/tau_p) * noise(nvel+i);
   }
 }
 
