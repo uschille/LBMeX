@@ -32,7 +32,7 @@ void cholesky_decomp(GpuArray<Real,ndof*ndof>& A, const int n) {
 	      sum -= A[i*n+k]*A[j*n+k];
       }
       if (i==j) {
-	      if (sum>DBL_EPSILON) {
+	      if (sum>FLT_EPSILON) {
 	        p[i] = std::sqrt(sum);
 	      } else {
 	        p[i] = 0.0;
@@ -40,7 +40,7 @@ void cholesky_decomp(GpuArray<Real,ndof*ndof>& A, const int n) {
           //Print() << "Row " << i << " matrix not positive definite!\n";
 	      }
       } else {
-	      if (positive_definite) {
+	      if (p[j]>FLT_EPSILON) {
 	        A[i*n+j] = sum/p[j];
 	      } else {
 	        A[i*n+j] = 0.0;
@@ -336,19 +336,16 @@ GpuArray<GpuComplex<Real>,ndof> kspace_white_noise(int kx, int ky, int kz, const
   GpuArray<GpuComplex<Real>,ndof> r = {};
   for (int i=ncons; i<nvel; ++i) {
     // symmetry points are purely real
-    if (((kx == 0) || (kx == domain.length(0) - kx))
-	&& ((ky == 0) || (ky == domain.length(1) - ky))
-	&& ((kz == 0) || (kz == domain.length(2) - kz))) {
-      r[i] = { RandomNormal(0., 1., engine),
-	       RandomNormal(0., 0., engine) };
-      r[nvel+i] = { RandomNormal(0., 1., engine),
-		    RandomNormal(0., 0., engine) };
+    if (     ((kx == 0) || (kx == domain.length(0) - kx))
+          && ((ky == 0) || (ky == domain.length(1) - ky))
+          && ((kz == 0) || (kz == domain.length(2) - kz)) ) {
+      // real Gaussian random variables with zero mean and variance 1
+      r[i] = { RandomNormal(0., 1., engine), RandomNormal(0., 0., engine) };
+      r[nvel+i] = { RandomNormal(0., 1., engine), RandomNormal(0., 0., engine) };
     } else {
       // complex Gaussian random variables with zero mean and variance 0.5
-      r[i] = { RandomNormal(0., std::sqrt(0.5), engine),
-	       RandomNormal(0., std::sqrt(0.5), engine) };
-      r[nvel+i] = { RandomNormal(0., std::sqrt(0.5), engine),
-		    RandomNormal(0., std::sqrt(0.5), engine) };
+      r[i] = { RandomNormal(0., std::sqrt(0.5), engine), RandomNormal(0., std::sqrt(0.5), engine) };
+      r[nvel+i] = { RandomNormal(0., std::sqrt(0.5), engine), RandomNormal(0., std::sqrt(0.5), engine) };
     }
   }
   return r;
@@ -405,11 +402,9 @@ inline void generate_kspace_noise(const Geometry& geom,
 	      // compute correlated noise in k-space
 	      xi = correlated_noise(kx,ky,kz,domain,engine);
 
-        for (int i=ncons; i<nvel; ++i) {
+        for (int i=2*ncons; i<ndof; ++i) {
           xi_real(kx,ky,kz,i) = xi[i].real();
           xi_imag(kx,ky,kz,i) = xi[i].imag();
-          xi_real(kx,ky,kz,nvel+i) = xi[nvel+i].real();
-          xi_imag(kx,ky,kz,nvel+i) = xi[nvel+i].imag();
         }
       }
     });
@@ -438,7 +433,7 @@ inline void check_kspace_symmetries(const Geometry& geom,
 	  && ((kz == 0) || (kz == domain.length(2) - kz))) {
 	symmetric &= (xi(kx,ky,kz).imag() == 0);
 	if (!symmetric) {
-	  Print() << "symmetry violation! ("
+	  Print() << "symmetry violation 1! ("
 		  << kx << "," << ky << "," << kz << ") "
 		  << xi(kx,ky,kz).imag() << " "
 	          << symmetric << " " << (xi(kx,ky,kz).imag() == 0.)
@@ -451,7 +446,7 @@ inline void check_kspace_symmetries(const Geometry& geom,
 	symmetric &= ((xi(kx,ky,kz).real() ==  xi(kxloc,kyloc,kzloc).real())
 		   && (xi(kx,ky,kz).imag() == -xi(kxloc,kyloc,kzloc).imag()));
 	if (!symmetric) {
-	  Print() << "symmetry violation! ("
+	  Print() << "symmetry violation 2! ("
 		  << kx << "," << ky << "," << kz << ")"
 		  << std::endl;
 	  exit(0);
@@ -461,7 +456,7 @@ inline void check_kspace_symmetries(const Geometry& geom,
 	  symmetric &= ((xi(kx,ky,kz).real() ==  xi(kxloc,kyloc,kzloc).real())
 		     && (xi(kx,ky,kz).imag() == -xi(kxloc,kyloc,kzloc).imag()));
 	  if (!symmetric) {
-	    Print() << "symmetry violation! ("
+	    Print() << "symmetry violation 3a! ("
 		    << kx << "," << ky << "," << kz << ") ("
 	            << kxloc << "," << kyloc << "," << kzloc << ")"
 	            << " " << xi(kx,ky,kz).real() << " " << xi(kxloc,kyloc,kzloc).real()
@@ -474,7 +469,7 @@ inline void check_kspace_symmetries(const Geometry& geom,
 	    symmetric &= ((xi(kx,ky,kz).real() ==  xi(kxloc,kyloc,kzloc).real())
 		       && (xi(kx,ky,kz).imag() == -xi(kxloc,kyloc,kzloc).imag()));
 	    if (!symmetric) {
-	      Print() << "symmetry violation! ("
+	      Print() << "symmetry violation 3b! ("
 		      << kx << "," << ky << "," << kz << ") ("
 		      << kxloc << "," << kyloc << "," << kzloc << ")"
 		      << " " << xi(kx,ky,kz).real() << " " << xi(kxloc,kyloc,kzloc).real()
@@ -496,11 +491,11 @@ inline void compute_ifft(const Geometry& geom, MultiFab& realspace_noise,
 			 const MultiFab& kspace_noise_imag) {
 
 #ifdef AMREX_USE_CUDA
-    Print() << "Using cuFFT\n";
+    //Print() << "Using cuFFT\n";
     using FFTplan = cufftHandle;
     using FFTcomplex = cuDoubleComplex;
 #else
-    Print() << "Using FFTW\n";
+    //Print() << "Using FFTW\n";
     using FFTplan = fftw_plan;
     using FFTcomplex = fftw_complex;
 #endif
@@ -604,8 +599,8 @@ inline void compute_ifft(const Geometry& geom, MultiFab& realspace_noise,
 	      });
       }
 
-      //ParallelDescriptor::Barrier();
-      //check_kspace_symmetries(geom,noise_onegrid,spectral_field);
+      ParallelDescriptor::Barrier();
+      check_kspace_symmetries(geom,noise_onegrid,spectral_field);
 
       // inverse FFT (complex to real)
       for (MFIter mfi(noise_onegrid); mfi.isValid(); ++mfi) {
