@@ -15,7 +15,7 @@ inline Vector<std::string> VariableNames(const int numVars) {
   Vector<std::string> var_names(numVars);
   std::string name;
   int cnt = 0;
-  // rho, phi, psi
+  // rho, phi
   var_names[cnt++] = "density";
   var_names[cnt++] = "phi";
   // velx, vely, velz
@@ -24,19 +24,24 @@ inline Vector<std::string> VariableNames(const int numVars) {
     name += (120+d);
     var_names[cnt++] = name;
   }
-  // pxx, pxy, pxz, pyy, pyz, pzz
-  for (int i=0; i<AMREX_SPACEDIM; ++i) {
-    for (int j=i; j<AMREX_SPACEDIM; ++j) {
-      name = "p";
-      name += (120+i);
-      name += (120+j);
-      var_names[cnt++] = name;
-    }
+  for (int d=0; d<AMREX_SPACEDIM; d++) {
+    name = "phi*u";
+    name += (120+d);
+    var_names[cnt++] = name;
   }
-  // kinetic moments
-  for (; cnt<nvel+1;) {
+  // pxx, pxy, pxz, pyy, pyz, pzz
+  // for (int i=0; i<AMREX_SPACEDIM; ++i) {
+  //   for (int j=i; j<AMREX_SPACEDIM; ++j) {
+  //     name = "p";
+  //     name += (120+i);
+  //     name += (120+j);
+  //     var_names[cnt++] = name;
+  //   }
+  // }
+  // remaining moments
+  for (; cnt<nvel+ncons;) {
     name = "mf";
-    name += std::to_string(cnt-1);
+    name += std::to_string(cnt-ncons);
     var_names[cnt++] = name;
   }
   for (; cnt<numVars;) {

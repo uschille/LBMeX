@@ -245,7 +245,7 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz) { // TODO: add
 
   // Noise covariance of the modes in k-space
   GpuArray<Real,ndof*ndof> Xi = {};
-  for (int i=0; i<ndof; ++i) Xi[i] = 0.;
+  Xi.fill(0);
 
   // TODO: Check factors of phi0
 
@@ -287,42 +287,42 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz) { // TODO: add
   Xi[(  20)*ndof+(   8)] = Xi[(   8)*ndof+(  20)];
 
   // rho-phi sector
-  Xi[(   8)*ndof+(   4)] = -3.*kT*phi0*k2*kappa*lambda_b/(rho0*mu_phi);
+  Xi[(   8)*ndof+(   1)] = -3.*kT*phi0*k2*kappa*lambda_b/(rho0*mu_phi);
   Xi[(   8)*ndof+(Q+ 4)] = 3.*kT*k2*kappa*lambda_b*(-3.*Gamma*mu0 + phi0)/(rho0*mu_phi);
   Xi[(   8)*ndof+(Q+16)] = 3.*kT*k2*kappa*lambda_b*(3.*Gamma*mu0 - phi0)/(rho0*mu_phi);
-  Xi[(  20)*ndof+(   4)] = 3.*kT*phi0*k2*kappa*lambda_b/(rho0*mu_phi);
+  Xi[(  20)*ndof+(   1)] = 3.*kT*phi0*k2*kappa*lambda_b/(rho0*mu_phi);
   Xi[(  20)*ndof+(Q+ 4)] = 3.*kT*k2*kappa*lambda_b*(3.*Gamma*mu0 - phi0)/(rho0*mu_phi);
   Xi[(  20)*ndof+(Q+16)] = 3.*kT*k2*kappa*lambda_b*(-3.*Gamma*mu0 + phi0)/(rho0*mu_phi);
-  Xi[(   4)*ndof+(   8)] = Xi[(   8)*ndof+(   4)];
+  Xi[(   1)*ndof+(   8)] = Xi[(   8)*ndof+(   1)];
   Xi[(Q+ 4)*ndof+(   8)] = Xi[(   8)*ndof+(Q+ 4)];
   Xi[(Q+16)*ndof+(   8)] = Xi[(   8)*ndof+(Q+16)];
-  Xi[(   4)*ndof+(  20)] = Xi[(  20)*ndof+(   4)];
+  Xi[(   1)*ndof+(  20)] = Xi[(  20)*ndof+(   1)];
   Xi[(Q+ 4)*ndof+(  20)] = Xi[(  20)*ndof+(Q+ 4)];
   Xi[(Q+16)*ndof+(  20)] = Xi[(  20)*ndof+(Q+16)];
 
   // phi-phi sector
   // real entries
-  Xi[(   4)*ndof+(Q+ 4)] = 3.*Gamma*kT*mu0*lambda_b/(rho0*mu_phi);///phi0
-  Xi[(   4)*ndof+(Q+16)] = -3.*Gamma*kT*mu0*lambda_b/(rho0*mu_phi);///phi0
+  Xi[(   1)*ndof+(Q+ 4)] = 3.*Gamma*kT*mu0*lambda_b/(rho0*mu_phi);///phi0
+  Xi[(   1)*ndof+(Q+16)] = -3.*Gamma*kT*mu0*lambda_b/(rho0*mu_phi);///phi0
   Xi[(Q+ 4)*ndof+(Q+16)] = 6.*kT*lambda_b*(-3.*pow(Gamma, 2)*pow(mu0, 2) + 3.*Gamma*mu0*pow(phi0, 3)*mu_phi + Gamma*mu0*phi0 - pow(phi0, 4)*mu_phi)/(rho0*mu_phi);///pow(phi0, 2)
-  Xi[(Q+ 4)*ndof+(   4)] = Xi[(   4)*ndof+(Q+ 4)];
-  Xi[(Q+16)*ndof+(   4)] = Xi[(   4)*ndof+(Q+16)];
+  Xi[(Q+ 4)*ndof+(   1)] = Xi[(   1)*ndof+(Q+ 4)];
+  Xi[(Q+16)*ndof+(   1)] = Xi[(   1)*ndof+(Q+16)];
   Xi[(Q+16)*ndof+(Q+ 4)] = Xi[(Q+ 4)*ndof+(Q+16)];
 
   // imaginary entries
   Real I = 0; // ignore imaginary entries until we know how to handle them
-  Xi[(   4)*ndof+(   5)] = I*kT*k[0]*(-Gamma*mu0 + pow(phi0, 3)*mu_phi)/(rho0*mu_phi);///phi0
-  Xi[(   4)*ndof+(   6)] = I*kT*k[1]*(-Gamma*mu0 + pow(phi0, 3)*mu_phi)/(rho0*mu_phi);///phi0
-  Xi[(   4)*ndof+(   7)] = I*kT*k[2]*(-Gamma*mu0 + pow(phi0, 3)*mu_phi)/(rho0*mu_phi);///phi0
+  Xi[(   1)*ndof+(   5)] = I*kT*k[0]*(-Gamma*mu0 + pow(phi0, 3)*mu_phi)/(rho0*mu_phi);///phi0
+  Xi[(   1)*ndof+(   6)] = I*kT*k[1]*(-Gamma*mu0 + pow(phi0, 3)*mu_phi)/(rho0*mu_phi);///phi0
+  Xi[(   1)*ndof+(   7)] = I*kT*k[2]*(-Gamma*mu0 + pow(phi0, 3)*mu_phi)/(rho0*mu_phi);///phi0
   Xi[(   5)*ndof+(Q+ 4)] = I*kT*k[0]*(3.*pow(Gamma, 2)*pow(mu0, 2) - 3.*Gamma*mu0*pow(phi0, 3)*mu_phi - Gamma*mu0*phi0 + pow(phi0, 4)*mu_phi)/(rho0*mu_phi);///pow(phi0, 2)
   Xi[(   5)*ndof+(Q+16)] = I*kT*k[0]*(-3.*pow(Gamma, 2)*pow(mu0, 2) + 3.*Gamma*mu0*pow(phi0, 3)*mu_phi + Gamma*mu0*phi0 - pow(phi0, 4)*mu_phi)/(rho0*mu_phi);///pow(phi0, 2)
   Xi[(   6)*ndof+(Q+ 4)] = I*kT*k[1]*(3.*pow(Gamma, 2)*pow(mu0, 2) - 3.*Gamma*mu0*pow(phi0, 3)*mu_phi - Gamma*mu0*phi0 + pow(phi0, 4)*mu_phi)/(rho0*mu_phi);///pow(phi0, 2)
   Xi[(   6)*ndof+(Q+16)] = I*kT*k[1]*(-3.*pow(Gamma, 2)*pow(mu0, 2) + 3.*Gamma*mu0*pow(phi0, 3)*mu_phi + Gamma*mu0*phi0 - pow(phi0, 4)*mu_phi)/(rho0*mu_phi);///pow(phi0, 2)
   Xi[(   7)*ndof+(Q+ 4)] = I*kT*k[2]*(3.*pow(Gamma, 2)*pow(mu0, 2) - 3.*Gamma*mu0*pow(phi0, 3)*mu_phi - Gamma*mu0*phi0 + pow(phi0, 4)*mu_phi)/(rho0*mu_phi);///pow(phi0, 2)
   Xi[(   7)*ndof+(Q+16)] = I*kT*k[2]*(-3.*pow(Gamma, 2)*pow(mu0, 2) + 3.*Gamma*mu0*pow(phi0, 3)*mu_phi + Gamma*mu0*phi0 - pow(phi0, 4)*mu_phi)/(rho0*mu_phi);///pow(phi0, 2)
-  Xi[(   5)*ndof+(   4)] = -Xi[(   4)*ndof+(   5)];
-  Xi[(   6)*ndof+(   4)] = -Xi[(   4)*ndof+(   6)];
-  Xi[(   7)*ndof+(   4)] = -Xi[(   4)*ndof+(   7)];
+  Xi[(   5)*ndof+(   1)] = -Xi[(   1)*ndof+(   5)];
+  Xi[(   6)*ndof+(   1)] = -Xi[(   1)*ndof+(   6)];
+  Xi[(   7)*ndof+(   1)] = -Xi[(   1)*ndof+(   7)];
   Xi[(Q+ 4)*ndof+(   5)] = -Xi[(   5)*ndof+(Q+ 4)];
   Xi[(Q+16)*ndof+(   5)] = -Xi[(   5)*ndof+(Q+16)];
   Xi[(Q+ 4)*ndof+(   6)] = -Xi[(   6)*ndof+(Q+ 4)];

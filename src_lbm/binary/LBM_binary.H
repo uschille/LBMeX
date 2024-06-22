@@ -397,12 +397,13 @@ void hydrovars(int x, int y, int z,
   const Array1D<Real,0,nvel> mg = moments(x,y,z,g);
   h(x,y,z,0) = mf(0);
   h(x,y,z,1) = mg(0);
-  for (int i=1; i<nvel; ++i) {
-    h(x,y,z,i+1) = mf(i);
-    h(x,y,z,nvel+i) = mg(i);
-  }
-  for (int i=1; i<4; ++i) {
+  for (int i=1; i<ncons; ++i) {
     h(x,y,z,i+1) = mf(i)/mf(0);
+    h(x,y,z,i+ncons) = mg(i);
+  }
+  for (int i=ncons; i<nvel; ++i) {
+    h(x,y,z,i+ncons) = mf(i);
+    h(x,y,z,i+nvel) = mg(i);
   }
 }
 
