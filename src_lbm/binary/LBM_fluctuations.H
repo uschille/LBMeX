@@ -247,6 +247,8 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz) { // TODO: add
   GpuArray<Real,ndof*ndof> Xi = {};
   for (int i=0; i<ndof; ++i) Xi[i] = 0.;
 
+  // TODO: Check factors of phi0
+
   // diagonal part
   Xi[(   8)*ndof+(   8)] = 2.*rho0*kT*lambda_b*(5. - 9.*cs2);
   Xi[(   9)*ndof+(   9)] = (8./3.)*rho0*kT*lambda_s;
@@ -402,7 +404,7 @@ inline void generate_kspace_noise(const Geometry& geom,
 	      // compute correlated noise in k-space
 	      xi = correlated_noise(kx,ky,kz,domain,engine);
 
-        for (int i=2*ncons; i<ndof; ++i) {
+        for (int i=0; i<ndof; ++i) {
           xi_real(kx,ky,kz,i) = xi[i].real();
           xi_imag(kx,ky,kz,i) = xi[i].imag();
         }
@@ -530,9 +532,7 @@ inline void compute_ifft(const Geometry& geom, MultiFab& realspace_noise,
     Vector<FFTplan> fftw_plans;
     FFTplan plan;
 
-    for (int j=0; j<2; ++j)
-    for (int i=ncons; i<nvel; ++i) {
-      int k = (j*nvel)+i;
+    for (int k=0; k<ndof; ++k) {
 
       // first copy the k-th conponent of the noise to one grid
       // may be faster to generate the noise here? [uschill 07/27/2022]
