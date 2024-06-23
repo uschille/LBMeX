@@ -308,6 +308,11 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 void thermalize_moments(int x, int y, int z,
       Array1D<Real,0,nvel>& mf, Array1D<Real,0,nvel>& mg,
       Array1D<Real,0,ndof>& noise) {
+  // diffusive moments 1,2,3 in noise at 5,6,7
+  for (int i=1; i<ncons; ++i) {
+    mg(i) += (1. - 0.5/tau_p) * noise(ncons+i);
+  }
+  // nonconserved moments 4..18 in noise at 8..22 and 23..37
   for (int i=ncons; i<nvel; ++i) {
     mf(i) += (1. - 0.5/tau_r) * noise(ncons+i);
     mg(i) += (1. - 0.5/tau_p) * noise(nvel+i);

@@ -25,10 +25,10 @@ void cholesky_decomp(GpuArray<Real,ndof*ndof>& A, const int n) {
   // adjust Cholesky to include all columns? [uschill 07/26/2022]
 
   // Cholesky-Banachiewicz algorithm
-  for (int i=2*ncons; i<n; ++i) {
-    for (int j=2*ncons; j<=i; ++j) {
+  for (int i=ncons+1; i<n; ++i) {
+    for (int j=ncons+1; j<=i; ++j) {
       sum = A[i*n+j];
-      for (int k=j-1; k>=2*ncons; --k) {
+      for (int k=j-1; k>=ncons+1; --k) {
 	      sum -= A[i*n+k]*A[j*n+k];
       }
       if (i==j) {
@@ -251,6 +251,10 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz) { // TODO: add
   // TODO: Check factors of phi0
 
   // diagonal part
+  Xi[(   5)*ndof+(   5)] = 2.*kT*pow(phi0, 2)/rho0*lambda_p;
+  Xi[(   6)*ndof+(   6)] = 2.*kT*pow(phi0, 2)/rho0*lambda_p;
+  Xi[(   7)*ndof+(   7)] = 2.*kT*pow(phi0, 2)/rho0*lambda_p;
+
   Xi[(   8)*ndof+(   8)] = 2.*rho0*kT*lambda_r*(5. - 9.*cs2);
   Xi[(   9)*ndof+(   9)] = (8./3.)*rho0*kT*lambda_r;
   Xi[(  10)*ndof+(  10)] = 8.*rho0*kT*lambda_r;
@@ -284,7 +288,19 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz) { // TODO: add
   Xi[(Q+18)*ndof+(Q+18)] = 8.*kT*pow(phi0, 2)*lambda_p/rho0;
 
   // rho-rho sector
+  Xi[(   1)*ndof+(   8)] = -3.*kT*phi0*k2*kappa*lambda_r/(rho0*mu_phi);
+  Xi[(   1)*ndof+(Q+ 1)] = 3.*kT*phi0*k2*kappa*lambda_r/(rho0*mu_phi);
+  Xi[(   2)*ndof+(   5)] = kT*phi0*rho0*lambda_p/rho0;
+  Xi[(   3)*ndof+(   6)] = kT*phi0*rho0*lambda_p/rho0;
+  Xi[(   4)*ndof+(   7)] = kT*phi0*rho0*lambda_p/rho0;
   Xi[(   8)*ndof+(  20)] = 6.*rho0*kT*lambda_r*(3.*cs2 - 1.);
+  Xi[(   8)*ndof+(Q+ 1)] = 6.*rho0*kT*lambda_r*(3.*cs2 - 1.);
+  Xi[(   8)*ndof+(   1)] = Xi[(   1)*ndof+(   8)];
+  Xi[(Q+ 1)*ndof+(   1)] = Xi[(   1)*ndof+(Q+ 1)];
+  Xi[(   5)*ndof+(   2)] = Xi[(   2)*ndof+(   5)];
+  Xi[(   6)*ndof+(   3)] = Xi[(   3)*ndof+(   6)];
+  Xi[(   7)*ndof+(   4)] = Xi[(   4)*ndof+(   7)];
+  Xi[(Q+ 1)*ndof+(   8)] = Xi[(   8)*ndof+(Q+ 1)];
   Xi[(  20)*ndof+(   8)] = Xi[(   8)*ndof+(  20)];
 
   // rho-phi sector
@@ -303,11 +319,18 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz) { // TODO: add
 
   // phi-phi sector
   // real entries
+  // TODO: Check these
+  //Xi[(   1)*ndof+(Q+ 4)] = 3.*Gamma*kT*mu0*lambda_p/(phi0*rho0*mu_phi);
+  //Xi[(   1)*ndof+(Q+16)] = -3.*Gamma*kT*mu0*lambda_p/(phi0*rho0*mu_phi);
   Xi[(   1)*ndof+(Q+ 4)] = 3.*Gamma*kT*mu0*lambda_p/(rho0*mu_phi);///phi0
   Xi[(   1)*ndof+(Q+16)] = -3.*Gamma*kT*mu0*lambda_p/(rho0*mu_phi);///phi0
+  Xi[(Q+ 1)*ndof+(Q+ 4)] = 3.*kT*k2*kappa*lambda_r*(3.*Gamma*mu0 - phi0)/(rho0*mu_phi);
+  Xi[(Q+ 1)*ndof+(Q+16)] = 3.*kT*k2*kappa*lambda_r*(-3.*Gamma*mu0 + phi0)/(rho0*mu_phi);
   Xi[(Q+ 4)*ndof+(Q+16)] = 6.*kT*lambda_p*(-3.*pow(Gamma, 2)*pow(mu0, 2) + 3.*Gamma*mu0*pow(phi0, 3)*mu_phi + Gamma*mu0*phi0 - pow(phi0, 4)*mu_phi)/(rho0*mu_phi);///pow(phi0, 2)
   Xi[(Q+ 4)*ndof+(   1)] = Xi[(   1)*ndof+(Q+ 4)];
   Xi[(Q+16)*ndof+(   1)] = Xi[(   1)*ndof+(Q+16)];
+  Xi[(Q+ 4)*ndof+(Q+ 1)] = Xi[(Q+ 1)*ndof+(Q+ 4)];
+  Xi[(Q+16)*ndof+(Q+ 1)] = Xi[(Q+ 1)*ndof+(Q+16)];
   Xi[(Q+16)*ndof+(Q+ 4)] = Xi[(Q+ 4)*ndof+(Q+16)];
 
   // imaginary entries
@@ -337,18 +360,16 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz) { // TODO: add
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 GpuArray<GpuComplex<Real>,ndof> kspace_white_noise(int kx, int ky, int kz, const Box& domain, RandomEngine const& engine) {
   GpuArray<GpuComplex<Real>,ndof> r = {};
-  for (int i=ncons; i<nvel; ++i) {
+  for (int i=ncons+1; i<ndof; ++i) {
     // symmetry points are purely real
     if (     ((kx == 0) || (kx == domain.length(0) - kx))
           && ((ky == 0) || (ky == domain.length(1) - ky))
           && ((kz == 0) || (kz == domain.length(2) - kz)) ) {
       // real Gaussian random variables with zero mean and variance 1
       r[i] = { RandomNormal(0., 1., engine), RandomNormal(0., 0., engine) };
-      r[nvel+i] = { RandomNormal(0., 1., engine), RandomNormal(0., 0., engine) };
     } else {
       // complex Gaussian random variables with zero mean and variance 0.5
       r[i] = { RandomNormal(0., std::sqrt(0.5), engine), RandomNormal(0., std::sqrt(0.5), engine) };
-      r[nvel+i] = { RandomNormal(0., std::sqrt(0.5), engine), RandomNormal(0., std::sqrt(0.5), engine) };
     }
   }
   return r;

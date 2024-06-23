@@ -5,18 +5,18 @@ void cholesky_test() {
     GpuArray<Real,n*n> L = {};
     GpuArray<Real,n*n> C = {};
 
-    for (int i=0; i<2*ncons; ++i) {
+    for (int i=0; i<ncons+1; ++i) {
         for (int j=0; j<n; ++j) {
             L[i*n+j] = 0.;
             L[j*n+i] = 0.;
         }
     }
 
-    for (int i=2*ncons; i<n; ++i) {
+    for (int i=ncons+1; i<n; ++i) {
         for (int j=i+1; j<n; ++j) {
             L[i*n+j] = 0.0;
         }
-        for (int j=2*ncons; j<i; ++j) {
+        for (int j=ncons+1; j<i; ++j) {
             L[i*n+j] = 0.5;
         }
         L[i*n+i] = 2./3.;
