@@ -235,14 +235,15 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz) { // TODO: add
   const Array1D<RealVect,0,2> gradients = { RealVect(0,0,0), RealVect(0,0,0) };
   const Array1D<Real,0,2> laplacians = { 0, 0 };
 
-  Real rho0 = fields(0);
-  Real phi0 = fields(1);
-  Real mu0 = chemical_potentials(fields, gradients, laplacians)(1);
-  Real mu_phi = T*(0.5/(rho0+phi0)+0.5/(rho0-phi0)) - 0.5*lambda/rho0;
+  const Real k[3] = { (Real)kx, (Real)ky, (Real)kz };
+  const Real k2 = kx*kx + ky*ky + kz*kz;
 
-  Real k[3] = { (Real)kx, (Real)ky, (Real)kz };
-  Real k2 = k[0]*k[0]+k[1]*k[1]+k[2]*k[2];
-  Real cs2 = T + rho0*kappa*k2;
+  const Real rho0 = fields(0);
+  const Real phi0 = fields(1);
+  const Real mu0 = chemical_potentials(fields, gradients, laplacians)(1);
+  const Real mu_phi = 0.5*T*(1./(rho0+phi0)+1./(rho0-phi0)) - 0.5*lambda/rho0 + kappa*k2;
+  const Real mu_rho = 0.5*lambda*phi0/(rho0*rho0) + 0.5*T*(1./(rho0+phi0)-1./(rho0-phi0));
+  const Real cs2 = T + rho0*kappa*k2;
 
   // Noise covariance of the modes in k-space
   GpuArray<Real,ndof*ndof> Xi = {};
@@ -304,12 +305,20 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz) { // TODO: add
   Xi[(  20)*ndof+(   8)] = Xi[(   8)*ndof+(  20)];
 
   // rho-phi sector
+  Xi[(   0)*ndof+(Q+ 4)] = -3*Gamma*kT*rho0*lambda_p*mu_rho/cs2;
+  Xi[(   0)*ndof+(Q+16)] = 3*Gamma*kT*rho0*lambda_p*mu_rho/cs2;
+  Xi[(   1)*ndof+(Q+ 4)] = 3*Gamma*kT*lambda_p*(mu0 - phi0*mu_phi)/(phi0*rho0*mu_phi);
+  Xi[(   1)*ndof+(Q+16)] = 3*Gamma*kT*lambda_p*(-mu0 + phi0*mu_phi)/(phi0*rho0*mu_phi);
   Xi[(   8)*ndof+(   1)] = -3.*kT*phi0*k2*kappa*lambda_r/(rho0*mu_phi);
   Xi[(   8)*ndof+(Q+ 4)] = 3.*kT*k2*kappa*lambda_r*(-3.*Gamma*mu0 + phi0)/(rho0*mu_phi);
   Xi[(   8)*ndof+(Q+16)] = 3.*kT*k2*kappa*lambda_r*(3.*Gamma*mu0 - phi0)/(rho0*mu_phi);
   Xi[(  20)*ndof+(   1)] = 3.*kT*phi0*k2*kappa*lambda_r/(rho0*mu_phi);
   Xi[(  20)*ndof+(Q+ 4)] = 3.*kT*k2*kappa*lambda_r*(3.*Gamma*mu0 - phi0)/(rho0*mu_phi);
   Xi[(  20)*ndof+(Q+16)] = 3.*kT*k2*kappa*lambda_r*(-3.*Gamma*mu0 + phi0)/(rho0*mu_phi);
+  Xi[(Q+ 4)*ndof+(   0)] = Xi[(   0)*ndof+(Q+ 4)];
+  Xi[(Q+16)*ndof+(   0)] = Xi[(   0)*ndof+(Q+16)];
+  Xi[(Q+ 4)*ndof+(   1)] = Xi[(   1)*ndof+(Q+ 4)];
+  Xi[(Q+16)*ndof+(   1)] = Xi[(   1)*ndof+(Q+16)];
   Xi[(   1)*ndof+(   8)] = Xi[(   8)*ndof+(   1)];
   Xi[(Q+ 4)*ndof+(   8)] = Xi[(   8)*ndof+(Q+ 4)];
   Xi[(Q+16)*ndof+(   8)] = Xi[(   8)*ndof+(Q+16)];
