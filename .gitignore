@@ -11,3 +11,6 @@ plt*/
 # ignore Python artifacts
 .idea/
 .ipynb_checkpoints/
+
+# ignore output
+*plt*

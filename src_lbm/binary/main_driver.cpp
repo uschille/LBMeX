@@ -4,11 +4,28 @@
 #include <AMReX_Print.H>
 #include <AMReX_ParmParse.H>
 #include <AMReX_PlotFileUtil.H>
+#include <AMReX_VisMF.H>
+
+#include "StructFact.H"
 
 using namespace amrex;
 
 #include "LBM_binary.H"
 #include "tests.H"
+
+inline void WriteDist(int step, 
+      const MultiFab& fold,
+      const MultiFab& gold, 
+      const Vector<std::string>& var_names,
+      const Geometry& geom){
+      
+      const Real time = step;
+      std::string pltfile = amrex::Concatenate("f_plt_",step,5);
+      WriteSingleLevelPlotfile(pltfile, fold, var_names, geom, time, step);
+
+      pltfile = amrex::Concatenate("g_plt_",step,5);
+      WriteSingleLevelPlotfile(pltfile, gold, var_names, geom, time, step);
+      }
 
 inline Vector<std::string> VariableNames(const int numVars) {
   // set variable names for output
@@ -51,6 +68,7 @@ inline Vector<std::string> VariableNames(const int numVars) {
   }
   return var_names;
 }
+
 
 inline void WriteOutput(int step,
 			const MultiFab& hydrovs,
@@ -116,10 +134,12 @@ void main_driver(const char* argv) {
   MultiFab hydrovs(ba, dm, 2*nvel, nghost);
   MultiFab noise(ba, dm, 2*nvel, nghost);
 
+
   // INITIALIZE
   LBM_init_mixture(fold, gold, hydrovs);
   // Write a plotfile of the initial data if plot_int > 0
   if (plot_int > 0) WriteOutput(0, hydrovs, geom);
+
   Print() << "LB initialized\n";
 
   // TIMESTEP
@@ -128,6 +148,8 @@ void main_driver(const char* argv) {
     if (plot_int > 0 && step%plot_int ==0) WriteOutput(step, hydrovs, geom);
     Print() << "LB step " << step << "\n";
   }
+
+  // structFact.WritePlotFile(nsteps, nsteps, geom, "SF_plt");
 
   // Call the timer again and compute the maximum difference between the start time 
   // and stop time over all processors

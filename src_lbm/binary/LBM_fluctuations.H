@@ -247,6 +247,7 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz) { // TODO: add
 
   // Noise covariance of the modes in k-space
   GpuArray<Real,ndof*ndof> Xi = {};
+  
   Xi.fill(0);
 
   // TODO: Check factors of phi0
