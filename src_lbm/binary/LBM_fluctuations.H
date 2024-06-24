@@ -24,33 +24,35 @@ void cholesky_decomp(GpuArray<Real,ndof*ndof>& A, const int n) {
 
   // adjust Cholesky to include all columns? [uschill 07/26/2022]
 
-  for (int i=0; i<n; ++i) {
-    for (int j=0; j<n; ++j) {
+  // Cholesky-Banachiewicz algorithm
+  for (int i=ncons+1; i<n; ++i) {
+    for (int j=ncons+1; j<=i; ++j) {
       sum = A[i*n+j];
-      for (int k=i-1; k>=0; --k) {
-	sum -= A[i*n+k]*A[j*n+k];
+      for (int k=j-1; k>=ncons+1; --k) {
+	      sum -= A[i*n+k]*A[j*n+k];
       }
       if (i==j) {
-	if (sum>0) {
-	  p[i] = std::sqrt(sum);
-	} else {
-	  p[i] = 0.0;
-	  positive_definite = false;
-	}
+	      if (sum>FLT_EPSILON) {
+	        p[i] = std::sqrt(sum);
+	      } else {
+	        p[i] = 0.0;
+	        positive_definite = false;
+          //Print() << "Row " << i << " matrix not positive definite!\n";
+	      }
       } else {
-	if (positive_definite) {
-	  A[j*n+i] = sum/p[i];
-	} else {
-	  A[j*n+i] = 0.0;
-	}
+	      if (p[j]>FLT_EPSILON) {
+	        A[i*n+j] = sum/p[j];
+	      } else {
+	        A[i*n+j] = 0.0;
+	      }
       }
     }
   }
   for (int i=0; i<n; ++i) {
+    A[i*n+i] = p[i];
     for (int j=i+1; j<n; ++j) {
       A[i*n+j] = 0.0;
     }
-    A[i*n+i] = p[i];
   }
 }
 
@@ -224,108 +226,143 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz) { // TODO: add function arguments: rho, phi, k, others?
   const uint Q = nvel;
 
+  const Real lambda_r = 1/tau_r;
+  const Real lambda_p = 1/tau_p;
   const Real kT = temperature;
-  const Real lambda_s=1/tau_r, lambda_b=1/tau_r, lambda_o=1/tau_r;
   /* NOTE: the expressions below are valid for lambda_e = lambda_b */
 
   const Array1D<Real,0,2> fields = { 1, 0 };// = { h(x,y,z,0), h(x,y,z,1) };
   const Array1D<RealVect,0,2> gradients = { RealVect(0,0,0), RealVect(0,0,0) };
   const Array1D<Real,0,2> laplacians = { 0, 0 };
 
-  Real rho0 = fields(0);
-  Real phi0 = fields(1);
-  Real mu0 = chemical_potentials(fields, gradients, laplacians)(1);
-  Real mu_phi = T*(0.5/(rho0+phi0)+0.5/(rho0-phi0)) - 0.5*lambda/rho0;
+  const Real k[3] = { (Real)kx, (Real)ky, (Real)kz };
+  const Real k2 = kx*kx + ky*ky + kz*kz;
 
-  Real k[3] = { (Real)kx, (Real)ky, (Real)kz };
-  Real k2 = k[0]*k[0]+k[1]*k[1]+k[2]*k[2];
-  Real cs2 = T + rho0*kappa*k2;
+  const Real rho0 = fields(0);
+  const Real phi0 = fields(1);
+  const Real mu0 = chemical_potentials(fields, gradients, laplacians)(1);
+  const Real mu_phi = 0.5*T*(1./(rho0+phi0)+1./(rho0-phi0)) - 0.5*lambda/rho0 + kappa*k2;
+  const Real mu_rho = 0.5*lambda*phi0/(rho0*rho0) + 0.5*T*(1./(rho0+phi0)-1./(rho0-phi0));
+  const Real cs2 = T + rho0*kappa*k2;
 
   // Noise covariance of the modes in k-space
   GpuArray<Real,ndof*ndof> Xi = {};
-  // Xi.fill(0);
-  for (int i=0; i<ndof; ++i) Xi[i] = 0.;
+  
+  Xi.fill(0);
+
+  // TODO: Check factors of phi0
 
   // diagonal part
-  Xi[(   4)*ndof+(   4)] = 2.*rho0*kT*lambda_b*(5. - 9.*cs2);
-  Xi[(   5)*ndof+(   5)] = (8./3.)*rho0*kT*lambda_s;
-  Xi[(   6)*ndof+(   6)] = 8.*rho0*kT*lambda_s;
-  Xi[(   7)*ndof+(   7)] = (2./3.)*rho0*kT*lambda_s;
-  Xi[(   8)*ndof+(   8)] = (2./3.)*rho0*kT*lambda_s;
-  Xi[(   9)*ndof+(   0)] = (2./3.)*rho0*kT*lambda_s;
-  Xi[(  10)*ndof+(  10)] = 4.*rho0*kT*lambda_o;
-  Xi[(  11)*ndof+(  11)] = 4.*rho0*kT*lambda_o;
-  Xi[(  12)*ndof+(  12)] = 4.*rho0*kT*lambda_o;
-  Xi[(  13)*ndof+(  13)] = (4./3.)*rho0*kT*lambda_o;
-  Xi[(  14)*ndof+(  14)] = (4./3.)*rho0*kT*lambda_o;
-  Xi[(  15)*ndof+(  15)] = (4./3.)*rho0*kT*lambda_o;
-  Xi[(  16)*ndof+(  16)] = 18.*rho0*kT*lambda_b*(1. - cs2);
-  Xi[(  17)*ndof+(  17)] = (8./3.)*rho0*kT*lambda_b;
-  Xi[(  18)*ndof+(  18)] = 8.*rho0*kT*lambda_b;
+  Xi[(   5)*ndof+(   5)] = 2.*kT*pow(phi0, 2)/rho0*lambda_p;
+  Xi[(   6)*ndof+(   6)] = 2.*kT*pow(phi0, 2)/rho0*lambda_p;
+  Xi[(   7)*ndof+(   7)] = 2.*kT*pow(phi0, 2)/rho0*lambda_p;
 
-  Xi[(Q+ 4)*ndof+(Q+ 4)] = 2.*kT*lambda_b*(9.*pow(Gamma, 2)*pow(mu0, 2) - 9.*Gamma*mu0*pow(phi0, 3)*mu_phi - 3.*Gamma*mu0*phi0 + 5.*pow(phi0, 4)*mu_phi)/(pow(phi0, 2)*rho0*mu_phi);
-  Xi[(Q+ 5)*ndof+(Q+ 5)] = (8./3.)*kT*pow(phi0, 2)*lambda_s/rho0;
-  Xi[(Q+ 6)*ndof+(Q+ 6)] = 8.*kT*pow(phi0, 2)*lambda_s/rho0;
-  Xi[(Q+ 7)*ndof+(Q+ 7)] = (2./3.)*kT*pow(phi0, 2)*lambda_s/rho0;
-  Xi[(Q+ 8)*ndof+(Q+ 8)] = (2./3.)*kT*pow(phi0, 2)*lambda_s/rho0;
-  Xi[(Q+ 9)*ndof+(Q+ 9)] = (2./3.)*kT*pow(phi0, 2)*lambda_s/rho0;
-  Xi[(Q+10)*ndof+(Q+10)] = 4.*kT*pow(phi0, 2)*lambda_o/rho0;
-  Xi[(Q+11)*ndof+(Q+11)] = 4.*kT*pow(phi0, 2)*lambda_o/rho0;
-  Xi[(Q+12)*ndof+(Q+12)] = 4.*kT*pow(phi0, 2)*lambda_o/rho0;
-  Xi[(Q+13)*ndof+(Q+13)] = (4./3.)*kT*pow(phi0, 2)*lambda_o/rho0;
-  Xi[(Q+14)*ndof+(Q+14)] = (4./3.)*kT*pow(phi0, 2)*lambda_o/rho0;
-  Xi[(Q+15)*ndof+(Q+15)] = (4./3.)*kT*pow(phi0, 2)*lambda_o/rho0;
-  Xi[(Q+16)*ndof+(Q+16)] = 6.*kT*lambda_b*(3*pow(Gamma, 2)*pow(mu0, 2) - 3.*Gamma*mu0*pow(phi0, 3)*mu_phi - Gamma*mu0*phi0 + 3.*pow(phi0, 4)*mu_phi)/(pow(phi0, 2)*rho0*mu_phi);
-  Xi[(Q+17)*ndof+(Q+17)] = (8./3.)*kT*pow(phi0, 2)*lambda_b/rho0;
-  Xi[(Q+18)*ndof+(Q+18)] = 8.*kT*pow(phi0, 2)*lambda_b/rho0;
+  Xi[(   8)*ndof+(   8)] = 2.*rho0*kT*lambda_r*(5. - 9.*cs2);
+  Xi[(   9)*ndof+(   9)] = (8./3.)*rho0*kT*lambda_r;
+  Xi[(  10)*ndof+(  10)] = 8.*rho0*kT*lambda_r;
+  Xi[(  11)*ndof+(  11)] = (2./3.)*rho0*kT*lambda_r;
+  Xi[(  12)*ndof+(  12)] = (2./3.)*rho0*kT*lambda_r;
+  Xi[(  13)*ndof+(  13)] = (2./3.)*rho0*kT*lambda_r;
+  Xi[(  14)*ndof+(  14)] = 4.*rho0*kT*lambda_r;
+  Xi[(  15)*ndof+(  15)] = 4.*rho0*kT*lambda_r;
+  Xi[(  16)*ndof+(  16)] = 4.*rho0*kT*lambda_r;
+  Xi[(  17)*ndof+(  17)] = (4./3.)*rho0*kT*lambda_r;
+  Xi[(  18)*ndof+(  18)] = (4./3.)*rho0*kT*lambda_r;
+  Xi[(  19)*ndof+(  19)] = (4./3.)*rho0*kT*lambda_r;
+  Xi[(  20)*ndof+(  20)] = 18.*rho0*kT*lambda_r*(1. - cs2);
+  Xi[(  21)*ndof+(  21)] = (8./3.)*rho0*kT*lambda_r;
+  Xi[(  22)*ndof+(  22)] = 8.*rho0*kT*lambda_r;
+
+  Xi[(Q+ 4)*ndof+(Q+ 4)] = 2.*kT*lambda_p*(9.*pow(Gamma, 2)*pow(mu0, 2) - 9.*Gamma*mu0*pow(phi0, 3)*mu_phi - 3.*Gamma*mu0*phi0 + 5.*pow(phi0, 4)*mu_phi)/(pow(phi0, 2)*rho0*mu_phi);
+  Xi[(Q+ 5)*ndof+(Q+ 5)] = (8./3.)*kT*pow(phi0, 2)*lambda_p/rho0;
+  Xi[(Q+ 6)*ndof+(Q+ 6)] = 8.*kT*pow(phi0, 2)*lambda_p/rho0;
+  Xi[(Q+ 7)*ndof+(Q+ 7)] = (2./3.)*kT*pow(phi0, 2)*lambda_p/rho0;
+  Xi[(Q+ 8)*ndof+(Q+ 8)] = (2./3.)*kT*pow(phi0, 2)*lambda_p/rho0;
+  Xi[(Q+ 9)*ndof+(Q+ 9)] = (2./3.)*kT*pow(phi0, 2)*lambda_p/rho0;
+  Xi[(Q+10)*ndof+(Q+10)] = 4.*kT*pow(phi0, 2)*lambda_p/rho0;
+  Xi[(Q+11)*ndof+(Q+11)] = 4.*kT*pow(phi0, 2)*lambda_p/rho0;
+  Xi[(Q+12)*ndof+(Q+12)] = 4.*kT*pow(phi0, 2)*lambda_p/rho0;
+  Xi[(Q+13)*ndof+(Q+13)] = (4./3.)*kT*pow(phi0, 2)*lambda_p/rho0;
+  Xi[(Q+14)*ndof+(Q+14)] = (4./3.)*kT*pow(phi0, 2)*lambda_p/rho0;
+  Xi[(Q+15)*ndof+(Q+15)] = (4./3.)*kT*pow(phi0, 2)*lambda_p/rho0;
+  Xi[(Q+16)*ndof+(Q+16)] = 6.*kT*lambda_p*(3*pow(Gamma, 2)*pow(mu0, 2) - 3.*Gamma*mu0*pow(phi0, 3)*mu_phi - Gamma*mu0*phi0 + 3.*pow(phi0, 4)*mu_phi)/(pow(phi0, 2)*rho0*mu_phi);
+  Xi[(Q+17)*ndof+(Q+17)] = (8./3.)*kT*pow(phi0, 2)*lambda_p/rho0;
+  Xi[(Q+18)*ndof+(Q+18)] = 8.*kT*pow(phi0, 2)*lambda_p/rho0;
 
   // rho-rho sector
-  Xi[(   4)*ndof+(  16)] = 6.*rho0*kT*lambda_b*(3.*cs2 - 1.);
-  Xi[(  16)*ndof+(   4)] = Xi[(   4)*ndof+(  16)];
+  Xi[(   1)*ndof+(   8)] = -3.*kT*phi0*k2*kappa*lambda_r/(rho0*mu_phi);
+  Xi[(   1)*ndof+(Q+ 1)] = 3.*kT*phi0*k2*kappa*lambda_r/(rho0*mu_phi);
+  Xi[(   2)*ndof+(   5)] = kT*phi0*rho0*lambda_p/rho0;
+  Xi[(   3)*ndof+(   6)] = kT*phi0*rho0*lambda_p/rho0;
+  Xi[(   4)*ndof+(   7)] = kT*phi0*rho0*lambda_p/rho0;
+  Xi[(   8)*ndof+(  20)] = 6.*rho0*kT*lambda_r*(3.*cs2 - 1.);
+  Xi[(   8)*ndof+(Q+ 1)] = 6.*rho0*kT*lambda_r*(3.*cs2 - 1.);
+  Xi[(   8)*ndof+(   1)] = Xi[(   1)*ndof+(   8)];
+  Xi[(Q+ 1)*ndof+(   1)] = Xi[(   1)*ndof+(Q+ 1)];
+  Xi[(   5)*ndof+(   2)] = Xi[(   2)*ndof+(   5)];
+  Xi[(   6)*ndof+(   3)] = Xi[(   3)*ndof+(   6)];
+  Xi[(   7)*ndof+(   4)] = Xi[(   4)*ndof+(   7)];
+  Xi[(Q+ 1)*ndof+(   8)] = Xi[(   8)*ndof+(Q+ 1)];
+  Xi[(  20)*ndof+(   8)] = Xi[(   8)*ndof+(  20)];
 
   // rho-phi sector
-  Xi[(   4)*ndof+(Q+ 0)] = -3.*kT*phi0*k2*kappa*lambda_b/(rho0*mu_phi);
-  Xi[(   4)*ndof+(Q+ 4)] = 3.*kT*phi0*k2*kappa*lambda_b*(-3.*Gamma*mu0 + phi0)/(phi0*rho0*mu_phi);
-  Xi[(   4)*ndof+(Q+16)] = 3.*kT*phi0*k2*kappa*lambda_b*(3.*Gamma*mu0 - phi0)/(phi0*rho0*mu_phi);
-  Xi[(  16)*ndof+(Q+ 0)] = 3.*kT*phi0*k2*kappa*lambda_b/(rho0*mu_phi);
-  Xi[(  16)*ndof+(Q+ 4)] = 3.*kT*phi0*k2*kappa*lambda_b*(3.*Gamma*mu0 - phi0)/(phi0*rho0*mu_phi);
-  Xi[(  16)*ndof+(Q+16)] = 3.*kT*phi0*k2*kappa*lambda_b*(-3.*Gamma*mu0 + phi0)/(phi0*rho0*mu_phi);
-  Xi[(Q+ 0)*ndof+(   4)] = Xi[(   4)*ndof+(Q+ 0)];
-  Xi[(Q+ 4)*ndof+(   4)] = Xi[(   4)*ndof+(Q+ 4)];
-  Xi[(Q+16)*ndof+(   4)] = Xi[(   4)*ndof+(Q+16)];
-  Xi[(Q+ 0)*ndof+(  16)] = Xi[(  16)*ndof+(Q+ 0)];
-  Xi[(Q+ 4)*ndof+(  16)] = Xi[(  16)*ndof+(Q+ 4)];
-  Xi[(Q+16)*ndof+(  16)] = Xi[(  16)*ndof+(Q+16)];
+  Xi[(   0)*ndof+(Q+ 4)] = -3*Gamma*kT*rho0*lambda_p*mu_rho/cs2;
+  Xi[(   0)*ndof+(Q+16)] = 3*Gamma*kT*rho0*lambda_p*mu_rho/cs2;
+  Xi[(   1)*ndof+(Q+ 4)] = 3*Gamma*kT*lambda_p*(mu0 - phi0*mu_phi)/(phi0*rho0*mu_phi);
+  Xi[(   1)*ndof+(Q+16)] = 3*Gamma*kT*lambda_p*(-mu0 + phi0*mu_phi)/(phi0*rho0*mu_phi);
+  Xi[(   8)*ndof+(   1)] = -3.*kT*phi0*k2*kappa*lambda_r/(rho0*mu_phi);
+  Xi[(   8)*ndof+(Q+ 4)] = 3.*kT*k2*kappa*lambda_r*(-3.*Gamma*mu0 + phi0)/(rho0*mu_phi);
+  Xi[(   8)*ndof+(Q+16)] = 3.*kT*k2*kappa*lambda_r*(3.*Gamma*mu0 - phi0)/(rho0*mu_phi);
+  Xi[(  20)*ndof+(   1)] = 3.*kT*phi0*k2*kappa*lambda_r/(rho0*mu_phi);
+  Xi[(  20)*ndof+(Q+ 4)] = 3.*kT*k2*kappa*lambda_r*(3.*Gamma*mu0 - phi0)/(rho0*mu_phi);
+  Xi[(  20)*ndof+(Q+16)] = 3.*kT*k2*kappa*lambda_r*(-3.*Gamma*mu0 + phi0)/(rho0*mu_phi);
+  Xi[(Q+ 4)*ndof+(   0)] = Xi[(   0)*ndof+(Q+ 4)];
+  Xi[(Q+16)*ndof+(   0)] = Xi[(   0)*ndof+(Q+16)];
+  Xi[(Q+ 4)*ndof+(   1)] = Xi[(   1)*ndof+(Q+ 4)];
+  Xi[(Q+16)*ndof+(   1)] = Xi[(   1)*ndof+(Q+16)];
+  Xi[(   1)*ndof+(   8)] = Xi[(   8)*ndof+(   1)];
+  Xi[(Q+ 4)*ndof+(   8)] = Xi[(   8)*ndof+(Q+ 4)];
+  Xi[(Q+16)*ndof+(   8)] = Xi[(   8)*ndof+(Q+16)];
+  Xi[(   1)*ndof+(  20)] = Xi[(  20)*ndof+(   1)];
+  Xi[(Q+ 4)*ndof+(  20)] = Xi[(  20)*ndof+(Q+ 4)];
+  Xi[(Q+16)*ndof+(  20)] = Xi[(  20)*ndof+(Q+16)];
 
   // phi-phi sector
   // real entries
-  Xi[(Q+ 0)*ndof+(Q+ 4)] = 3.*Gamma*kT*mu0*lambda_b/(phi0*rho0*mu_phi);
-  Xi[(Q+ 0)*ndof+(Q+16)] = -3.*Gamma*kT*mu0*lambda_b/(phi0*rho0*mu_phi);
-  Xi[(Q+ 4)*ndof+(Q+16)] = 6.*kT*lambda_b*(-3.*pow(Gamma, 2)*pow(mu0, 2) + 3.*Gamma*mu0*pow(phi0, 3)*mu_phi + Gamma*mu0*phi0 - pow(phi0, 4)*mu_phi)/(pow(phi0, 2)*rho0*mu_phi);
-  Xi[(Q+ 4)*ndof+(Q+ 0)] = Xi[(Q+ 0)*ndof+(Q+ 4)];
-  Xi[(Q+16)*ndof+(Q+ 0)] = Xi[(Q+ 0)*ndof+(Q+16)];
+  // TODO: Check these
+  //Xi[(   1)*ndof+(Q+ 4)] = 3.*Gamma*kT*mu0*lambda_p/(phi0*rho0*mu_phi);
+  //Xi[(   1)*ndof+(Q+16)] = -3.*Gamma*kT*mu0*lambda_p/(phi0*rho0*mu_phi);
+  Xi[(   1)*ndof+(Q+ 4)] = 3.*Gamma*kT*mu0*lambda_p/(rho0*mu_phi);///phi0
+  Xi[(   1)*ndof+(Q+16)] = -3.*Gamma*kT*mu0*lambda_p/(rho0*mu_phi);///phi0
+  Xi[(Q+ 1)*ndof+(Q+ 4)] = 3.*kT*k2*kappa*lambda_r*(3.*Gamma*mu0 - phi0)/(rho0*mu_phi);
+  Xi[(Q+ 1)*ndof+(Q+16)] = 3.*kT*k2*kappa*lambda_r*(-3.*Gamma*mu0 + phi0)/(rho0*mu_phi);
+  Xi[(Q+ 4)*ndof+(Q+16)] = 6.*kT*lambda_p*(-3.*pow(Gamma, 2)*pow(mu0, 2) + 3.*Gamma*mu0*pow(phi0, 3)*mu_phi + Gamma*mu0*phi0 - pow(phi0, 4)*mu_phi)/(rho0*mu_phi);///pow(phi0, 2)
+  Xi[(Q+ 4)*ndof+(   1)] = Xi[(   1)*ndof+(Q+ 4)];
+  Xi[(Q+16)*ndof+(   1)] = Xi[(   1)*ndof+(Q+16)];
+  Xi[(Q+ 4)*ndof+(Q+ 1)] = Xi[(Q+ 1)*ndof+(Q+ 4)];
+  Xi[(Q+16)*ndof+(Q+ 1)] = Xi[(Q+ 1)*ndof+(Q+16)];
   Xi[(Q+16)*ndof+(Q+ 4)] = Xi[(Q+ 4)*ndof+(Q+16)];
 
   // imaginary entries
   Real I = 0; // ignore imaginary entries until we know how to handle them
-  Xi[(Q+ 0)*ndof+(Q+ 1)] = I*kT*k[0]*(-Gamma*mu0 + pow(phi0, 3)*mu_phi)/(phi0*rho0*mu_phi);
-  Xi[(Q+ 0)*ndof+(Q+ 2)] = I*kT*k[1]*(-Gamma*mu0 + pow(phi0, 3)*mu_phi)/(phi0*rho0*mu_phi);
-  Xi[(Q+ 0)*ndof+(Q+ 3)] = I*kT*k[2]*(-Gamma*mu0 + pow(phi0, 3)*mu_phi)/(phi0*rho0*mu_phi);
-  Xi[(Q+ 1)*ndof+(Q+ 4)] = I*kT*k[0]*(3.*pow(Gamma, 2)*pow(mu0, 2) - 3.*Gamma*mu0*pow(phi0, 3)*mu_phi - Gamma*mu0*phi0 + pow(phi0, 4)*mu_phi)/(pow(phi0, 2)*rho0*mu_phi);
-  Xi[(Q+ 1)*ndof+(Q+16)] = I*kT*k[0]*(-3.*pow(Gamma, 2)*pow(mu0, 2) + 3.*Gamma*mu0*pow(phi0, 3)*mu_phi + Gamma*mu0*phi0 - pow(phi0, 4)*mu_phi)/(pow(phi0, 2)*rho0*mu_phi);
-  Xi[(Q+ 2)*ndof+(Q+ 4)] = I*kT*k[1]*(3.*pow(Gamma, 2)*pow(mu0, 2) - 3.*Gamma*mu0*pow(phi0, 3)*mu_phi - Gamma*mu0*phi0 + pow(phi0, 4)*mu_phi)/(pow(phi0, 2)*rho0*mu_phi);
-  Xi[(Q+ 2)*ndof+(Q+16)] = I*kT*k[1]*(-3.*pow(Gamma, 2)*pow(mu0, 2) + 3.*Gamma*mu0*pow(phi0, 3)*mu_phi + Gamma*mu0*phi0 - pow(phi0, 4)*mu_phi)/(pow(phi0, 2)*rho0*mu_phi);
-  Xi[(Q+ 3)*ndof+(Q+ 4)] = I*kT*k[2]*(3.*pow(Gamma, 2)*pow(mu0, 2) - 3.*Gamma*mu0*pow(phi0, 3)*mu_phi - Gamma*mu0*phi0 + pow(phi0, 4)*mu_phi)/(pow(phi0, 2)*rho0*mu_phi);
-  Xi[(Q+ 3)*ndof+(Q+16)] = I*kT*k[2]*(-3.*pow(Gamma, 2)*pow(mu0, 2) + 3.*Gamma*mu0*pow(phi0, 3)*mu_phi + Gamma*mu0*phi0 - pow(phi0, 4)*mu_phi)/(pow(phi0, 2)*rho0*mu_phi);
-  Xi[(Q+ 1)*ndof+(Q+ 0)] = -Xi[(Q+ 0)*ndof+(Q+ 1)];
-  Xi[(Q+ 2)*ndof+(Q+ 0)] = -Xi[(Q+ 0)*ndof+(Q+ 2)];
-  Xi[(Q+ 3)*ndof+(Q+ 0)] = -Xi[(Q+ 0)*ndof+(Q+ 3)];
-  Xi[(Q+ 4)*ndof+(Q+ 1)] = -Xi[(Q+ 1)*ndof+(Q+ 4)];
-  Xi[(Q+16)*ndof+(Q+ 1)] = -Xi[(Q+ 1)*ndof+(Q+16)];
-  Xi[(Q+ 4)*ndof+(Q+ 2)] = -Xi[(Q+ 2)*ndof+(Q+ 4)];
-  Xi[(Q+16)*ndof+(Q+ 2)] = -Xi[(Q+ 2)*ndof+(Q+16)];
-  Xi[(Q+ 4)*ndof+(Q+ 3)] = -Xi[(Q+ 3)*ndof+(Q+ 4)];
-  Xi[(Q+16)*ndof+(Q+ 3)] = -Xi[(Q+ 3)*ndof+(Q+16)];
+  Xi[(   1)*ndof+(   5)] = I*kT*k[0]*(-Gamma*mu0 + pow(phi0, 3)*mu_phi)/(rho0*mu_phi);///phi0
+  Xi[(   1)*ndof+(   6)] = I*kT*k[1]*(-Gamma*mu0 + pow(phi0, 3)*mu_phi)/(rho0*mu_phi);///phi0
+  Xi[(   1)*ndof+(   7)] = I*kT*k[2]*(-Gamma*mu0 + pow(phi0, 3)*mu_phi)/(rho0*mu_phi);///phi0
+  Xi[(   5)*ndof+(Q+ 4)] = I*kT*k[0]*(3.*pow(Gamma, 2)*pow(mu0, 2) - 3.*Gamma*mu0*pow(phi0, 3)*mu_phi - Gamma*mu0*phi0 + pow(phi0, 4)*mu_phi)/(rho0*mu_phi);///pow(phi0, 2)
+  Xi[(   5)*ndof+(Q+16)] = I*kT*k[0]*(-3.*pow(Gamma, 2)*pow(mu0, 2) + 3.*Gamma*mu0*pow(phi0, 3)*mu_phi + Gamma*mu0*phi0 - pow(phi0, 4)*mu_phi)/(rho0*mu_phi);///pow(phi0, 2)
+  Xi[(   6)*ndof+(Q+ 4)] = I*kT*k[1]*(3.*pow(Gamma, 2)*pow(mu0, 2) - 3.*Gamma*mu0*pow(phi0, 3)*mu_phi - Gamma*mu0*phi0 + pow(phi0, 4)*mu_phi)/(rho0*mu_phi);///pow(phi0, 2)
+  Xi[(   6)*ndof+(Q+16)] = I*kT*k[1]*(-3.*pow(Gamma, 2)*pow(mu0, 2) + 3.*Gamma*mu0*pow(phi0, 3)*mu_phi + Gamma*mu0*phi0 - pow(phi0, 4)*mu_phi)/(rho0*mu_phi);///pow(phi0, 2)
+  Xi[(   7)*ndof+(Q+ 4)] = I*kT*k[2]*(3.*pow(Gamma, 2)*pow(mu0, 2) - 3.*Gamma*mu0*pow(phi0, 3)*mu_phi - Gamma*mu0*phi0 + pow(phi0, 4)*mu_phi)/(rho0*mu_phi);///pow(phi0, 2)
+  Xi[(   7)*ndof+(Q+16)] = I*kT*k[2]*(-3.*pow(Gamma, 2)*pow(mu0, 2) + 3.*Gamma*mu0*pow(phi0, 3)*mu_phi + Gamma*mu0*phi0 - pow(phi0, 4)*mu_phi)/(rho0*mu_phi);///pow(phi0, 2)
+  Xi[(   5)*ndof+(   1)] = -Xi[(   1)*ndof+(   5)];
+  Xi[(   6)*ndof+(   1)] = -Xi[(   1)*ndof+(   6)];
+  Xi[(   7)*ndof+(   1)] = -Xi[(   1)*ndof+(   7)];
+  Xi[(Q+ 4)*ndof+(   5)] = -Xi[(   5)*ndof+(Q+ 4)];
+  Xi[(Q+16)*ndof+(   5)] = -Xi[(   5)*ndof+(Q+16)];
+  Xi[(Q+ 4)*ndof+(   6)] = -Xi[(   6)*ndof+(Q+ 4)];
+  Xi[(Q+16)*ndof+(   6)] = -Xi[(   6)*ndof+(Q+16)];
+  Xi[(Q+ 4)*ndof+(   7)] = -Xi[(   7)*ndof+(Q+ 4)];
+  Xi[(Q+16)*ndof+(   7)] = -Xi[(   7)*ndof+(Q+16)];
 
   return Xi;
 }
@@ -333,21 +370,16 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz) { // TODO: add
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 GpuArray<GpuComplex<Real>,ndof> kspace_white_noise(int kx, int ky, int kz, const Box& domain, RandomEngine const& engine) {
   GpuArray<GpuComplex<Real>,ndof> r = {};
-  for (int i=ncons; i<nvel; ++i) {
+  for (int i=ncons+1; i<ndof; ++i) {
     // symmetry points are purely real
-    if (((kx == 0) || (kx == domain.length(0) - kx))
-	&& ((ky == 0) || (ky == domain.length(1) - ky))
-	&& ((kz == 0) || (kz == domain.length(2) - kz))) {
-      r[i] = { RandomNormal(0., 1., engine),
-	       RandomNormal(0., 0., engine) };
-      r[nvel+i] = { RandomNormal(0., 1., engine),
-		    RandomNormal(0., 0., engine) };
+    if (     ((kx == 0) || (kx == domain.length(0) - kx))
+          && ((ky == 0) || (ky == domain.length(1) - ky))
+          && ((kz == 0) || (kz == domain.length(2) - kz)) ) {
+      // real Gaussian random variables with zero mean and variance 1
+      r[i] = { RandomNormal(0., 1., engine), RandomNormal(0., 0., engine) };
     } else {
       // complex Gaussian random variables with zero mean and variance 0.5
-      r[i] = { RandomNormal(0., std::sqrt(0.5), engine),
-	       RandomNormal(0., std::sqrt(0.5), engine) };
-      r[nvel+i] = { RandomNormal(0., std::sqrt(0.5), engine),
-		    RandomNormal(0., std::sqrt(0.5), engine) };
+      r[i] = { RandomNormal(0., std::sqrt(0.5), engine), RandomNormal(0., std::sqrt(0.5), engine) };
     }
   }
   return r;
@@ -373,7 +405,7 @@ GpuArray<GpuComplex<Real>,ndof> correlated_noise(int kx, int ky, int kz,
   for (int i=0; i<ndof; ++i) {
     xi[i] = { 0, 0 };
     for (int j=0; j<=i; ++j) {
-      xi[i] += C[(i)*ndof+(j)]*r[j];
+      xi[i] += C[i*ndof+j]*r[j];
     }
   }
   return xi;
@@ -404,11 +436,9 @@ inline void generate_kspace_noise(const Geometry& geom,
 	      // compute correlated noise in k-space
 	      xi = correlated_noise(kx,ky,kz,domain,engine);
 
-        for (int i=ncons; i<nvel; ++i) {
+        for (int i=0; i<ndof; ++i) {
           xi_real(kx,ky,kz,i) = xi[i].real();
           xi_imag(kx,ky,kz,i) = xi[i].imag();
-          xi_real(kx,ky,kz,nvel+i) = xi[nvel+i].real();
-          xi_imag(kx,ky,kz,nvel+i) = xi[nvel+i].imag();
         }
       }
     });
@@ -437,7 +467,7 @@ inline void check_kspace_symmetries(const Geometry& geom,
 	  && ((kz == 0) || (kz == domain.length(2) - kz))) {
 	symmetric &= (xi(kx,ky,kz).imag() == 0);
 	if (!symmetric) {
-	  Print() << "symmetry violation! ("
+	  Print() << "symmetry violation 1! ("
 		  << kx << "," << ky << "," << kz << ") "
 		  << xi(kx,ky,kz).imag() << " "
 	          << symmetric << " " << (xi(kx,ky,kz).imag() == 0.)
@@ -450,7 +480,7 @@ inline void check_kspace_symmetries(const Geometry& geom,
 	symmetric &= ((xi(kx,ky,kz).real() ==  xi(kxloc,kyloc,kzloc).real())
 		   && (xi(kx,ky,kz).imag() == -xi(kxloc,kyloc,kzloc).imag()));
 	if (!symmetric) {
-	  Print() << "symmetry violation! ("
+	  Print() << "symmetry violation 2! ("
 		  << kx << "," << ky << "," << kz << ")"
 		  << std::endl;
 	  exit(0);
@@ -460,7 +490,7 @@ inline void check_kspace_symmetries(const Geometry& geom,
 	  symmetric &= ((xi(kx,ky,kz).real() ==  xi(kxloc,kyloc,kzloc).real())
 		     && (xi(kx,ky,kz).imag() == -xi(kxloc,kyloc,kzloc).imag()));
 	  if (!symmetric) {
-	    Print() << "symmetry violation! ("
+	    Print() << "symmetry violation 3a! ("
 		    << kx << "," << ky << "," << kz << ") ("
 	            << kxloc << "," << kyloc << "," << kzloc << ")"
 	            << " " << xi(kx,ky,kz).real() << " " << xi(kxloc,kyloc,kzloc).real()
@@ -473,7 +503,7 @@ inline void check_kspace_symmetries(const Geometry& geom,
 	    symmetric &= ((xi(kx,ky,kz).real() ==  xi(kxloc,kyloc,kzloc).real())
 		       && (xi(kx,ky,kz).imag() == -xi(kxloc,kyloc,kzloc).imag()));
 	    if (!symmetric) {
-	      Print() << "symmetry violation! ("
+	      Print() << "symmetry violation 3b! ("
 		      << kx << "," << ky << "," << kz << ") ("
 		      << kxloc << "," << kyloc << "," << kzloc << ")"
 		      << " " << xi(kx,ky,kz).real() << " " << xi(kxloc,kyloc,kzloc).real()
@@ -495,11 +525,11 @@ inline void compute_ifft(const Geometry& geom, MultiFab& realspace_noise,
 			 const MultiFab& kspace_noise_imag) {
 
 #ifdef AMREX_USE_CUDA
-    Print() << "Using cuFFT\n";
+    //Print() << "Using cuFFT\n";
     using FFTplan = cufftHandle;
     using FFTcomplex = cuDoubleComplex;
 #else
-    Print() << "Using FFTW\n";
+    //Print() << "Using FFTW\n";
     using FFTplan = fftw_plan;
     using FFTcomplex = fftw_complex;
 #endif
@@ -534,7 +564,7 @@ inline void compute_ifft(const Geometry& geom, MultiFab& realspace_noise,
     Vector<FFTplan> fftw_plans;
     FFTplan plan;
 
-    for (int k=ncons; k<ndof; ++k) {
+    for (int k=0; k<ndof; ++k) {
 
       // first copy the k-th conponent of the noise to one grid
       // may be faster to generate the noise here? [uschill 07/27/2022]
@@ -601,8 +631,8 @@ inline void compute_ifft(const Geometry& geom, MultiFab& realspace_noise,
 	      });
       }
 
-      //ParallelDescriptor::Barrier();
-      //check_kspace_symmetries(geom,noise_onegrid,spectral_field);
+      ParallelDescriptor::Barrier();
+      check_kspace_symmetries(geom,noise_onegrid,spectral_field);
 
       // inverse FFT (complex to real)
       for (MFIter mfi(noise_onegrid); mfi.isValid(); ++mfi) {

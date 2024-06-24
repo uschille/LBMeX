@@ -11,15 +11,7 @@
 using namespace amrex;
 
 #include "LBM_binary.H"
-
-inline void WriteOutput(int step,
-			const MultiFab& hydrovs,
-			const Vector<std::string>& var_names,
-			const Geometry& geom) {
-  const Real time = step;
-  const std::string& pltfile = amrex::Concatenate("hydro_plt_",step,5);
-  WriteSingleLevelPlotfile(pltfile, hydrovs, var_names, geom, time, step);
-}
+#include "tests.H"
 
 inline void WriteDist(int step, 
       const MultiFab& fold,
@@ -40,7 +32,7 @@ inline Vector<std::string> VariableNames(const int numVars) {
   Vector<std::string> var_names(numVars);
   std::string name;
   int cnt = 0;
-  // rho, phi, psi
+  // rho, phi
   var_names[cnt++] = "density";
   var_names[cnt++] = "phi";
   // velx, vely, velz
@@ -49,19 +41,24 @@ inline Vector<std::string> VariableNames(const int numVars) {
     name += (120+d);
     var_names[cnt++] = name;
   }
-  // pxx, pxy, pxz, pyy, pyz, pzz
-  for (int i=0; i<AMREX_SPACEDIM; ++i) {
-    for (int j=i; j<AMREX_SPACEDIM; ++j) {
-      name = "p";
-      name += (120+i);
-      name += (120+j);
-      var_names[cnt++] = name;
-    }
+  for (int d=0; d<AMREX_SPACEDIM; d++) {
+    name = "phi*u";
+    name += (120+d);
+    var_names[cnt++] = name;
   }
-  // kinetic moments
-  for (; cnt<nvel+1;) {
+  // pxx, pxy, pxz, pyy, pyz, pzz
+  // for (int i=0; i<AMREX_SPACEDIM; ++i) {
+  //   for (int j=i; j<AMREX_SPACEDIM; ++j) {
+  //     name = "p";
+  //     name += (120+i);
+  //     name += (120+j);
+  //     var_names[cnt++] = name;
+  //   }
+  // }
+  // remaining moments
+  for (; cnt<nvel+ncons;) {
     name = "mf";
-    name += std::to_string(cnt-1);
+    name += std::to_string(cnt-ncons);
     var_names[cnt++] = name;
   }
   for (; cnt<numVars;) {
@@ -72,20 +69,19 @@ inline Vector<std::string> VariableNames(const int numVars) {
   return var_names;
 }
 
-inline Vector<std::string> distribution_Variable_names() {
-  // output names
-  Vector<std::string> var_names(nvel);
-  std::string name;
 
-  for (int i = 0; i < nvel; i++){
-    name = "e";
-    name += std::to_string(i);
-    var_names[i] = name;  
-  }
-  return var_names;
+inline void WriteOutput(int step,
+			const MultiFab& hydrovs,
+			const Geometry& geom) {
+  // set up variable names for output
+  const Vector<std::string> var_names = VariableNames(2*nvel);
+  const std::string& pltfile = amrex::Concatenate("plt",step,5);
+  WriteSingleLevelPlotfile(pltfile, hydrovs, var_names, geom, Real(step), step);
 }
 
 void main_driver(const char* argv) {
+
+  cholesky_test();
 
   // store the current time so we can later compute total run time.
   Real strt_time = ParallelDescriptor::second();
@@ -130,9 +126,6 @@ void main_driver(const char* argv) {
   // need two halo layers for gradients
   int nghost = 2;
 
-  // number of hydrodynamic fields to output
-  int nhydro = 6;
-
   // set up MultiFabs
   MultiFab fold(ba, dm, nvel, nghost);
   MultiFab fnew(ba, dm, nvel, nghost);
@@ -141,40 +134,18 @@ void main_driver(const char* argv) {
   MultiFab hydrovs(ba, dm, 2*nvel, nghost);
   MultiFab noise(ba, dm, 2*nvel, nghost);
 
-  // set up variable names for output
-  const Vector<std::string> var_names = VariableNames(2*nvel);
-  const Vector<std::string> distribution_var_names = distribution_Variable_names();
-
-  int nStructVars = hydrovs.nComp();
-
-  Vector<Real> var_scaling(nStructVars*(nStructVars+1)/2);
-  for (int d=0; d<var_scaling.size(); ++d) {
-    if (temperature>0) var_scaling[d] = temperature; else var_scaling[d] = 1.;
-  }
-
-  // StructFact structFact(ba, dm, var_names, var_scaling);
 
   // INITIALIZE
   LBM_init_mixture(fold, gold, hydrovs);
   // Write a plotfile of the initial data if plot_int > 0
-  if (plot_int > 0) {
-    WriteOutput(0, hydrovs, var_names, geom);
-    // WriteDist(0, fold, gold, distribution_var_names, geom);
-    // structFact.FortStructure(hydrovs, geom);
-    // structFact.WritePlotFile(0, 0., geom, "SF_plt_");
-  }
+  if (plot_int > 0) WriteOutput(0, hydrovs, geom);
+
   Print() << "LB initialized\n";
 
   // TIMESTEP
   for (int step=1; step <= nsteps; ++step) {
     LBM_timestep(geom, fold, gold, fnew, gnew, hydrovs, noise);
-    // structFact.FortStructure(hydrovs, geom);
-    if (plot_int > 0 && step%plot_int ==0){
-      std::string noiseplt = amrex::Concatenate("noise_plt_",step,5);
-      VisMF::Write(noise, noiseplt);
-      WriteOutput(step, hydrovs, var_names, geom);
-      // WriteDist(step, fold, gold, distribution_var_names, geom);
-    }
+    if (plot_int > 0 && step%plot_int ==0) WriteOutput(step, hydrovs, geom);
     Print() << "LB step " << step << "\n";
   }
 
