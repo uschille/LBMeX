@@ -4,6 +4,7 @@
 #include <AMReX_Print.H>
 #include <AMReX_ParmParse.H>
 #include <AMReX_PlotFileUtil.H>
+#include "StructFact.H"
 
 using namespace amrex;
 
@@ -16,15 +17,15 @@ inline Vector<std::string> VariableNames(const int numVars) {
   std::string name;
   int cnt = 0;
   // rho, phi
-  var_names[cnt++] = "density";
-  var_names[cnt++] = "phi";
+  if (cnt<numVars) var_names[cnt++] = "density";
+  if (cnt<numVars) var_names[cnt++] = "phi";
   // velx, vely, velz
-  for (int d=0; d<AMREX_SPACEDIM; d++) {
+  for (int d=0; d<AMREX_SPACEDIM, cnt<numVars; d++) {
     name = "u";
     name += (120+d);
     var_names[cnt++] = name;
   }
-  for (int d=0; d<AMREX_SPACEDIM; d++) {
+  for (int d=0; d<AMREX_SPACEDIM, cnt<numVars; d++) {
     name = "phi*u";
     name += (120+d);
     var_names[cnt++] = name;
@@ -39,7 +40,7 @@ inline Vector<std::string> VariableNames(const int numVars) {
   //   }
   // }
   // remaining moments
-  for (; cnt<nvel+ncons;) {
+  for (; cnt<nvel+ncons, cnt<numVars;) {
     name = "mf";
     name += std::to_string(cnt-ncons);
     var_names[cnt++] = name;
@@ -116,6 +117,14 @@ void main_driver(const char* argv) {
   MultiFab hydrovs(ba, dm, 2*nvel, nghost);
   MultiFab noise(ba, dm, 2*nvel, nghost);
 
+  int nStructVars = 5;
+  const Vector<std::string> var_names = VariableNames(nStructVars);
+  Vector<Real> var_scaling(nStructVars*(nStructVars+1)/2);
+  for (int i=0; i<var_scaling.size(); ++i) {
+    if (temperature>0) var_scaling[i] = temperature; else var_scaling[i] = 1.;
+  }
+  StructFact structFact(ba, dm, var_names, var_scaling);
+
   // INITIALIZE
   LBM_init_mixture(fold, gold, hydrovs);
   // Write a plotfile of the initial data if plot_int > 0
@@ -125,7 +134,11 @@ void main_driver(const char* argv) {
   // TIMESTEP
   for (int step=1; step <= nsteps; ++step) {
     LBM_timestep(geom, fold, gold, fnew, gnew, hydrovs, noise);
-    if (plot_int > 0 && step%plot_int ==0) WriteOutput(step, hydrovs, geom);
+    structFact.FortStructure(hydrovs, geom);
+    if (plot_int > 0 && step%plot_int ==0) {
+      WriteOutput(step, hydrovs, geom);
+      structFact.WritePlotFile(step, static_cast<Real>(step), geom, "plt_SF");
+    }
     Print() << "LB step " << step << "\n";
   }
 
