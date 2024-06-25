@@ -99,6 +99,9 @@ void main_driver(const char* argv) {
   int nsteps = 100;
   int plot_int = 10;
 
+  // fft test input
+  int reps = 1
+
   // input parameters
   ParmParse pp;
   pp.query("nx", nx);
@@ -109,6 +112,7 @@ void main_driver(const char* argv) {
   pp.query("lambda", lambda);
   pp.query("T", T);
   pp.query("temperature", temperature);
+  pp.query("reps", reps);
 
   // set up Box and Geomtry
   IntVect dom_lo(0, 0, 0);
@@ -141,7 +145,7 @@ void main_driver(const char* argv) {
   MultiFab test_noise(ba, dm, 2*nvel, nghost);
 
   Print() << "IFFT test cases\n";
-  test_case_ifft(geom, test_noise);
+  test_case_ifft(geom, test_noise, nx, reps);
 
 
   // INITIALIZE
