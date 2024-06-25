@@ -11,7 +11,8 @@
 using namespace amrex;
 
 #include "LBM_binary.H"
-#include "tests.H"
+#include "unit_tests_cholesky.H"
+#include "unit_tests_ifft.H"
 
 inline void WriteDist(int step, 
       const MultiFab& fold,
@@ -81,7 +82,11 @@ inline void WriteOutput(int step,
 
 void main_driver(const char* argv) {
 
-  cholesky_test();
+  // cholesky decomposition tests;
+  Print() << "Cholesky decomposition test cases\n";
+  test_case_1();
+  test_case_2();
+  test_case_3();
 
   // store the current time so we can later compute total run time.
   Real strt_time = ParallelDescriptor::second();
@@ -133,6 +138,10 @@ void main_driver(const char* argv) {
   MultiFab gnew(ba, dm, nvel, nghost);
   MultiFab hydrovs(ba, dm, 2*nvel, nghost);
   MultiFab noise(ba, dm, 2*nvel, nghost);
+  MultiFab test_noise(ba, dm, 2*nvel, nghost);
+
+  Print() << "IFFT test cases\n";
+  test_case_ifft(geom, test_noise);
 
 
   // INITIALIZE
