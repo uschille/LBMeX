@@ -18,7 +18,7 @@ GpuArray<Real,ndof*ndof> spd_matrix(const int n, const int bstart) {
     C.fill(0.);
     for (int i=bstart; i<n; ++i) {
         for (int j=bstart; j<n; ++j) {
-            A[i*ndof+j] = arc4random_uniform(0.5);
+            A[i*ndof+j] = 0.1*(Random()-0.5);
         }
     }
     for (int i=bstart; i<n; ++i) {
