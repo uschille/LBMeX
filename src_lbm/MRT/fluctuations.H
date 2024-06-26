@@ -77,7 +77,7 @@ void cholesky_decomp(GpuArray<Real,ncomp*ncomp>& A) {
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 GpuArray<GpuComplex<Real>,ncomp> kspace_white_noise(int kx, int ky, int kz, const Box& domain, RandomEngine const& engine) {
   GpuArray<GpuComplex<Real>,ncomp> r = {};
-  for (int i=ncons; i<ncomp; ++i) {
+  for (int i=ncons+1; i<ncomp; ++i) {
     // symmetry points are purely real
     if (     ((kx == 0) || (kx == domain.length(0) - kx))
           && ((ky == 0) || (ky == domain.length(1) - ky))
@@ -100,13 +100,13 @@ GpuArray<GpuComplex<Real>,ncomp> correlated_noise(int kx, int ky, int kz,
   GpuArray<GpuComplex<Real>,ncomp> r, xi;
   GpuArray<Real,ncomp*ncomp> C;
 
-  // need to generate the correct symmetries here? [uschill 07/25/2022]
-  // possibly the case if C(k) != C(-k) [uschill 07/27/2022]
-  r = kspace_white_noise(kx,ky,kz,domain,engine);
-
   // Cholesky decomposition of noise covariance matrix
   C = noise_covariance(kx,ky,kz);
   cholesky_decomp(C);
+
+  // need to generate the correct symmetries here? [uschill 07/25/2022]
+  // possibly the case if C(k) != C(-k) [uschill 07/27/2022]
+  r = kspace_white_noise(kx,ky,kz,domain,engine);
 
   // compute correlated noise vector from Gaussian random variables
   for (int i=0; i<ncomp; ++i) {

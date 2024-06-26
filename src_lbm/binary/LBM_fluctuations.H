@@ -12,6 +12,7 @@
 #include "LBM_d3q19.H"
 #include "LBM_binary.H"
 
+const int ncons = 2 + AMREX_SPACEDIM;
 const int ndof = 2*nvel;
 
 // Cholesky decomposition of matrix A
