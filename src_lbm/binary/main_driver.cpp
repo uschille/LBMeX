@@ -64,7 +64,7 @@ inline void WriteOutput(int step,
 
 void main_driver(const char* argv) {
 
-  cholesky_test();
+  if (!cholesky_test(100)) exit(-1);
 
   // store the current time so we can later compute total run time.
   Real strt_time = ParallelDescriptor::second();
