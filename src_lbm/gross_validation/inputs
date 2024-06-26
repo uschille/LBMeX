@@ -1,0 +1,15 @@
+# box dims
+nx = 16
+max_grid_size = 16
+
+# timesteps
+nsteps = 1
+plot_int = 0
+
+# model_params
+kappa = 0.01
+T = 0.6
+lambda = 1.1
+
+# fluctuations
+temperature = 1e-7
