@@ -9,8 +9,7 @@
 using namespace amrex;
 
 #include "LBM_binary.H"
-#include "unit_tests_cholesky.H"
-#include "unit_tests_ifft.H"
+#include "tests.H"
 
 inline void WriteDist(int step, 
       const MultiFab& fold,
@@ -67,7 +66,6 @@ inline Vector<std::string> VariableNames(const int numVars) {
   }
   return var_names;
 }
-
 
 inline void WriteOutput(int step,
 			const MultiFab& hydrovs,
@@ -138,10 +136,6 @@ void main_driver(const char* argv) {
   MultiFab noise(ba, dm, 2*nvel, nghost);
   MultiFab test_noise(ba, dm, 2*nvel, nghost);
 
-  Print() << "IFFT test cases\n";
-  test_case_ifft(geom, test_noise, nx, reps);
-
-
   int nStructVars = 5;
   const Vector<std::string> var_names = VariableNames(nStructVars);
   Vector<Real> var_scaling(nStructVars*(nStructVars+1)/2);
@@ -154,7 +148,6 @@ void main_driver(const char* argv) {
   LBM_init_mixture(fold, gold, hydrovs);
   // Write a plotfile of the initial data if plot_int > 0
   if (plot_int > 0) WriteOutput(0, hydrovs, geom);
-
   Print() << "LB initialized\n";
 
   // TIMESTEP
