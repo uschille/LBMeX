@@ -3,7 +3,6 @@
 
 const int ncomp = 19;
 const int ncons = 1 + AMREX_SPACEDIM;
-const int nnoise = ncomp - ncons;
 
 const Real cs2 = 1./3.;
 

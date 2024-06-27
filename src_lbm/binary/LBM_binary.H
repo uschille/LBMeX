@@ -308,15 +308,15 @@ void thermalize_moments(Array1D<Real,0,nvel>& mf,
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 void thermalize_moments(int x, int y, int z,
       Array1D<Real,0,nvel>& mf, Array1D<Real,0,nvel>& mg,
-      Array1D<Real,0,ndof>& noise) {
+      const Array4<Real>& noise) {
   // diffusive moments 1,2,3 in noise at 5,6,7
   for (int i=1; i<ncons; ++i) {
-    mg(i) += (1. - 0.5/tau_p) * noise(ncons+i);
+    mg(i) += (1. - 0.5/tau_p) * noise(x,y,z,ncons+i);
   }
-  // nonconserved moments 4..18 in noise at 8..22 and 23..37
+  // nonconserved moments 4..18 in noise at 8..22 (f) and 23..37 (g)
   for (int i=ncons; i<nvel; ++i) {
-    mf(i) += (1. - 0.5/tau_r) * noise(ncons+i);
-    mg(i) += (1. - 0.5/tau_p) * noise(nvel+i);
+    mf(i) += (1. - 0.5/tau_r) * noise(x,y,z,ncons+i);
+    mg(i) += (1. - 0.5/tau_p) * noise(x,y,z,nvel+i);
   }
 }
 
@@ -327,15 +327,13 @@ void collide(int x, int y, int z,
 	     const Array4<Real>& h,
        const Array4<Real>& noise) {
   Array1D<Real,0,nvel> mf, mg;
-  Array1D<Real,0,ndof> xi;
 
   mf = moments(x,y,z,f);
   mg = moments(x,y,z,g);
 
   relax_moments(x,y,z,mf,mg,h);
 
-  for (int i=0; i<ndof; ++i) xi(i) = noise(x,y,z,i);
-  thermalize_moments(x,y,z,mf,mg,xi);
+  thermalize_moments(x,y,z,mf,mg,noise);
 
   populations(x,y,z,f,mf);
   populations(x,y,z,g,mg);

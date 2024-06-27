@@ -2,8 +2,6 @@
 #define LBM_D3Q19_H_
 
 const int nvel = 19;
-const int ncons = 1 + AMREX_SPACEDIM;
-const int nnoise = nvel - ncons;
 
 const Real cs2 = 1./3.;
 

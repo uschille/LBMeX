@@ -12,44 +12,40 @@
 #include "LBM_d3q19.H"
 #include "LBM_binary.H"
 
+const int ncons = 2 + AMREX_SPACEDIM;
 const int ndof = 2*nvel;
 
 // Cholesky decomposition of matrix A
 // result is stored in lower triangle of A
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-void cholesky_decomp(GpuArray<Real,ndof*ndof>& A, const int n) {
-  GpuArray<Real,ndof> p;
-  Real sum;
-  bool positive_definite = true;
-
-  // adjust Cholesky to include all columns? [uschill 07/26/2022]
-
+void cholesky_decomp(GpuArray<Real,ndof*ndof>& A, const int n, const int bstart) {
   // Cholesky-Banachiewicz algorithm
-  for (int i=ncons+1; i<n; ++i) {
-    for (int j=ncons+1; j<=i; ++j) {
+  Real sum;
+  for (int i=bstart; i<n; ++i) {
+    for (int j=bstart; j<=i; ++j) {
       sum = A[i*n+j];
-      for (int k=j-1; k>=ncons+1; --k) {
+      for (int k=j-1; k>=bstart; --k) {
 	      sum -= A[i*n+k]*A[j*n+k];
       }
       if (i==j) {
-	      if (sum>FLT_EPSILON) {
-	        p[i] = std::sqrt(sum);
-	      } else {
-	        p[i] = 0.0;
-	        positive_definite = false;
-          //Print() << "Row " << i << " matrix not positive definite!\n";
-	      }
-      } else {
-	      if (p[j]>FLT_EPSILON) {
-	        A[i*n+j] = sum/p[j];
+	      if (sum>=0) {
+	        A[i*n+j] = std::sqrt(sum);
 	      } else {
 	        A[i*n+j] = 0.0;
+          Print() << "Row " << i << " matrix not positive definite! " << sum << std::endl;
+          exit(-1);
+	      }
+      } else {
+	      if (A[j*n+j]>0) {
+	        A[i*n+j] = sum/A[j*n+j];
+	      } else {
+          Print() << "Cholesky decomposition should not reach " << __FILE__ <<":"<< __LINE__ << std::endl;
+	        exit(-1);
 	      }
       }
     }
   }
   for (int i=0; i<n; ++i) {
-    A[i*n+i] = p[i];
     for (int j=i+1; j<n; ++j) {
       A[i*n+j] = 0.0;
     }
@@ -395,7 +391,7 @@ GpuArray<GpuComplex<Real>,ndof> correlated_noise(int kx, int ky, int kz,
 
   // Cholesky decomposition of noise covariance matrix
   C = noise_covariance(kx,ky,kz);
-  cholesky_decomp(C,ndof);
+  cholesky_decomp(C,ndof,ncons+1);
 
   // need to generate the correct symmetries here? [uschill 07/25/2022]
   // possibly the case if C(k) != C(-k) [uschill 07/27/2022]
