@@ -82,6 +82,7 @@ Real pressure(Real rho, Real phi) {
   return p0;
 }
 
+
 #if 0 // equilibrium populations not necessary for MRT
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 Array1D<Real,0,nvel> fequilibrium(const Array1D<Real,0,2>& fields,
@@ -426,6 +427,7 @@ inline void LBM_timestep(const Geometry& geom,
 			 MultiFab& fnew, MultiFab& gnew,
 			 MultiFab& hydrovs, MultiFab& noise) {
   generate_fluctuations(geom, hydrovs, noise);
+  // noise.setVal(0.);
   collide_stream(geom, fold, gold, fnew, gnew, hydrovs, noise);
   hydrovars(fold, gold, hydrovs);
 }

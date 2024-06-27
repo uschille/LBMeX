@@ -4,12 +4,15 @@
 #include <AMReX_Print.H>
 #include <AMReX_ParmParse.H>
 #include <AMReX_PlotFileUtil.H>
+#include <AMReX_VisMF.H>
+
 #include "StructFact.H"
 
 using namespace amrex;
 
 #include "LBM_binary.H"
-#include "tests.H"
+#include "unit_tests_cholesky.H"
+#include "unit_tests_ifft.H"
 
 inline void WriteDist(int step, 
       const MultiFab& fold,
@@ -78,7 +81,11 @@ inline void WriteOutput(int step,
 
 void main_driver(const char* argv) {
 
-  if (!cholesky_test(100)) exit(-1);
+  // cholesky decomposition tests;
+  Print() << "Cholesky decomposition test cases\n";
+  test_case_1();
+  test_case_2();
+  test_case_3();
 
   // store the current time so we can later compute total run time.
   Real strt_time = ParallelDescriptor::second();
@@ -91,6 +98,9 @@ void main_driver(const char* argv) {
   int nsteps = 100;
   int plot_int = 10;
 
+  // fft test input
+  int reps = 1
+
   // input parameters
   ParmParse pp;
   pp.query("nx", nx);
@@ -101,6 +111,7 @@ void main_driver(const char* argv) {
   pp.query("lambda", lambda);
   pp.query("T", T);
   pp.query("temperature", temperature);
+  pp.query("reps", reps);
 
   // set up Box and Geomtry
   IntVect dom_lo(0, 0, 0);
@@ -130,14 +141,11 @@ void main_driver(const char* argv) {
   MultiFab gnew(ba, dm, nvel, nghost);
   MultiFab hydrovs(ba, dm, 2*nvel, nghost);
   MultiFab noise(ba, dm, 2*nvel, nghost);
+  MultiFab test_noise(ba, dm, 2*nvel, nghost);
 
-  int nStructVars = 5;
-  const Vector<std::string> var_names = VariableNames(nStructVars);
-  Vector<Real> var_scaling(nStructVars*(nStructVars+1)/2);
-  for (int i=0; i<var_scaling.size(); ++i) {
-    if (temperature>0) var_scaling[i] = temperature; else var_scaling[i] = 1.;
-  }
-  StructFact structFact(ba, dm, var_names, var_scaling);
+  Print() << "IFFT test cases\n";
+  test_case_ifft(geom, test_noise, nx, reps);
+
 
   // INITIALIZE
   LBM_init_mixture(fold, gold, hydrovs);
@@ -148,15 +156,11 @@ void main_driver(const char* argv) {
   // TIMESTEP
   for (int step=1; step <= nsteps; ++step) {
     LBM_timestep(geom, fold, gold, fnew, gnew, hydrovs, noise);
-    structFact.FortStructure(hydrovs, geom);
-    if (plot_int > 0 && step%plot_int ==0) {
-      WriteOutput(step, hydrovs, geom);
-      structFact.WritePlotFile(step, static_cast<Real>(step), geom, "plt_SF");
-    }
+    if (plot_int > 0 && step%plot_int ==0) WriteOutput(step, hydrovs, geom);
     Print() << "LB step " << step << "\n";
   }
 
-  structFact.WritePlotFile(nsteps, nsteps, geom, "SF_plt");
+  // structFact.WritePlotFile(nsteps, nsteps, geom, "SF_plt");
 
   // Call the timer again and compute the maximum difference between the start time 
   // and stop time over all processors
