@@ -4,15 +4,12 @@
 #include <AMReX_Print.H>
 #include <AMReX_ParmParse.H>
 #include <AMReX_PlotFileUtil.H>
-#include <AMReX_VisMF.H>
-
 #include "StructFact.H"
 
 using namespace amrex;
 
 #include "LBM_binary.H"
-#include "unit_tests_cholesky.H"
-#include "unit_tests_ifft.H"
+#include "tests.H"
 
 inline void WriteDist(int step, 
       const MultiFab& fold,
@@ -81,11 +78,7 @@ inline void WriteOutput(int step,
 
 void main_driver(const char* argv) {
 
-  // cholesky decomposition tests;
-  Print() << "Cholesky decomposition test cases\n";
-  test_case_1();
-  test_case_2();
-  test_case_3();
+  if (!cholesky_test(100)) exit(-1);
 
   // store the current time so we can later compute total run time.
   Real strt_time = ParallelDescriptor::second();
@@ -143,9 +136,13 @@ void main_driver(const char* argv) {
   MultiFab noise(ba, dm, 2*nvel, nghost);
   MultiFab test_noise(ba, dm, 2*nvel, nghost);
 
-  Print() << "IFFT test cases\n";
-  test_case_ifft(geom, test_noise, nx, reps);
-
+  int nStructVars = 5;
+  const Vector<std::string> var_names = VariableNames(nStructVars);
+  Vector<Real> var_scaling(nStructVars*(nStructVars+1)/2);
+  for (int i=0; i<var_scaling.size(); ++i) {
+    if (temperature>0) var_scaling[i] = temperature; else var_scaling[i] = 1.;
+  }
+  StructFact structFact(ba, dm, var_names, var_scaling);
 
   // INITIALIZE
   LBM_init_mixture(fold, gold, hydrovs);
@@ -156,7 +153,11 @@ void main_driver(const char* argv) {
   // TIMESTEP
   for (int step=1; step <= nsteps; ++step) {
     LBM_timestep(geom, fold, gold, fnew, gnew, hydrovs, noise);
-    if (plot_int > 0 && step%plot_int ==0) WriteOutput(step, hydrovs, geom);
+    structFact.FortStructure(hydrovs, geom);
+    if (plot_int > 0 && step%plot_int ==0) {
+      WriteOutput(step, hydrovs, geom);
+      structFact.WritePlotFile(step, static_cast<Real>(step), geom, "plt_SF");
+    }
     Print() << "LB step " << step << "\n";
   }
 
