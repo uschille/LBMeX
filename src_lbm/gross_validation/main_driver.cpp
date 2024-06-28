@@ -32,15 +32,19 @@ inline Vector<std::string> VariableNames(const int numVars) {
   int cnt = 0;
   // rho, phi
   if (cnt<numVars) var_names[cnt++] = "density";
-  if (cnt<numVars) var_names[cnt++] = "phi";
   // velx, vely, velz
   for (int d=0; d<AMREX_SPACEDIM, cnt<numVars; d++) {
     name = "u";
     name += (120+d);
     var_names[cnt++] = name;
   }
-  for (int d=0; d<AMREX_SPACEDIM, cnt<numVars; d++) {
-    name = "phi*u";
+  for (int d=0; d<3, cnt<numVars; d++) {
+    name = "P";
+    name += (120+d);
+    var_names[cnt++] = name;
+  }
+    for (int d=0; d<3, cnt<numVars; d++) {
+    name = "P";
     name += (120+d);
     var_names[cnt++] = name;
   }
@@ -57,11 +61,6 @@ inline Vector<std::string> VariableNames(const int numVars) {
   for (; cnt<nvel+ncons, cnt<numVars;) {
     name = "mf";
     name += std::to_string(cnt-ncons);
-    var_names[cnt++] = name;
-  }
-  for (; cnt<numVars;) {
-    name = "mg";
-    name += std::to_string(cnt-nvel);
     var_names[cnt++] = name;
   }
   return var_names;
@@ -91,6 +90,9 @@ void main_driver(const char* argv) {
   int nsteps = 100;
   int plot_int = 10;
 
+  // fft test input
+  int reps = 1;
+
   // input parameters
   ParmParse pp;
   pp.query("nx", nx);
@@ -101,6 +103,7 @@ void main_driver(const char* argv) {
   pp.query("lambda", lambda);
   pp.query("T", T);
   pp.query("temperature", temperature);
+  // pp.query("reps", reps);
 
   // set up Box and Geomtry
   IntVect dom_lo(0, 0, 0);
@@ -126,12 +129,11 @@ void main_driver(const char* argv) {
   // set up MultiFabs
   MultiFab fold(ba, dm, nvel, nghost);
   MultiFab fnew(ba, dm, nvel, nghost);
-  MultiFab gold(ba, dm, nvel, nghost);
-  MultiFab gnew(ba, dm, nvel, nghost);
-  MultiFab hydrovs(ba, dm, 2*nvel, nghost);
-  MultiFab noise(ba, dm, 2*nvel, nghost);
+  MultiFab hydrovs(ba, dm, nvel, nghost);
+  MultiFab noise(ba, dm, nvel, nghost);
+  // MultiFab test_noise(ba, dm, 2*nvel, nghost);
 
-  int nStructVars = 5;
+  int nStructVars = 4;
   const Vector<std::string> var_names = VariableNames(nStructVars);
   Vector<Real> var_scaling(nStructVars*(nStructVars+1)/2);
   for (int i=0; i<var_scaling.size(); ++i) {
@@ -140,14 +142,15 @@ void main_driver(const char* argv) {
   StructFact structFact(ba, dm, var_names, var_scaling);
 
   // INITIALIZE
-  LBM_init_mixture(fold, gold, hydrovs);
+  // LBM_init_mixture(fold, gold, hydrovs);
+  
   // Write a plotfile of the initial data if plot_int > 0
   if (plot_int > 0) WriteOutput(0, hydrovs, geom);
   Print() << "LB initialized\n";
 
   // TIMESTEP
   for (int step=1; step <= nsteps; ++step) {
-    LBM_timestep(geom, fold, gold, fnew, gnew, hydrovs, noise);
+    LBM_timestep(geom, fold, fnew, hydrovs, noise);
     structFact.FortStructure(hydrovs, geom);
     if (plot_int > 0 && step%plot_int ==0) {
       WriteOutput(step, hydrovs, geom);
@@ -156,7 +159,7 @@ void main_driver(const char* argv) {
     Print() << "LB step " << step << "\n";
   }
 
-  structFact.WritePlotFile(nsteps, nsteps, geom, "SF_plt");
+  // structFact.WritePlotFile(nsteps, nsteps, geom, "SF_plt");
 
   // Call the timer again and compute the maximum difference between the start time 
   // and stop time over all processors
