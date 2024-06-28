@@ -1,6 +1,8 @@
 #ifndef LBM_D3Q19_H_
 #define LBM_D3Q19_H_
 
+// #include "LBM_binary.H"
+
 const int nvel = 19;
 
 const Real cs2 = 1./3.;
@@ -281,6 +283,7 @@ Array1D<Real,0,nvel> hydrovars(const Array1D<Real,0,nvel>& m) {
   h(8) = m(8); // pyz
   h(9) = (m(0)+m(4)-0.5*m(5)-1.5*m(6))/3.; // pzz
 
+  // Real pbulk = pressure(h(0));
   // deviatoric stress
   if (m(0) > std::numeric_limits<Real>::epsilon()) {
     const Real rho = m(0);

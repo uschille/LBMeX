@@ -7,9 +7,10 @@ nsteps = 1
 plot_int = 0
 
 # model_params
-kappa = 0.01
-T = 0.6
-lambda = 1.1
+kappa = 0.08
+B = 0.01
+rhov = 0.1
+rhol = 1.1
 
 # fluctuations
 temperature = 1e-7

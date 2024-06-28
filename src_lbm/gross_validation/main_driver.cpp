@@ -77,7 +77,7 @@ inline void WriteOutput(int step,
 
 void main_driver(const char* argv) {
 
-  if (!cholesky_test(100)) exit(-1);
+  // if (!cholesky_test(100)) exit(-1);
 
   // store the current time so we can later compute total run time.
   Real strt_time = ParallelDescriptor::second();
@@ -100,8 +100,9 @@ void main_driver(const char* argv) {
   pp.query("nsteps", nsteps);
   pp.query("plot_int", plot_int);
   pp.query("kappa", kappa);
-  pp.query("lambda", lambda);
-  pp.query("T", T);
+  pp.query("rhov", rhov);
+  pp.query("rhol", rhol);
+  pp.query("B", B);
   pp.query("temperature", temperature);
   // pp.query("reps", reps);
 

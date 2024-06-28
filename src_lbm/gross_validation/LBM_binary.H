@@ -4,16 +4,14 @@
 #include "LBM_d3q19.H"
 
 AMREX_GPU_MANAGED Real tau_r = 0.7886751345948129; // tau=0.5*(1.+1./sqrt(3.)) minimizes spurious currents according to Swift et al.
-AMREX_GPU_MANAGED Real tau_p = 1.0;
+// AMREX_GPU_MANAGED Real tau_p = 1.0;
 
 AMREX_GPU_MANAGED Real kappa = 0.0;
-
-AMREX_GPU_MANAGED Real lambda = 1.1;
-AMREX_GPU_MANAGED Real T = 0.6;
-
-AMREX_GPU_MANAGED Real Gamma = 1.0;
-
+AMREX_GPU_MANAGED Real B = 0.01;
 AMREX_GPU_MANAGED Real temperature = 0.0;
+AMREX_GPU_MANAGED Real rhov = 0.1;
+AMREX_GPU_MANAGED Real rhol = 1.1;
+const Real system_cs2 = B*2*pow(rhol - rhov, 2);
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 Real pressure(Real rho, Real phi);
@@ -46,7 +44,7 @@ Real laplacian(int x, int y, int z, const Array4<Real>& field, int icomp) {
     int xp = x + c[i][0];
     int yp = y + c[i][1];
     int zp = z + c[i][2];
-    laplacian += 2.*w[i]/cs2*(field(xp,yp,zp,icomp)-field(x,y,z,icomp));
+    laplacian += 2.*w[i]/system_cs2*(field(xp,yp,zp,icomp)-field(x,y,z,icomp));
   }
   return laplacian;
 }
@@ -60,7 +58,11 @@ Array1D<Real,0,1> chemical_potentials(const Array1D<Real,0,1>& fields,
   const Real D2rho = laplacians(0);
 
   Array1D<Real,0,1> mu = {0.0} ;
-  mu(0) = lambda/4.*(1.+phi2/rho2) + T/2*log((rho2-phi2)/4) - kappa*D2rho; //This is most definitely wrong for the multiphase case
+  // mu(0) = lambda/4.*(1.+phi2/rho2) + T/2*log((rho2-phi2)/4) - kappa*D2rho; //This is most definitely wrong for the multiphase case
+
+  // Real square_term = (rho - rhol)*(rho - rhov);
+  Real mu_0 = B*pow(rho - rhol, 2)*(2*rho - 2*rhov) + B*pow(rho - rhov, 2)*(2*rho - 2*rhol);
+  mu(0) = mu_0 - kappa*D2rho;
 
   return mu;
 }
@@ -68,7 +70,9 @@ Array1D<Real,0,1> chemical_potentials(const Array1D<Real,0,1>& fields,
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 Real pressure(Real rho) {
 
-  Real p0 = rho*T; // Eq. (40) in Swift et al.
+  // Real p0 = rho*T; // Eq. (40) in Swift et al.
+  Real square_term = (rho - rhol)*(rho - rhov);
+  Real p0 = B*square_term*(2*rho*(2*rho - rhol - rhov) - square_term); // eq 2 and para after in Gross 1010
   // note that gradient terms are included in fequilibrium
 
   return p0;
@@ -97,23 +101,23 @@ Array1D<Real,0,nvel> fequilibrium(const Array1D<Real,0,1>& fields,
   ruu[2][0] = rho*u[2]*u[0];
 
   Real G[3][3]; // Eq. (39) in Swift et al.
-  G[0][0] = kappa*Drho[0]*Drho[0] + kappa*Dphi[0]*Dphi[0];
-  G[1][1] = kappa*Drho[1]*Drho[1] + kappa*Dphi[1]*Dphi[1];
-  G[2][2] = kappa*Drho[2]*Drho[2] + kappa*Dphi[2]*Dphi[2];
-  G[0][1] = kappa*Drho[0]*Drho[1] + kappa*Dphi[0]*Dphi[1];
-  G[1][2] = kappa*Drho[1]*Drho[2] + kappa*Dphi[1]*Dphi[2];
-  G[2][0] = kappa*Drho[2]*Drho[0] + kappa*Dphi[2]*Dphi[0];
+  G[0][0] = kappa*Drho[0]*Drho[0];
+  G[1][1] = kappa*Drho[1]*Drho[1];
+  G[2][2] = kappa*Drho[2]*Drho[2];
+  G[0][1] = kappa*Drho[0]*Drho[1];
+  G[1][2] = kappa*Drho[1]*Drho[2];
+  G[2][0] = kappa*Drho[2]*Drho[0];
 
   Real fi, sumf = 0.0;
   for (int i=1; i<nvel; ++i) {
-    fi  = 3.*w[i]*pbulk;
-    fi += 3.*w[i]*rho*(u[0]*c[i][0]+u[1]*c[i][1]+u[2]*c[i][2]);
-    fi += 9./2.*w[i]*((ruu[0][0]*c[i][0]+2.*ruu[0][1]*c[i][1])*c[i][0]
+    fi = w[i]/system_cs2 * pbulk;
+    fi += w[i]/system_cs2 * rho * (u[0]*c[i][0]+u[1]*c[i][1]+u[2]*c[i][2]);
+    fi += w[i]/(2*system_cs2**4)*((ruu[0][0]*c[i][0]+2.*ruu[0][1]*c[i][1])*c[i][0]
 		     +(ruu[1][1]*c[i][1]+2.*ruu[1][2]*c[i][2])*c[i][1]
 		     +(ruu[2][2]*c[i][2]+2.*ruu[2][0]*c[i][0])*c[i][2]);
-    fi -= 3./2.*w[i]*(ruu[0][0]+ruu[1][1]+ruu[2][2]);
+    fi -= w[i]/(2*system_cs2**2)*(ruu[0][0]+ruu[1][1]+ruu[2][2]);
     // gradient terms
-    fi -= 3.*w[i]*(kappa*rho*D2rho+kappa*phi*D2phi);
+    fi -= w[i]/(system_cs2**2)*(kappa*rho*D2rho);
     fi += 3.*(wg[i][0][0]*G[0][0]+wg[i][1][1]*G[1][1]+wg[i][2][2]*G[2][2]
 	     +wg[i][0][1]*G[0][1]+wg[i][1][2]*G[1][2]+wg[i][2][0]*G[2][0]);
     fEq(i) = fi;
@@ -139,12 +143,12 @@ Array1D<Real,0,nvel> fequilibrium_moments(const Array1D<Real,0,1>& fields,
   const Real pbulk = pressure(rho);
 
   Real G[3][3], traceG=0.; // Eq. (39) in Swift et al.
-  G[0][0] = kappa*Drho[0]*Drho[0] + kappa*Dphi[0]*Dphi[0]; traceG  = G[0][0];
-  G[1][1] = kappa*Drho[1]*Drho[1] + kappa*Dphi[1]*Dphi[1]; traceG += G[1][1];
-  G[2][2] = kappa*Drho[2]*Drho[2] + kappa*Dphi[2]*Dphi[2]; traceG += G[2][2];
-  G[0][1] = kappa*Drho[0]*Drho[1] + kappa*Dphi[0]*Dphi[1];
-  G[1][2] = kappa*Drho[1]*Drho[2] + kappa*Dphi[1]*Dphi[2];
-  G[2][0] = kappa*Drho[2]*Drho[0] + kappa*Dphi[2]*Dphi[0];
+  G[0][0] = kappa*Drho[0]*Drho[0]; traceG  = G[0][0];
+  G[1][1] = kappa*Drho[1]*Drho[1]; traceG += G[1][1];
+  G[2][2] = kappa*Drho[2]*Drho[2]; traceG += G[2][2];
+  G[0][1] = kappa*Drho[0]*Drho[1];
+  G[1][2] = kappa*Drho[1]*Drho[2];
+  G[2][0] = kappa*Drho[2]*Drho[0];
 
   mEq( 0) = rho;
 
@@ -152,7 +156,7 @@ Array1D<Real,0,nvel> fequilibrium_moments(const Array1D<Real,0,1>& fields,
   mEq( 2) = rho*u[1];
   mEq( 3) = rho*u[2];
 
-  mEq( 4) = 3.*(pbulk-kappa*(rho*D2rho+phi*D2phi)) + rho*u2 - 0.5*traceG - rho;
+  mEq( 4) = 3.*(pbulk - kappa*rho*D2rho) + rho*u2 - 0.5*traceG - rho;
   mEq( 5) = rho*(3.*u[0]*u[0]-u2) + (3.*G[0][0]-traceG);
   mEq( 6) = rho*(u[1]*u[1]-u[2]*u[2]) + (G[1][1]-G[2][2]);
   mEq( 7) = rho*u[0]*u[1] + G[0][1];
@@ -166,7 +170,7 @@ Array1D<Real,0,nvel> fequilibrium_moments(const Array1D<Real,0,1>& fields,
   mEq(14) = 0.;
   mEq(15) = 0.;
 
-  mEq(16) = 1.5*traceG - 3.*(pbulk-kappa*(rho*D2rho+phi*D2phi)) + rho;
+  mEq(16) = 1.5*traceG - 3.*(pbulk - kappa*rho*D2rho) + rho;
   mEq(17) = 2.*(G[1][1]+G[2][2]-2.*G[0][0]);
   mEq(18) = 2.*(G[2][2]-G[1][1]);
 
@@ -199,7 +203,7 @@ void thermalize_moments(Array1D<Real,0,nvel>& mf,
 			RandomEngine const& engine) {
   const Real rho = mf(0);
   const Real gamma_r = 1. - 1./tau_r;
-  const Real phi_r = sqrt(rho*temperature/cs2*(1.-gamma_r*gamma_r));
+  const Real phi_r = sqrt(rho*temperature/system_cs2*(1.-gamma_r*gamma_r));
   Array<Real,nvel> r = {}; // {} to value initialize r
   for (int i=4; i<nvel; ++i) {
     mf(i) += sqrt(b[i])*phi_r*RandomNormal(0., 1., engine);
