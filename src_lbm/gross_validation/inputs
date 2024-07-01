@@ -3,11 +3,11 @@ nx = 16
 max_grid_size = 16
 
 # timesteps
-nsteps = 1
-plot_int = 0
+nsteps = 10000
+plot_int = 10000
 
 # model_params
-kappa = 0.08
+kappa = 0
 B = 0.01
 rhov = 0.1
 rhol = 1.1

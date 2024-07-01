@@ -177,6 +177,7 @@ Array1D<Real,0,nvel> moments(int x, int y, int z, const Array4<Real>& fsite) {
   for (int i=0; i<nvel; ++i) {
     f(i) = fsite(x,y,z,i);
   }
+  // Print() << "Copying f distribution to get moments\n";
   return moments(f);
 }
 
@@ -263,6 +264,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 Array1D<Real,0,nvel> populations(int x, int y, int z, const Array4<Real>& fsite, const Array1D<Real,0,nvel>& m) {
   Array1D<Real,0,nvel> f = populations(m);
   for (int i=0; i<nvel; ++i) {
+    // Print() << i << " direction copied\n"
     fsite(x,y,z,i) = f(i);
   }
   return f;

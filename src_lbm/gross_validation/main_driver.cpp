@@ -30,37 +30,29 @@ inline Vector<std::string> VariableNames(const int numVars) {
   Vector<std::string> var_names(numVars);
   std::string name;
   int cnt = 0;
-  // rho, phi
-  if (cnt<numVars) var_names[cnt++] = "density";
+  var_names[cnt++] = "rho";
+  Print() << "Density specified\n";
   // velx, vely, velz
-  for (int d=0; d<AMREX_SPACEDIM, cnt<numVars; d++) {
+  for (int d=0; d<AMREX_SPACEDIM; d++) {
     name = "u";
     name += (120+d);
     var_names[cnt++] = name;
   }
-  for (int d=0; d<3, cnt<numVars; d++) {
-    name = "P";
-    name += (120+d);
-    var_names[cnt++] = name;
+  Print() << "velocity specified\n";
+  if(cnt >= numVars){return var_names;}
+  for (int i=0; i<AMREX_SPACEDIM; ++i) {
+    for (int j=i; j<AMREX_SPACEDIM; ++j) {
+      name = "p";
+      name += (120+i);
+      name += (120+j);
+      var_names[cnt++] = name;
+    }
   }
-    for (int d=0; d<3, cnt<numVars; d++) {
-    name = "P";
-    name += (120+d);
-    var_names[cnt++] = name;
-  }
-  // pxx, pxy, pxz, pyy, pyz, pzz
-  // for (int i=0; i<AMREX_SPACEDIM; ++i) {
-  //   for (int j=i; j<AMREX_SPACEDIM; ++j) {
-  //     name = "p";
-  //     name += (120+i);
-  //     name += (120+j);
-  //     var_names[cnt++] = name;
-  //   }
-  // }
-  // remaining moments
-  for (; cnt<nvel+ncons, cnt<numVars;) {
-    name = "mf";
-    name += std::to_string(cnt-ncons);
+  Print() << "pressure specified\n";
+  if(cnt >= numVars){return var_names;}
+  for (; cnt < numVars;) {
+    name = "m";
+    name += std::to_string(cnt);
     var_names[cnt++] = name;
   }
   return var_names;
@@ -70,7 +62,7 @@ inline void WriteOutput(int step,
 			const MultiFab& hydrovs,
 			const Geometry& geom) {
   // set up variable names for output
-  const Vector<std::string> var_names = VariableNames(2*nvel);
+  const Vector<std::string> var_names = VariableNames(nvel);
   const std::string& pltfile = amrex::Concatenate("plt",step,5);
   WriteSingleLevelPlotfile(pltfile, hydrovs, var_names, geom, Real(step), step);
 }
@@ -102,10 +94,10 @@ void main_driver(const char* argv) {
   pp.query("kappa", kappa);
   pp.query("rhov", rhov);
   pp.query("rhol", rhol);
-  pp.query("B", B);
+  pp.query("B", Beta);
   pp.query("temperature", temperature);
   // pp.query("reps", reps);
-
+  Print() << "parameters parsed\n";
   // set up Box and Geomtry
   IntVect dom_lo(0, 0, 0);
   IntVect dom_hi(nx-1, nx-1, nx-1);
@@ -124,6 +116,8 @@ void main_driver(const char* argv) {
 
   DistributionMapping dm(ba);
 
+  Print() << "Geometry generated\n";
+
   // need two halo layers for gradients
   int nghost = 2;
 
@@ -134,17 +128,21 @@ void main_driver(const char* argv) {
   MultiFab noise(ba, dm, nvel, nghost);
   // MultiFab test_noise(ba, dm, 2*nvel, nghost);
 
+  Print() << "Data structures generated\n";
+
   int nStructVars = 4;
   const Vector<std::string> var_names = VariableNames(nStructVars);
+  Print() << "SF names specified\n";
   Vector<Real> var_scaling(nStructVars*(nStructVars+1)/2);
   for (int i=0; i<var_scaling.size(); ++i) {
     if (temperature>0) var_scaling[i] = temperature; else var_scaling[i] = 1.;
   }
   StructFact structFact(ba, dm, var_names, var_scaling);
-
+  Print() << "StructFact object generated\n";
   // INITIALIZE
-  // LBM_init_mixture(fold, gold, hydrovs);
-  
+  LBM_init_mixture(fold, hydrovs);
+  Print() << "Initial condition created\n";
+
   // Write a plotfile of the initial data if plot_int > 0
   if (plot_int > 0) WriteOutput(0, hydrovs, geom);
   Print() << "LB initialized\n";

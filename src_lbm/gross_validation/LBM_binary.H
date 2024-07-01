@@ -3,15 +3,16 @@
 
 #include "LBM_d3q19.H"
 
-AMREX_GPU_MANAGED Real tau_r = 0.7886751345948129; // tau=0.5*(1.+1./sqrt(3.)) minimizes spurious currents according to Swift et al.
+
+AMREX_GPU_MANAGED Real tau_r = 1.0; // What is used in Gross 2010 for all relaxation rates
 // AMREX_GPU_MANAGED Real tau_p = 1.0;
 
 AMREX_GPU_MANAGED Real kappa = 0.0;
-AMREX_GPU_MANAGED Real B = 0.01;
+AMREX_GPU_MANAGED Real Beta = 0.01;
 AMREX_GPU_MANAGED Real temperature = 0.0;
 AMREX_GPU_MANAGED Real rhov = 0.1;
 AMREX_GPU_MANAGED Real rhol = 1.1;
-const Real system_cs2 = B*2*pow(rhol - rhov, 2);
+const Real system_cs2 = Beta*2*pow(rhol - rhov, 2);
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 Real pressure(Real rho, Real phi);
@@ -61,7 +62,7 @@ Array1D<Real,0,1> chemical_potentials(const Array1D<Real,0,1>& fields,
   // mu(0) = lambda/4.*(1.+phi2/rho2) + T/2*log((rho2-phi2)/4) - kappa*D2rho; //This is most definitely wrong for the multiphase case
 
   // Real square_term = (rho - rhol)*(rho - rhov);
-  Real mu_0 = B*pow(rho - rhol, 2)*(2*rho - 2*rhov) + B*pow(rho - rhov, 2)*(2*rho - 2*rhol);
+  Real mu_0 = Beta*pow(rho - rhol, 2)*(2*rho - 2*rhov) + Beta*pow(rho - rhov, 2)*(2*rho - 2*rhol);
   mu(0) = mu_0 - kappa*D2rho;
 
   return mu;
@@ -72,7 +73,7 @@ Real pressure(Real rho) {
 
   // Real p0 = rho*T; // Eq. (40) in Swift et al.
   Real square_term = (rho - rhol)*(rho - rhov);
-  Real p0 = B*square_term*(2*rho*(2*rho - rhol - rhov) - square_term); // eq 2 and para after in Gross 1010
+  Real p0 = Beta*square_term*(2*rho*(2*rho - rhol - rhov) - square_term); // eq 2 and para after in Gross 1010
   // note that gradient terms are included in fequilibrium
 
   return p0;
@@ -187,7 +188,7 @@ void relax_moments(int x, int y, int z,
 
   const Array1D<RealVect,0,1> gradients = {gradient(x,y,z,h,0)};
   const Array1D<Real,0,1> laplacians = {laplacian(x,y,z,h,0)};
-  const Array1D<Real,0,1> mu = chemical_potentials(fields, gradients, laplacians);
+  // const Array1D<Real,0,1> mu = chemical_potentials(fields, gradients, laplacians);
 
   Array1D<Real,0,nvel> mfEq;
   mfEq = fequilibrium_moments(fields, gradients, laplacians, u);
@@ -217,7 +218,8 @@ void thermalize_moments(int x, int y, int z,
   // diffusive moments 1,2,3 in noise at 5,6,7
   // nonconserved moments 4..18 in noise at 8..22 (f) and 23..37 (g)
   for (int i=ncons; i<nvel; ++i) {
-    mf(i) += (1. - 0.5/tau_r) * noise(x,y,z,ncons+i);
+    // Print() << noise(x,y,z,i) << " on index " << i << "\n";
+    mf(i) += (1. - 0.5/tau_r) * noise(x,y,z,i); //might have to correct for time discretization here. Check in Gross paper once everything else isn't broken
   }
 }
 
@@ -229,8 +231,10 @@ void collide(int x, int y, int z,
   Array1D<Real,0,nvel> mf;
 
   mf = moments(x,y,z,f);
+  // Print() << "moments generated from f matrix\n";
 
   relax_moments(x,y,z,mf,h);
+  // Print() << "Moments relaxed\n";
 
   thermalize_moments(x,y,z,mf,noise);
 
@@ -259,7 +263,9 @@ void collide_stream(int x, int y, int z,
         const Array4<Real>& noise,
 		    RandomEngine const& rng) {
   collide(x, y, z, fOld, h, noise); // collide populations on current site
+  // Print() << "Collision step complete\n";
   stream_push(x, y, z, fOld, fNew); // push populations to neighbors
+  // Print() << "Streaming step complete\n";
 }
 
 // apply fluctuating lattice Boltzmann equation for whole lattice
@@ -268,9 +274,11 @@ inline void collide_stream(const Geometry& geom,
 			   MultiFab& fnew,
 			   MultiFab& hydrovs, MultiFab& noise) {
   const int halo = 1; // need to push from first halo layer into domain
+  // Print() << "Entered collide stream function\n";
   fold.FillBoundary(geom.periodicity());
   noise.FillBoundary(geom.periodicity());
   hydrovs.FillBoundary(geom.periodicity());
+  // Print() << "Periodic domain boundaries filled\n";
   for (MFIter mfi(fold); mfi.isValid(); ++mfi) {
     const Array4<Real>& fOld = fold.array(mfi);
     const Array4<Real>& fNew = fnew.array(mfi);
@@ -278,6 +286,7 @@ inline void collide_stream(const Geometry& geom,
     const Array4<Real>& xi = noise.array(mfi);
     const Box& valid_box = mfi.growntilebox(halo);
     ParallelForRNG(valid_box, [=] AMREX_GPU_DEVICE(int x, int y, int z, RandomEngine const& engine) {
+      // Print() << x << y << z << "\n";
       collide_stream(x, y, z, fOld, fNew, h, xi, engine);
     });
   }
@@ -314,31 +323,28 @@ inline void LBM_timestep(const Geometry& geom,
 			 MultiFab& hydrovs, MultiFab& noise) {
   generate_fluctuations(geom, hydrovs, noise);
   // noise.setVal(0.);
+  // Print() << "Noise generated for moments\n";
   collide_stream(geom, fold, fnew, hydrovs, noise);
+  // Print() << "Collide stream completed\n";
   hydrovars(fold, hydrovs);
 }
 
-// // homogeneous mixture of C1 and C2 with random concentration fluctuations
-// inline void LBM_init_mixture(MultiFab& mf,
-// 			     MultiFab& mg,
-// 			     MultiFab& hydrovs) {
-//   const Real C1 = 0.5;
-//   const Real C2 = 0.5;
-//   for (MFIter mfi(mf); mfi.isValid(); ++mfi) {
-//     const Box& valid_box = mfi.validbox();
-//     const Array4<Real>& f = mf.array(mfi);
-//     const Array4<Real>& g = mg.array(mfi);
-//     ParallelForRNG(valid_box, [=] AMREX_GPU_DEVICE(int x, int y, int z, RandomEngine const& engine) {
-//       const Real rho = C1 + C2;
-//       const Real phi = (C1-C2)+0.001*RandomNormal(0., 1., engine);
-//       for (int i=0; i<nvel; i++) {
-//         f(x,y,z,i) = w[i]*rho;
-//         g(x,y,z,i) = w[i]*phi;
-//       }
-//     });
-//   }
-//   hydrovars(mf, mg, hydrovs);
-// }
+// homogeneous mixture of C1 and C2 with random concentration fluctuations
+inline void LBM_init_mixture(MultiFab& mf,
+			     MultiFab& hydrovs) {
+  const Real C1 = 1;
+  for (MFIter mfi(mf); mfi.isValid(); ++mfi) {
+    const Box& valid_box = mfi.validbox();
+    const Array4<Real>& f = mf.array(mfi);
+    ParallelForRNG(valid_box, [=] AMREX_GPU_DEVICE(int x, int y, int z, RandomEngine const& engine) {
+      const Real rho = C1;
+      for (int i=0; i<nvel; i++) {
+        f(x,y,z,i) = w[i]*rho;
+      }
+    });
+  }
+  hydrovars(mf, hydrovs);
+}
 
 // // flat interface between C1 and C2
 // inline void LBM_init_flat_interface(const Geometry& geom,
