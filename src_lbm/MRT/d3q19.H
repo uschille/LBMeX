@@ -223,37 +223,62 @@ Array1D<Real,0,ncomp> hydrovars(const Array1D<Real,0,ncomp>& m) {
   return h;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-Array1D<Real,0,ncomp> mequilibrium(const Real& rho, const RealVect& u) {
-  Array1D<Real,0,ncomp> mEq;
+// AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+// Array1D<Real,0,ncomp> mequilibrium(const Real& rho, const RealVect& u) {
+//   Array1D<Real,0,ncomp> mEq;
 
-  /* mass density */
-  mEq(0) = rho;
+//   /* mass density */
+//   mEq(0) = rho;
 
-  /* momentum density */
-  mEq(1) = rho*u[0];
-  mEq(2) = rho*u[1];
-  mEq(3) = rho*u[2];
+//   /* momentum density */
+//   mEq(1) = rho*u[0];
+//   mEq(2) = rho*u[1];
+//   mEq(3) = rho*u[2];
 
-  /* equilibrium part of the stress modes */
-  mEq(4) = (u[0]*u[0] + u[1]*u[1] + u[2]*u[2])*rho;
-  mEq(5) = (u[0]*u[0] - u[1]*u[1])*rho;
-  mEq(6) = (u[0]*u[0] + u[1]*u[1] - 2.*u[2]*u[2])*rho;
-  mEq(7) = u[0]*u[1]*rho;
-  mEq(8) = u[0]*u[2]*rho;
-  mEq(9) = u[1]*u[2]*rho;
+//   /* equilibrium part of the stress modes */
+//   mEq(4) = (u[0]*u[0] + u[1]*u[1] + u[2]*u[2])*rho;
+//   mEq(5) = (u[0]*u[0] - u[1]*u[1])*rho;
+//   mEq(6) = (u[0]*u[0] + u[1]*u[1] - 2.*u[2]*u[2])*rho;
+//   mEq(7) = u[0]*u[1]*rho;
+//   mEq(8) = u[0]*u[2]*rho;
+//   mEq(9) = u[1]*u[2]*rho;
 
-  /* ghost modes have no equilibrium part due to orthogonality */
-  for (int i=10; i<ncomp; ++i) mEq(i) = 0.0;
+//   /* ghost modes have no equilibrium part due to orthogonality */
+//   for (int i=10; i<ncomp; ++i) mEq(i) = 0.0;
 
-  return mEq;
-}
+//   return mEq;
+// }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-Array1D<Real,0,ncomp> mequilibrium(int x, int y, int z, const Array4<Real>& m) {
-  const Real rho = m(x,y,z,0);
-  const RealVect j = { m(x,y,z,1), m(x,y,z,2), m(x,y,z,3) };
-  return mequilibrium(rho, j/rho);
-}
+// AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+// Array1D<Real,0,ncomp> mequilibrium(const Real& rho, const RealVect& u) {
+//   Array1D<Real,0,ncomp> mEq;
 
+//   /* mass density */
+//   mEq(0) = rho;
+
+//   /* momentum density */
+//   mEq(1) = rho*u[0];
+//   mEq(2) = rho*u[1];
+//   mEq(3) = rho*u[2];
+
+//   /* equilibrium part of the stress modes */
+//   mEq(4) = (u[0]*u[0] + u[1]*u[1] + u[2]*u[2])*rho;
+//   mEq(5) = (u[0]*u[0] - u[1]*u[1])*rho;
+//   mEq(6) = (u[0]*u[0] + u[1]*u[1] - 2.*u[2]*u[2])*rho;
+//   mEq(7) = u[0]*u[1]*rho;
+//   mEq(8) = u[0]*u[2]*rho;
+//   mEq(9) = u[1]*u[2]*rho;
+
+//   /* ghost modes have no equilibrium part due to orthogonality */
+//   for (int i=10; i<ncomp; ++i) mEq(i) = 0.0;
+
+//   return mEq;
+// }
+
+// AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+// Array1D<Real,0,ncomp> mequilibrium(int x, int y, int z, const Array4<Real>& m) {
+//   const Real rho = m(x,y,z,0);
+//   const RealVect j = { m(x,y,z,1), m(x,y,z,2), m(x,y,z,3) };
+//   return mequilibrium(rho, j/rho);
+// }
 #endif

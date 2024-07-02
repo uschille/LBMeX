@@ -53,7 +53,7 @@ void main_driver(const char* argv) {
   int comp = 5;
 
   // default amplitude of sinusoidal shear wave
-  Real A = 0.001;
+  Real A = 0.0;
   
   // input parameters
   ParmParse pp;
@@ -61,12 +61,17 @@ void main_driver(const char* argv) {
   pp.query("max_grid_size", max_grid_size);
   pp.query("nsteps", nsteps);
   pp.query("plot_int", plot_int);
-  pp.query("density", density);
+  // pp.query("density", density);
+  // pp.query("tau", tau);
   pp.query("temperature", temperature);
-  pp.query("tau", tau);
-  pp.query("A", A);
-  pp.query("ncorr", ncorr);
-  pp.query("comp", comp);
+  pp.query("k", kappa);
+  pp.query("B", Beta);
+  pp.query("rhov", rhov);
+  pp.query("rhol", rhol);
+  // pp.query("A", A);
+
+  // pp.query("ncorr", ncorr);
+  // pp.query("comp", comp);
 
   // make Box and Geomtry
   IntVect dom_lo(0, 0, 0);
@@ -163,11 +168,15 @@ void main_driver(const char* argv) {
     const Real uy = A*std::sin(2.*M_PI*x/nx);
     const RealVect u = { 0., uy, 0. };
     for (int i=0; i<ncomp; ++i) {
-      m[nbx](x,y,z,i) = mequilibrium(density, u)(i);
+      const Array1D<RealVect,0,1> gradients = {gradient(x,y,z,m[nbx])};
+      const Array1D<Real,0,1> laplacians = {laplacian(x,y,z,m[nbx])};
+      m[nbx](x,y,z,i) = mfequilibrium(density, gradients, laplacians, u)(i);
       f[nbx](x,y,z,i) = fequilibrium(density, u)(i);
     }
     for (int i=0; i<10; ++i) {
-      h[nbx](x,y,z,i) = hydrovars(mequilibrium(density, u))(i);
+      const Array1D<RealVect,0,1> gradients = {gradient(x,y,z,m[nbx])};
+      const Array1D<Real,0,1> laplacians = {laplacian(x,y,z,m[nbx])};
+      h[nbx](x,y,z,i) = hydrovars(mfequilibrium(density, gradients, laplacians, u))(i);
       hEq[nbx](x,y,z,i) = h[nbx](x,y,z,i);
     }
   });

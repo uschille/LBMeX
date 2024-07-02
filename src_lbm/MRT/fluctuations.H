@@ -12,23 +12,74 @@
 #include "d3q19.H"
 #include "lbm.H"
 
-extern AMREX_GPU_MANAGED Real density;
-extern AMREX_GPU_MANAGED Real temperature;
-extern AMREX_GPU_MANAGED Real tau;
+// extern AMREX_GPU_MANAGED Real density;
+// extern AMREX_GPU_MANAGED Real temperature;
+// extern AMREX_GPU_MANAGED Real tau;
+
+// // construct noise covariance matrix of the modes in k-space
+// AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+// GpuArray<Real,ncomp*ncomp> noise_covariance(int kx, int ky, int kz) {
+//   const Real gamma = 1. - 1./tau;
+
+//   // Noise covariance of the modes in k-space
+//   GpuArray<Real,ncomp*ncomp> Xi = {};
+//   Xi.fill(0);
+
+// 	for (int i=ncons; i<ncomp; ++i) {
+// 	  // noise covariance for ideal fluid
+// 	  Xi[i*ncomp+i] = b[i]*temperature/cs2*(1.-gamma*gamma);
+// 	}
+
+//   return Xi;
+// }
 
 // construct noise covariance matrix of the modes in k-space
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 GpuArray<Real,ncomp*ncomp> noise_covariance(int kx, int ky, int kz) {
-  const Real gamma = 1. - 1./tau;
+  // const Real gamma = 1. - 1./tau;
+  const Real lambda_a = 1./tau;
+  const Real lambda_ee = 1./tau;
+  const Real kT = temperature;
+  const Real system_cs2 = 2.*Beta*pow(rhol - rhov, 2);
+
+  const Real k2 = kx*kx + ky*ky + kz*kz;
+  const Real cs2_k = system_cs2 + rho0*kappa*k2;
+  const Real S_k = density*kT/cs2;
+
 
   // Noise covariance of the modes in k-space
   GpuArray<Real,ncomp*ncomp> Xi = {};
   Xi.fill(0);
 
-	for (int i=ncons; i<ncomp; ++i) {
-	  // noise covariance for ideal fluid
-	  Xi[i*ncomp+i] = b[i]*temperature/cs2*(1.-gamma*gamma);
-	}
+  // diagonal part
+  Xi[ 4*ncomp +  4] = 2.0*S_k*lambda_a*(5. - 9.*cs2_k)*b[4];
+  // Print() << "noise matrix at row " << 4 << " and column " << 4 << " :" << Xi[ 4*ncomp +  4] << "\n";
+  Xi[ 5*ncomp +  5] = 8.0*S_k*lambda_a*b[5];
+  // Print() << "noise matrix at row " << 5 << " and column " << 5 << " :" << Xi[ 5*ncomp +  5] << "\n";
+  // Print() << "noise matrix: " << Xi[ 5*ncomp +  5] << "\n";
+  Xi[ 6*ncomp +  6] = 8.0/3.0*S_k*lambda_a*b[6];
+  // Print() << "noise matrix at row " << 6 << " and column " << 6 << " :" << Xi[ 6*ncomp +  6] << "\n";
+  Xi[ 7*ncomp +  7] = 2.0/3.0*S_k*lambda_a*b[7];
+  // Print() << "noise matrix at row " << 7 << " and column " << 7 << " :" << Xi[ 7*ncomp +  7] << "\n";
+  Xi[ 8*ncomp +  8] = Xi[ 7*ncomp +  7];
+  Xi[ 9*ncomp +  9] = Xi[ 7*ncomp +  7];
+  Xi[10*ncomp + 10] = 4.0*S_k*lambda_a*b[10];
+  // Print() << "noise matrix at row " << 10 << " and column " << 10 << " :" << Xi[ 10*ncomp +  10] << "\n";
+  Xi[11*ncomp + 11] = Xi[10*ncomp + 10];
+  Xi[12*ncomp + 12] = Xi[10*ncomp + 10];
+  Xi[13*ncomp + 13] = 4.0/3.0*S_k*lambda_a*b[13];
+  // Print() << "noise matrix at row " << 13 << " and column " << 13 << " :" << Xi[ 13*ncomp +  13] << "\n";
+  Xi[14*ncomp + 14] = Xi[13*ncomp + 13];
+  Xi[15*ncomp + 15] = Xi[13*ncomp + 13];
+  Xi[16*ncomp + 16] = 18.0*S_k*lambda_a*(1. - cs2_k)*b[16];
+  // Print() << "noise matrix at row " << 16 << " and column " << 16 << " :" << Xi[ 16*ncomp +  16] << "\n";
+  Xi[17*ncomp + 17] = 8.0*S_k*lambda_a*b[17];
+  Xi[18*ncomp + 18] = 8.0/3.0*S_k*lambda_a*b[18];
+
+  // off diagonal part
+  Xi[16*ncomp +  4] = 6.*rho0*kT*lambda_ee*(3.*cs2_k - 1);
+  // Print() << "noise matrix at row " << 16 << " and column " << 4 << " :" << Xi[ 16*ncomp +  4] << "\n";
+  Xi[4*ncomp +  16] = Xi[16*ncomp +  4];
 
   return Xi;
 }

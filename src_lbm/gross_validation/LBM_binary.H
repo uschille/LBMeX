@@ -12,7 +12,6 @@ AMREX_GPU_MANAGED Real Beta = 0.01;
 AMREX_GPU_MANAGED Real temperature = 0.0;
 AMREX_GPU_MANAGED Real rhov = 0.1;
 AMREX_GPU_MANAGED Real rhol = 1.1;
-const Real system_cs2 = Beta*2*pow(rhol - rhov, 2);
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 Real pressure(Real rho, Real phi);
@@ -27,12 +26,13 @@ Array1D<Real,0,1> chemical_potentials(const Array1D<Real,0,1>& fields,
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 RealVect gradient(int x, int y, int z, const Array4<Real>& field, int icomp) {
   RealVect gradient = { 0.0, 0.0, 0.0 };
+  const Real system_cs2 = 2.0*Beta*pow(rhol - rhov, 2);
   for (int i=0; i<nvel; i++) {
     int xp = x + c[i][0];
     int yp = y + c[i][1];
     int zp = z + c[i][2];
     for (int dir=0; dir<3; dir++) {
-      gradient[dir] += w[i]/cs2*field(xp,yp,zp,icomp)*c[i][dir];
+      gradient[dir] += w[i]/system_cs2*field(xp,yp,zp,icomp)*c[i][dir];
     }
   }
   return gradient;
@@ -41,6 +41,7 @@ RealVect gradient(int x, int y, int z, const Array4<Real>& field, int icomp) {
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 Real laplacian(int x, int y, int z, const Array4<Real>& field, int icomp) {
   Real laplacian = 0.0;
+  const Real system_cs2 = 2.0*Beta*pow(rhol - rhov, 2);
   for (int i=0; i<nvel; i++) {
     int xp = x + c[i][0];
     int yp = y + c[i][1];
@@ -88,6 +89,8 @@ Array1D<Real,0,nvel> fequilibrium(const Array1D<Real,0,1>& fields,
 			      const RealVect& u) {
   Array1D<Real,0,nvel> fEq;
 
+  const Real system_cs2 = Beta*pow(rhol - rhov, 2);
+
   const Real rho = fields(0);
   const RealVect Drho = gradients(0);
   const Real D2rho = laplacians(0);
@@ -110,15 +113,16 @@ Array1D<Real,0,nvel> fequilibrium(const Array1D<Real,0,1>& fields,
   G[2][0] = kappa*Drho[2]*Drho[0];
 
   Real fi, sumf = 0.0;
+  
   for (int i=1; i<nvel; ++i) {
-    fi = w[i]/system_cs2 * pbulk;
-    fi += w[i]/system_cs2 * rho * (u[0]*c[i][0]+u[1]*c[i][1]+u[2]*c[i][2]);
-    fi += w[i]/(2*system_cs2**4)*((ruu[0][0]*c[i][0]+2.*ruu[0][1]*c[i][1])*c[i][0]
+    fi = w[i]/sysem_cs2 * pbulk;
+    fi += w[i]/sysem_cs2 * rho * (u[0]*c[i][0]+u[1]*c[i][1]+u[2]*c[i][2]);
+    fi += w[i]/(2*sysem_cs2**4)*((ruu[0][0]*c[i][0]+2.*ruu[0][1]*c[i][1])*c[i][0]
 		     +(ruu[1][1]*c[i][1]+2.*ruu[1][2]*c[i][2])*c[i][1]
 		     +(ruu[2][2]*c[i][2]+2.*ruu[2][0]*c[i][0])*c[i][2]);
-    fi -= w[i]/(2*system_cs2**2)*(ruu[0][0]+ruu[1][1]+ruu[2][2]);
+    fi -= w[i]/(2*sysem_cs2**2)*(ruu[0][0]+ruu[1][1]+ruu[2][2]);
     // gradient terms
-    fi -= w[i]/(system_cs2**2)*(kappa*rho*D2rho);
+    fi -= w[i]/(sysem_cs2**2)*(kappa*rho*D2rho);
     fi += 3.*(wg[i][0][0]*G[0][0]+wg[i][1][1]*G[1][1]+wg[i][2][2]*G[2][2]
 	     +wg[i][0][1]*G[0][1]+wg[i][1][2]*G[1][2]+wg[i][2][0]*G[2][0]);
     fEq(i) = fi;
@@ -140,6 +144,7 @@ Array1D<Real,0,nvel> fequilibrium_moments(const Array1D<Real,0,1>& fields,
   const Real rho = fields(0);
   const Real u2 = u[0]*u[0]+u[1]*u[1]+u[2]*u[2];
   const RealVect Drho = gradients(0);
+  
   const Real D2rho = laplacians(0);
   const Real pbulk = pressure(rho);
 
@@ -204,6 +209,7 @@ void thermalize_moments(Array1D<Real,0,nvel>& mf,
 			RandomEngine const& engine) {
   const Real rho = mf(0);
   const Real gamma_r = 1. - 1./tau_r;
+  const Real system_cs2 = Beta*pow(rhol - rhov, 2);
   const Real phi_r = sqrt(rho*temperature/system_cs2*(1.-gamma_r*gamma_r));
   Array<Real,nvel> r = {}; // {} to value initialize r
   for (int i=4; i<nvel; ++i) {

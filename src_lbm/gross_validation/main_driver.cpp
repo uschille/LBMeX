@@ -31,14 +31,14 @@ inline Vector<std::string> VariableNames(const int numVars) {
   std::string name;
   int cnt = 0;
   var_names[cnt++] = "rho";
-  Print() << "Density specified\n";
+  // Print() << "Density specified\n";
   // velx, vely, velz
   for (int d=0; d<AMREX_SPACEDIM; d++) {
     name = "u";
     name += (120+d);
     var_names[cnt++] = name;
   }
-  Print() << "velocity specified\n";
+  // Print() << "velocity specified\n";
   if(cnt >= numVars){return var_names;}
   for (int i=0; i<AMREX_SPACEDIM; ++i) {
     for (int j=i; j<AMREX_SPACEDIM; ++j) {
@@ -48,7 +48,7 @@ inline Vector<std::string> VariableNames(const int numVars) {
       var_names[cnt++] = name;
     }
   }
-  Print() << "pressure specified\n";
+  // Print() << "pressure specified\n";
   if(cnt >= numVars){return var_names;}
   for (; cnt < numVars;) {
     name = "m";
@@ -63,7 +63,7 @@ inline void WriteOutput(int step,
 			const Geometry& geom) {
   // set up variable names for output
   const Vector<std::string> var_names = VariableNames(nvel);
-  const std::string& pltfile = amrex::Concatenate("plt",step,5);
+  const std::string& pltfile = amrex::Concatenate("hydro_plt",step,5);
   WriteSingleLevelPlotfile(pltfile, hydrovs, var_names, geom, Real(step), step);
 }
 
@@ -116,7 +116,7 @@ void main_driver(const char* argv) {
 
   DistributionMapping dm(ba);
 
-  Print() << "Geometry generated\n";
+  // Print() << "Geometry generated\n";
 
   // need two halo layers for gradients
   int nghost = 2;
@@ -128,24 +128,25 @@ void main_driver(const char* argv) {
   MultiFab noise(ba, dm, nvel, nghost);
   // MultiFab test_noise(ba, dm, 2*nvel, nghost);
 
-  Print() << "Data structures generated\n";
+  // Print() << "Data structures generated\n";
 
   int nStructVars = 4;
   const Vector<std::string> var_names = VariableNames(nStructVars);
-  Print() << "SF names specified\n";
+  // Print() << "SF names specified\n";
   Vector<Real> var_scaling(nStructVars*(nStructVars+1)/2);
   for (int i=0; i<var_scaling.size(); ++i) {
     if (temperature>0) var_scaling[i] = temperature; else var_scaling[i] = 1.;
   }
   StructFact structFact(ba, dm, var_names, var_scaling);
-  Print() << "StructFact object generated\n";
+  // Print() << "StructFact object generated\n";
   // INITIALIZE
   LBM_init_mixture(fold, hydrovs);
-  Print() << "Initial condition created\n";
+  // Print() << "Initial condition created\n";
+  // Print() << "thermodynamic cs2: " << system_cs2 << "\n";
 
   // Write a plotfile of the initial data if plot_int > 0
   if (plot_int > 0) WriteOutput(0, hydrovs, geom);
-  Print() << "LB initialized\n";
+  // Print() << "LB initialized\n";
 
   // TIMESTEP
   for (int step=1; step <= nsteps; ++step) {
@@ -153,7 +154,7 @@ void main_driver(const char* argv) {
     structFact.FortStructure(hydrovs, geom);
     if (plot_int > 0 && step%plot_int ==0) {
       WriteOutput(step, hydrovs, geom);
-      structFact.WritePlotFile(step, static_cast<Real>(step), geom, "plt_SF");
+      structFact.WritePlotFile(step, static_cast<Real>(step), geom, "SF_plt");
     }
     Print() << "LB step " << step << "\n";
   }

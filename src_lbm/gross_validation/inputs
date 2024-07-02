@@ -3,14 +3,14 @@ nx = 16
 max_grid_size = 16
 
 # timesteps
-nsteps = 10000
-plot_int = 10000
+nsteps = 1000
+plot_int = 100
 
 # model_params
 kappa = 0
-B = 0.01
-rhov = 0.1
-rhol = 1.1
+B = 0.14
+rhov = 0.5
+rhol = 1.0
 
 # fluctuations
 temperature = 1e-7
