@@ -116,7 +116,7 @@ void main_driver(const char* argv) {
 
   Vector<std::string> tnames(ncorr);
   for (int t=0; t<ncorr; ++t) {
-    tnames[t] = Concatenate("plt_TC",t,4);
+    tnames[t] = Concatenate("TC_plt",t,4);
   }
 
   ///////////////////////////////////////////
@@ -162,6 +162,7 @@ void main_driver(const char* argv) {
 
   StructFact structFact(ba, dm, var_names, var_scaling);
 
+  Print() << "Init density: " << density << "\n";
   // INITIALIZE: set up sinusoidal shear wave u_y(x)=A*sin(k*x)
   Real time = 0.0;
   ParallelFor(fold, IntVect(0), [=] AMREX_GPU_DEVICE(int nbx, int x, int y, int z) {
@@ -190,11 +191,11 @@ void main_driver(const char* argv) {
   // Write a plotfile of the initial data if plot_int > 0
   if (plot_int > 0) {
     int step = 0;
-    const std::string& pltfile = amrex::Concatenate("plt",step,5);
+    const std::string& pltfile = amrex::Concatenate("hydro_plt",step,5);
     WriteSingleLevelPlotfile(pltfile, hydro, var_names, geom, time, step);
-    const std::string& tcfile = Concatenate("plt_TC",step,5);
+    const std::string& tcfile = Concatenate("TC_plt",step,5);
     WriteSingleLevelPlotfile(tcfile, mfCorr, tnames, geom, time, step);
-    structFact.WritePlotFile(0, 0., geom, "plt_SF");
+    structFact.WritePlotFile(0, 0., geom, "SF_plt");
   }
 
   Print() << "LB initialized\n";
@@ -216,11 +217,11 @@ void main_driver(const char* argv) {
     // OUTPUT
     time = static_cast<Real>(step);
     if (plot_int > 0 && step%plot_int ==0) {
-      const std::string& pltfile = Concatenate("plt",step,5);
+      const std::string& pltfile = Concatenate("hydro_plt",step,5);
       WriteSingleLevelPlotfile(pltfile, hydro, var_names, geom, time, step);
-      const std::string& tcfile = Concatenate("plt_TC",step,5);
+      const std::string& tcfile = Concatenate("TC_plt",step,5);
       WriteSingleLevelPlotfile(tcfile, mfCorr, tnames, geom, time, step);
-      structFact.WritePlotFile(step, time, geom, "plt_SF");
+      structFact.WritePlotFile(step, time, geom, "SF_plt");
     }
 
   }

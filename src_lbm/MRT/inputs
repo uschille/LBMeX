@@ -1,12 +1,16 @@
-nx = 64
+# box dims
+nx = 16
 max_grid_size = 16
 
-nsteps = 1000
-plot_int = 1000
-ncorr = 100
+# timesteps
+nsteps = 10
+plot_int = 1
 
-density = 1.0
-temperature = 0.111111e-6
-tau = 0.75
+# model_params
+kappa = 0
+B = 0.14
+rhov = 0.5
+rhol = 1.0
 
-A = 0.0
+# fluctuations
+temperature = 1e-7

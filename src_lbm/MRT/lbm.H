@@ -5,15 +5,15 @@
 #include "fluctuations.H"
 
 // hard coded
-AMREX_GPU_MANAGED Real density = 1.0;
-AMREX_GPU_MANAGED Real tau = 1.0;
+const Real density = 1.0;
+const Real tau = 1.0;
 
 // user modifiable
-AMREX_GPU_MANAGED Real temperature = 0.0;
-AMREX_GPU_MANAGED Real kappa = 0.0;
-AMREX_GPU_MANAGED Real Beta = 0.01;
-AMREX_GPU_MANAGED Real rhov = 0.1;
-AMREX_GPU_MANAGED Real rhol = 1.1;
+Real temperature = 0.0;
+Real kappa = 0.0;
+Real Beta = 0.01;
+Real rhov = 0.1;
+Real rhol = 1.1;
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 Real pressure(Real rho) {

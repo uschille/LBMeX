@@ -129,13 +129,14 @@ void main_driver(const char* argv) {
   // MultiFab test_noise(ba, dm, 2*nvel, nghost);
 
   // Print() << "Data structures generated\n";
+  const Real rho0 = 0.5*rhol + 0.5*rhov;
 
   int nStructVars = 4;
   const Vector<std::string> var_names = VariableNames(nStructVars);
   // Print() << "SF names specified\n";
   Vector<Real> var_scaling(nStructVars*(nStructVars+1)/2);
   for (int i=0; i<var_scaling.size(); ++i) {
-    if (temperature>0) var_scaling[i] = temperature; else var_scaling[i] = 1.;
+    if (temperature>0) var_scaling[i] = rho0*temperature; else var_scaling[i] = 1.;
   }
   StructFact structFact(ba, dm, var_names, var_scaling);
   // Print() << "StructFact object generated\n";

@@ -12,6 +12,18 @@
 #include "d3q19.H"
 #include "lbm.H"
 
+
+// hard coded
+extern const Real density;
+extern const Real tau;
+
+// user modifiable
+extern Real temperature;
+extern Real kappa;
+extern Real Beta;
+extern Real rhov;
+extern Real rhol;
+
 // extern AMREX_GPU_MANAGED Real density;
 // extern AMREX_GPU_MANAGED Real temperature;
 // extern AMREX_GPU_MANAGED Real tau;
@@ -45,7 +57,6 @@ GpuArray<Real,ncomp*ncomp> noise_covariance(int kx, int ky, int kz) {
   const Real k2 = kx*kx + ky*ky + kz*kz;
   const Real cs2_k = system_cs2 + rho0*kappa*k2;
   const Real S_k = density*kT/cs2;
-
 
   // Noise covariance of the modes in k-space
   GpuArray<Real,ncomp*ncomp> Xi = {};

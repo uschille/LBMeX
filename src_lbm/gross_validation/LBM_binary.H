@@ -338,7 +338,7 @@ inline void LBM_timestep(const Geometry& geom,
 // homogeneous mixture of C1 and C2 with random concentration fluctuations
 inline void LBM_init_mixture(MultiFab& mf,
 			     MultiFab& hydrovs) {
-  const Real C1 = 1;
+  const Real C1 = 0.5*rhol + 0.5*rhov;
   for (MFIter mfi(mf); mfi.isValid(); ++mfi) {
     const Box& valid_box = mfi.validbox();
     const Array4<Real>& f = mf.array(mfi);
