@@ -222,11 +222,12 @@ GpuArray<Real,nvel*nvel> noise_covariance(int kx, int ky, int kz) {
 // construct noise covariance matrix of the modes in k-space
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 GpuArray<Real,nvel*nvel> noise_covariance(int kx, int ky, int kz) { // TODO: add function arguments: rho, phi, k, others?
-  const Real lambda_r = 1/tau_r;
-  // Real lambda_a = lambda_r*(2 + lambda_r);
-  // Real lambda_ee = lambda_r + lambda_r + lambda_r*lambda_r;
-  Real lambda_a = 1/tau_r;
-  Real lambda_ee = 1/tau_r;
+  const Real lambda_r = -1.0/tau_r;
+  Real lambda_a = lambda_r*(2.0 + lambda_r);
+  Real lambda_ee = lambda_r + lambda_r + lambda_r*lambda_r;
+  // Print() << "La: " << lambda_a << " Lee: " << lambda_ee << " \n";
+  // Real lambda_a = -1./tau_r;
+  // Real lambda_ee = -1./tau_r;
   const Real kT = temperature;
   /* NOTE: the expressions below are valid for lambda_e = lambda_b */
 
@@ -234,19 +235,26 @@ GpuArray<Real,nvel*nvel> noise_covariance(int kx, int ky, int kz) { // TODO: add
 
   const Real k[3] = { (Real)kx, (Real)ky, (Real)kz };
   // const Real k2 = kx*kx + ky*ky + kz*kz;
-  const Real kx_conv = 2.*M_PI*kx/(16.);
-  const Real ky_conv = 2.*M_PI*ky/(16.);
-  const Real kz_conv = 2.*M_PI*kz/(16.);
+  // const Real kx_conv, ky_conv, kz_conv;
+  // Real kx_conv = (kx < nx) ? static_cast<Real>(kx) : static_cast<Real>(nx) - static_cast<Real>(kx);
+  // Real ky_conv = (kx < nx) ? static_cast<Real>(ky) : static_cast<Real>(nx) - static_cast<Real>(ky);
+  // Real kz_conv = (kx < nx) ? static_cast<Real>(kz) : static_cast<Real>(nx) - static_cast<Real>(kz);
+
+  Real kx_conv = (static_cast<Real>(kx) - static_cast<Real>(nx/2))/static_cast<Real>(nx);
+  Real ky_conv = (static_cast<Real>(ky) - static_cast<Real>(nx/2))/static_cast<Real>(nx);
+  Real kz_conv = (static_cast<Real>(kz) - static_cast<Real>(nx/2))/static_cast<Real>(nx);
+
   // Print() << "kx: " << kx_conv << " ky:" << ky_conv << " kz:" << kz_conv << "\n";
   const Real k2 = kx_conv*kx_conv + ky_conv*ky_conv + kz_conv*kz_conv;
 
-  const Real rho0 = 0.5*rhol + 0.5*rhov;
+  // const Real rho0 = 0.5*rhol + 0.5*rhov;
+  const Real rho0 = rhol;
   const Real system_cs2 = 2.*rho0*Beta*pow(rhol - rhov, 2);
-  const Real cs2_k = system_cs2 + rho0*kappa*k2;
+  const Real cs2_k = system_cs2;//+ rho0*kappa*k2;
   // const Real cs2_k = system_cs2 + rho0*kappa*k2;
-  const Real S_k = rho0*kT/cs2; //according to paper this is correct
-  // const Real S_k = rho0*kT/std::abs(cs2_k);
-  // Print() << "k dependent cs2: " << cs2 << "\n";
+  const Real T = -rho0*kT/cs2; //according to paper this is correct
+  // const Real T = rho0*kT/std::abs(cs2_k);
+  // Print() << "k dependent cs2: " << cs2_k << "\n";
 
   // Noise covariance of the modes in k-space
   GpuArray<Real,nvel*nvel> Xi = {};
@@ -254,35 +262,34 @@ GpuArray<Real,nvel*nvel> noise_covariance(int kx, int ky, int kz) { // TODO: add
   Xi.fill(0);
 
   // diagonal part
-  Xi[ 4*nvel +  4] = 2.0*S_k*lambda_a*(5. - 9.*cs2_k)*b[4];//
+  Xi[ 4*nvel +  4] = 2.0*T*lambda_a*(5. - 9.*cs2_k);//*b[4];//
   // Print() << "noise matrix at row " << 4 << " and column " << 4 << " :" << Xi[ 4*nvel +  4] << "\n";
-  Xi[ 5*nvel +  5] = 8.0*S_k*lambda_a*b[5];
+  Xi[ 5*nvel +  5] = 8.0*T*lambda_a;//*b[5];
   // Print() << "noise matrix at row " << 5 << " and column " << 5 << " :" << Xi[ 5*nvel +  5] << "\n";
   // Print() << "noise matrix: " << Xi[ 5*nvel +  5] << "\n";
-  Xi[ 6*nvel +  6] = 8.0/3.0*S_k*lambda_a*b[6];
+  Xi[ 6*nvel +  6] = 8.0/3.0*T*lambda_a;//*b[6];
   // Print() << "noise matrix at row " << 6 << " and column " << 6 << " :" << Xi[ 6*nvel +  6] << "\n";
-  Xi[ 7*nvel +  7] = 2.0/3.0*S_k*lambda_a*b[7];
+  Xi[ 7*nvel +  7] = 2.0/3.0*T*lambda_a;//*b[7];
   // Print() << "noise matrix at row " << 7 << " and column " << 7 << " :" << Xi[ 7*nvel +  7] << "\n";
   Xi[ 8*nvel +  8] = Xi[ 7*nvel +  7];
   Xi[ 9*nvel +  9] = Xi[ 7*nvel +  7];
-  Xi[10*nvel + 10] = 4.0*S_k*lambda_a*b[10];
+  Xi[10*nvel + 10] = 4.0*T*lambda_a;//*b[10];
   // Print() << "noise matrix at row " << 10 << " and column " << 10 << " :" << Xi[ 10*nvel +  10] << "\n";
   Xi[11*nvel + 11] = Xi[10*nvel + 10];
   Xi[12*nvel + 12] = Xi[10*nvel + 10];
-  Xi[13*nvel + 13] = 4.0/3.0*S_k*lambda_a*b[13];
+  Xi[13*nvel + 13] = 4.0/3.0*T*lambda_a;//*b[13];
   // Print() << "noise matrix at row " << 13 << " and column " << 13 << " :" << Xi[ 13*nvel +  13] << "\n";
   Xi[14*nvel + 14] = Xi[13*nvel + 13];
   Xi[15*nvel + 15] = Xi[13*nvel + 13];
-  Xi[16*nvel + 16] = 18.0*S_k*lambda_a*(1. - cs2_k)*b[16];
+  Xi[16*nvel + 16] = 18.0*T*lambda_a*(1. - cs2_k);//*b[16];
   // Print() << "noise matrix at row " << 16 << " and column " << 16 << " :" << Xi[ 16*nvel +  16] << "\n";
-  Xi[17*nvel + 17] = 8.0*S_k*lambda_a*b[17];
-  Xi[18*nvel + 18] = 8.0/3.0*S_k*lambda_a*b[18];
+  Xi[17*nvel + 17] = 8.0*T*lambda_a;//*b[17];
+  Xi[18*nvel + 18] = 8.0/3.0*T*lambda_a;//*b[18];
 
   // off diagonal part
-  Xi[16*nvel +  4] = 6.*rho0*kT*lambda_ee*(3.*cs2_k - 1);
+  Xi[16*nvel +  4] = 6.0*T*lambda_ee*(3.*cs2_k - 1);
   // Print() << "noise matrix at row " << 16 << " and column " << 4 << " :" << Xi[ 16*nvel +  4] << "\n";
   Xi[4*nvel +  16] = Xi[16*nvel +  4];
-
 
   return Xi;
 }
@@ -299,7 +306,8 @@ GpuArray<GpuComplex<Real>,nvel> kspace_white_noise(int kx, int ky, int kz, const
       r[i] = { RandomNormal(0., 1., engine), RandomNormal(0., 0., engine) };
     } else {
       // complex Gaussian random variables with zero mean and variance 0.5
-      r[i] = { RandomNormal(0., std::sqrt(0.5), engine), RandomNormal(0., std::sqrt(0.5), engine) };
+      // r[i] = { RandomNormal(0., std::sqrt(0.5), engine), RandomNormal(0., std::sqrt(0.5), engine) };
+      r[i] = { RandomNormal(0., 1, engine), RandomNormal(0., 0, engine) };
     }
   }
   return r;

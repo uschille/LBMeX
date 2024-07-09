@@ -7,11 +7,13 @@
 AMREX_GPU_MANAGED Real tau_r = 1.0; // What is used in Gross 2010 for all relaxation rates
 // AMREX_GPU_MANAGED Real tau_p = 1.0;
 
+AMREX_GPU_MANAGED int nx = 16;
 AMREX_GPU_MANAGED Real kappa = 0.0;
 AMREX_GPU_MANAGED Real Beta = 0.01;
 AMREX_GPU_MANAGED Real temperature = 0.0;
 AMREX_GPU_MANAGED Real rhov = 0.1;
 AMREX_GPU_MANAGED Real rhol = 1.1;
+AMREX_GPU_MANAGED int use_correlated_noise= 1;
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 Real pressure(Real rho, Real phi);
@@ -65,6 +67,7 @@ Array1D<Real,0,1> chemical_potentials(const Array1D<Real,0,1>& fields,
   // Real square_term = (rho - rhol)*(rho - rhov);
   Real mu_0 = Beta*pow(rho - rhol, 2)*(2*rho - 2*rhov) + Beta*pow(rho - rhov, 2)*(2*rho - 2*rhol);
   mu(0) = mu_0 - kappa*D2rho;
+  Print() << "Chemical Potential: " << mu(0) << "\n";
 
   return mu;
 }
@@ -76,6 +79,7 @@ Real pressure(Real rho) {
   Real square_term = (rho - rhol)*(rho - rhov);
   Real p0 = Beta*square_term*(2*rho*(2*rho - rhol - rhov) - square_term); // eq 2 and para after in Gross 1010
   // note that gradient terms are included in fequilibrium
+  // Print() << "Bulk pressure: " << p0 << "\n";
 
   return p0;
 }
@@ -144,9 +148,15 @@ Array1D<Real,0,nvel> fequilibrium_moments(const Array1D<Real,0,1>& fields,
   const Real rho = fields(0);
   const Real u2 = u[0]*u[0]+u[1]*u[1]+u[2]*u[2];
   const RealVect Drho = gradients(0);
-  
+
   const Real D2rho = laplacians(0);
   const Real pbulk = pressure(rho);
+
+  Print() << "drho/dx: " << Drho[0] << "\n";
+  Print() << "drho/dy: " << Drho[1] << "\n";
+  Print() << "drho/dz: " << Drho[2] << "\n";
+
+  Print() << "d2rho/dx: " << D2rho << "\n";
 
   Real G[3][3], traceG=0.; // Eq. (39) in Swift et al.
   G[0][0] = kappa*Drho[0]*Drho[0]; traceG  = G[0][0];
@@ -338,7 +348,8 @@ inline void LBM_timestep(const Geometry& geom,
 // homogeneous mixture of C1 and C2 with random concentration fluctuations
 inline void LBM_init_mixture(MultiFab& mf,
 			     MultiFab& hydrovs) {
-  const Real C1 = 0.5*rhol + 0.5*rhov;
+  // const Real C1 = 0.5*rhol + 0.5*rhov;
+  const Real C1 = rhol;
   for (MFIter mfi(mf); mfi.isValid(); ++mfi) {
     const Box& valid_box = mfi.validbox();
     const Array4<Real>& f = mf.array(mfi);

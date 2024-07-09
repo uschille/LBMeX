@@ -3,13 +3,13 @@ nx = 16
 max_grid_size = 16
 
 # timesteps
-nsteps = 1000
-plot_int = 100
+nsteps = 10
+plot_int = 0
 
 # model_params
-kappa = 0.0
-B = -0.01
-rhov = 0.5
+kappa = 0.03
+B = 0.015
+rhov = 0.1
 rhol = 1.0
 
 # fluctuations

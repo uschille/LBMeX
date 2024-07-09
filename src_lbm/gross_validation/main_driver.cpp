@@ -63,7 +63,7 @@ inline void WriteOutput(int step,
 			const Geometry& geom) {
   // set up variable names for output
   const Vector<std::string> var_names = VariableNames(nvel);
-  const std::string& pltfile = amrex::Concatenate("hydro_plt",step,5);
+  const std::string& pltfile = amrex::Concatenate("hydro_plt",step,7);
   WriteSingleLevelPlotfile(pltfile, hydrovs, var_names, geom, Real(step), step);
 }
 
@@ -96,6 +96,7 @@ void main_driver(const char* argv) {
   pp.query("rhol", rhol);
   pp.query("B", Beta);
   pp.query("temperature", temperature);
+  pp.query("correlated_noise", use_correlated_noise);
   // pp.query("reps", reps);
   Print() << "parameters parsed\n";
   // set up Box and Geomtry
@@ -129,9 +130,10 @@ void main_driver(const char* argv) {
   // MultiFab test_noise(ba, dm, 2*nvel, nghost);
 
   // Print() << "Data structures generated\n";
-  const Real rho0 = 0.5*rhol + 0.5*rhov;
+  const Real rho0 = rhol;
+  // const Real rho0 = 0.5*rhol + 0.5*rhov;
 
-  int nStructVars = 4;
+  int nStructVars = 10;
   const Vector<std::string> var_names = VariableNames(nStructVars);
   // Print() << "SF names specified\n";
   Vector<Real> var_scaling(nStructVars*(nStructVars+1)/2);
@@ -152,16 +154,13 @@ void main_driver(const char* argv) {
   // TIMESTEP
   for (int step=1; step <= nsteps; ++step) {
     LBM_timestep(geom, fold, fnew, hydrovs, noise);
-    structFact.FortStructure(hydrovs, geom);
-    if (plot_int > 0 && step%plot_int ==0) {
-      WriteOutput(step, hydrovs, geom);
-      structFact.WritePlotFile(step, static_cast<Real>(step), geom, "SF_plt");
-    }
+    if (plot_int > 0 && step%plot_int ==0) {WriteOutput(step, hydrovs, geom);}
+    if (step > 0.9*nsteps){structFact.FortStructure(hydrovs, geom);}
     Print() << "LB step " << step << "\n";
   }
 
   // structFact.WritePlotFile(nsteps, nsteps, geom, "SF_plt");
-
+structFact.WritePlotFile(nsteps, static_cast<Real>(nsteps), geom, "SF_plt");
   // Call the timer again and compute the maximum difference between the start time 
   // and stop time over all processors
   Real stop_time = ParallelDescriptor::second() - strt_time;
