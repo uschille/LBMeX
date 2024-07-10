@@ -26,6 +26,10 @@ include $(FHDEX_HOME)/src_analysis/Make.package
 VPATH_LOCATIONS   += $(FHDEX_HOME)/src_analysis/
 INCLUDE_LOCATIONS += $(FHDEX_HOME)/src_analysis/
 
+#include $(FHDEX_HOME)/src_rng/Make.package
+#VPATH_LOCATIONS   += $(FHDEX_HOME)/src_rng/
+#INCLUDE_LOCATIONS += $(FHDEX_HOME)/src_rng/
+
 include $(AMREX_HOME)/Src/Base/Make.package
 
 include $(AMREX_HOME)/Tools/GNUMake/Make.rules

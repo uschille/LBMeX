@@ -77,6 +77,7 @@ void main_driver(const char* argv) {
   // default grid parameters
   int nx = 16;
   int max_grid_size = 8;
+  int init_cond = 0;
 
   // default time stepping parameters
   int nsteps = 100;
@@ -96,7 +97,7 @@ void main_driver(const char* argv) {
   pp.query("rhol", rhol);
   pp.query("B", Beta);
   pp.query("temperature", temperature);
-  pp.query("correlated_noise", use_correlated_noise);
+  pp.query("init_cond", init_cond);
   // pp.query("reps", reps);
   Print() << "parameters parsed\n";
   // set up Box and Geomtry
@@ -127,13 +128,21 @@ void main_driver(const char* argv) {
   MultiFab fnew(ba, dm, nvel, nghost);
   MultiFab hydrovs(ba, dm, nvel, nghost);
   MultiFab noise(ba, dm, nvel, nghost);
+  // MultiFab ic_setup(ba, dm, nvel, nghost);
   // MultiFab test_noise(ba, dm, 2*nvel, nghost);
 
-  // Print() << "Data structures generated\n";
-  const Real rho0 = rhol;
-  // const Real rho0 = 0.5*rhol + 0.5*rhov;
+  if (init_cond == 0) {
+    LBM_init_liquid(fold, hydrovs);
+    const Real rho0 = rhol;
+    }
+  else {
+    LBM_init_mixture(fold, hydrovs);
+    const Real rho0 = 0.5*rhol + 0.5*rhov;
+    }
 
-  int nStructVars = 10;
+  // Print() << "Data structures generated\n";
+
+  int nStructVars = 4;
   const Vector<std::string> var_names = VariableNames(nStructVars);
   // Print() << "SF names specified\n";
   Vector<Real> var_scaling(nStructVars*(nStructVars+1)/2);
@@ -143,12 +152,11 @@ void main_driver(const char* argv) {
   StructFact structFact(ba, dm, var_names, var_scaling);
   // Print() << "StructFact object generated\n";
   // INITIALIZE
-  LBM_init_mixture(fold, hydrovs);
   // Print() << "Initial condition created\n";
   // Print() << "thermodynamic cs2: " << system_cs2 << "\n";
 
   // Write a plotfile of the initial data if plot_int > 0
-  if (plot_int > 0) WriteOutput(0, hydrovs, geom);
+  if (plot_int > 0) {WriteOutput(0, hydrovs, geom);}
   // Print() << "LB initialized\n";
 
   // TIMESTEP
@@ -160,7 +168,7 @@ void main_driver(const char* argv) {
   }
 
   // structFact.WritePlotFile(nsteps, nsteps, geom, "SF_plt");
-structFact.WritePlotFile(nsteps, static_cast<Real>(nsteps), geom, "SF_plt");
+  structFact.WritePlotFile(nsteps, static_cast<Real>(nsteps), geom, "SF_plt");
   // Call the timer again and compute the maximum difference between the start time 
   // and stop time over all processors
   Real stop_time = ParallelDescriptor::second() - strt_time;

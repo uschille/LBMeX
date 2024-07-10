@@ -2,7 +2,7 @@
 #define LBM_H_
 
 #include "LBM_d3q19.H"
-
+// #include "rng_functions.H"
 
 AMREX_GPU_MANAGED Real tau_r = 1.0; // What is used in Gross 2010 for all relaxation rates
 // AMREX_GPU_MANAGED Real tau_p = 1.0;
@@ -13,7 +13,6 @@ AMREX_GPU_MANAGED Real Beta = 0.01;
 AMREX_GPU_MANAGED Real temperature = 0.0;
 AMREX_GPU_MANAGED Real rhov = 0.1;
 AMREX_GPU_MANAGED Real rhol = 1.1;
-AMREX_GPU_MANAGED int use_correlated_noise= 1;
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 Real pressure(Real rho, Real phi);
@@ -34,7 +33,7 @@ RealVect gradient(int x, int y, int z, const Array4<Real>& field, int icomp) {
     int yp = y + c[i][1];
     int zp = z + c[i][2];
     for (int dir=0; dir<3; dir++) {
-      gradient[dir] += w[i]/system_cs2*field(xp,yp,zp,icomp)*c[i][dir];
+      gradient[dir] += w[i]/cs2*field(xp,yp,zp,icomp)*c[i][dir];
     }
   }
   return gradient;
@@ -48,7 +47,7 @@ Real laplacian(int x, int y, int z, const Array4<Real>& field, int icomp) {
     int xp = x + c[i][0];
     int yp = y + c[i][1];
     int zp = z + c[i][2];
-    laplacian += 2.*w[i]/system_cs2*(field(xp,yp,zp,icomp)-field(x,y,z,icomp));
+    laplacian += 2.*w[i]/cs2*(field(xp,yp,zp,icomp)-field(x,y,z,icomp));
   }
   return laplacian;
 }
@@ -152,11 +151,11 @@ Array1D<Real,0,nvel> fequilibrium_moments(const Array1D<Real,0,1>& fields,
   const Real D2rho = laplacians(0);
   const Real pbulk = pressure(rho);
 
-  Print() << "drho/dx: " << Drho[0] << "\n";
-  Print() << "drho/dy: " << Drho[1] << "\n";
-  Print() << "drho/dz: " << Drho[2] << "\n";
+  // Print() << "drho/dx: " << Drho[0] << "\n";
+  // Print() << "drho/dy: " << Drho[1] << "\n";
+  // Print() << "drho/dz: " << Drho[2] << "\n";
 
-  Print() << "d2rho/dx: " << D2rho << "\n";
+  // Print() << "d2rho/dx: " << D2rho << "\n";
 
   Real G[3][3], traceG=0.; // Eq. (39) in Swift et al.
   G[0][0] = kappa*Drho[0]*Drho[0]; traceG  = G[0][0];
@@ -337,8 +336,9 @@ inline void LBM_timestep(const Geometry& geom,
 			 MultiFab& fold,
 			 MultiFab& fnew,
 			 MultiFab& hydrovs, MultiFab& noise) {
-  generate_fluctuations(geom, hydrovs, noise);
-  // noise.setVal(0.);
+  
+  if (temperature > 0.0) {generate_fluctuations(geom, hydrovs, noise);}
+  else {noise.setVal(0.);}
   // Print() << "Noise generated for moments\n";
   collide_stream(geom, fold, fnew, hydrovs, noise);
   // Print() << "Collide stream completed\n";
@@ -346,7 +346,7 @@ inline void LBM_timestep(const Geometry& geom,
 }
 
 // homogeneous mixture of C1 and C2 with random concentration fluctuations
-inline void LBM_init_mixture(MultiFab& mf,
+inline void LBM_init_liquid(MultiFab& mf,
 			     MultiFab& hydrovs) {
   // const Real C1 = 0.5*rhol + 0.5*rhov;
   const Real C1 = rhol;
@@ -356,6 +356,25 @@ inline void LBM_init_mixture(MultiFab& mf,
     ParallelForRNG(valid_box, [=] AMREX_GPU_DEVICE(int x, int y, int z, RandomEngine const& engine) {
       const Real rho = C1;
       for (int i=0; i<nvel; i++) {
+        f(x,y,z,i) = w[i]*rho;
+      }
+    });
+  }
+  hydrovars(mf, hydrovs);
+}
+
+// homogeneous mixture of C1 and C2 with random concentration fluctuations
+inline void LBM_init_mixture(MultiFab& mf, MultiFab& hydrovs) {
+
+  const Real perturbation = 0.00001;
+  const Real C1 = 0.5*rhol + 0.5*rhov;
+
+  for (MFIter mfi(mf); mfi.isValid(); ++mfi) {
+    const Box& valid_box = mfi.validbox();
+    const Array4<Real>& f = mf.array(mfi);
+    ParallelForRNG(valid_box, [=] AMREX_GPU_DEVICE(int x, int y, int z, RandomEngine const& engine) {
+      for (int i=0; i<nvel; i++) {
+        const Real rho = C1 +  RandomNormal(0., perturbation, engine);
         f(x,y,z,i) = w[i]*rho;
       }
     });
