@@ -382,78 +382,63 @@ inline void LBM_init_mixture(MultiFab& mf, MultiFab& hydrovs) {
   hydrovars(mf, hydrovs);
 }
 
-// // flat interface between C1 and C2
-// inline void LBM_init_flat_interface(const Geometry& geom,
-// 				    MultiFab& mf,
-// 				    MultiFab& mg,
-// 				    MultiFab& hydrovs) {
-//   const IntVect box = geom.Domain().length();
+// flat interface between C1 and C2
+inline void LBM_init_flat_interface(const Geometry& geom,
+				    MultiFab& mf,
+				    MultiFab& hydrovs) {
+  const IntVect box = geom.Domain().length();
+  auto const & f = mf.arrays();
+  GpuArray<Real,3> dx = geom.CellSizeArray();
+  ParallelFor(mf, IntVect(0), [=] AMREX_GPU_DEVICE(int nbx, int x, int y, int z) {
+    const Real rx = x-box[0]/2;
+    const Real ry = y-box[1]/2;
+#if (AMREX_SPACEDIM == 2)
+    const Real r2 = rx*rx+ry*ry;
+#elif (AMREX_SPACEDIM == 3)
+    const Real rz = z-box[0]/2;
+    const Real r2 = rx*rx+ry*ry+rz*rz;
+#endif
 
-//   auto const & f = mf.arrays();
-//   auto const & g = mg.arrays();
-//   GpuArray<Real,3> dx = geom.CellSizeArray();
-//   ParallelFor(mf, IntVect(0), [=] AMREX_GPU_DEVICE(int nbx, int x, int y, int z) {
-//     const Real rx = x-box[0]/2;
-//     const Real ry = y-box[1]/2;
-// #if (AMREX_SPACEDIM == 2)
-//     const Real r2 = rx*rx+ry*ry;
-// #elif (AMREX_SPACEDIM == 3)
-//     const Real rz = z-box[0]/2;
-//     const Real r2 = rx*rx+ry*ry+rz*rz;
-// #endif
+    for (int i=0; i<nvel; i++) {
+      if (rx < 0.){f[nbx](x,y,z,i) = w[i]*rhol;}
+      else{f[nbx](x,y,z,i) = w[i]*rhov;}
+    }
 
-//     const Real rho=1.0;
-//     Real phi;
+  });
+  hydrovars(mf, hydrovs);
+}
 
-//     if (rx < 0.) {
-//       phi = 0.5;
-//     } else {
-//       phi = -0.5;
-//     }
+// binary droplet of vapor in liquid
+inline void LBM_init_droplet(const Real r,
+			     const Geometry& geom,
+			     MultiFab& mf,
+			     MultiFab& hydrovs) {
 
-//     for (int i=0; i<nvel; i++) {
-//       f[nbx](x,y,z,i) = w[i]*rho;
-//       g[nbx](x,y,z,i) = w[i]*phi;
-//     }
+  const IntVect box = geom.Domain().length();
+  const Real R = r*box[0];
 
-//   });
-//   hydrovars(mf, mg, hydrovs);
-// }
+  auto const & f = mf.arrays();
+  GpuArray<Real,3> dx = geom.CellSizeArray();
 
-// // binary droplet of C1 and C2
-// inline void LBM_init_droplet(const Real r,
-// 			     const Geometry& geom,
-// 			     MultiFab& mf,
-// 			     MultiFab& mg,
-// 			     MultiFab& hydrovs) {
-//   const IntVect box = geom.Domain().length();
-//   const Real R = r*box[0];
+  ParallelFor(mf, IntVect(0), [=] AMREX_GPU_DEVICE(int nbx, int x, int y, int z) {
+    const Real rx = x-box[0]/2;
+    const Real ry = y-box[1]/2;
+#if (AMREX_SPACEDIM == 2)
+    const Real r2 = rx*rx+ry*ry;
+#elif (AMREX_SPACEDIM == 3)
+    const Real rz = z-box[0]/2;
+    const Real r2 = rx*rx+ry*ry+rz*rz;
+#endif
+    const Real r = sqrt(r2);
+    const Real profile = tanh((R-r)/sqrt(kappa));
 
-//   auto const & f = mf.arrays();
-//   auto const & g = mg.arrays();
-//   GpuArray<Real,3> dx = geom.CellSizeArray();
-//   ParallelFor(mf, IntVect(0), [=] AMREX_GPU_DEVICE(int nbx, int x, int y, int z) {
-//     const Real rx = x-box[0]/2;
-//     const Real ry = y-box[1]/2;
-// #if (AMREX_SPACEDIM == 2)
-//     const Real r2 = rx*rx+ry*ry;
-// #elif (AMREX_SPACEDIM == 3)
-//     const Real rz = z-box[0]/2;
-//     const Real r2 = rx*rx+ry*ry+rz*rz;
-// #endif
-//     const Real r = sqrt(r2);
+    for (int i=0; i<nvel; i++) {
+      if (profile < 0.0){f[nbx](x,y,z,i) = w[i]*rhol;}
+      else {f[nbx](x,y,z,i) = w[i]*rhov;}
+    }
 
-//     const Real rho = 1.0;
-//     const Real phi0 = 0.5;
-//     const Real phi = phi0*tanh((R-r)/sqrt(kappa));
-
-//     for (int i=0; i<nvel; i++) {
-//       f[nbx](x,y,z,i) = w[i]*rho;
-//       g[nbx](x,y,z,i) = w[i]*phi;
-//     }
-
-//   });
-//   hydrovars(mf, mg, hydrovs);
-// }
+  });
+  hydrovars(mf, hydrovs);
+}
 
 #endif

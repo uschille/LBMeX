@@ -78,6 +78,7 @@ void main_driver(const char* argv) {
   int nx = 16;
   int max_grid_size = 8;
   int init_cond = 0;
+  Real radius = 0.3;
 
   // default time stepping parameters
   int nsteps = 100;
@@ -98,6 +99,7 @@ void main_driver(const char* argv) {
   pp.query("B", Beta);
   pp.query("temperature", temperature);
   pp.query("init_cond", init_cond);
+  pp.query("droplet_radius", radius);
   // pp.query("reps", reps);
   Print() << "parameters parsed\n";
   // set up Box and Geomtry
@@ -130,19 +132,26 @@ void main_driver(const char* argv) {
   MultiFab noise(ba, dm, nvel, nghost);
   // MultiFab ic_setup(ba, dm, nvel, nghost);
   // MultiFab test_noise(ba, dm, 2*nvel, nghost);
-
+  Real rho0;
   if (init_cond == 0) {
     LBM_init_liquid(fold, hydrovs);
-    const Real rho0 = rhol;
+    rho0 = rhol;
     }
-  else {
+  else if (init_cond == 1){
     LBM_init_mixture(fold, hydrovs);
-    const Real rho0 = 0.5*rhol + 0.5*rhov;
+    rho0 = 0.5*rhol + 0.5*rhov;
     }
-
+  else if (init_cond == 2){
+    LBM_init_flat_interface(geom, fold, hydrovs);
+    rho0 = 0.5*rhol + 0.5*rhov;
+    }
+  else if (init_cond == 3){
+    LBM_init_droplet(radius, geom, fold, hydrovs);
+    rho0 = 0.5*rhol + 0.5*rhov;
+    }
   // Print() << "Data structures generated\n";
 
-  int nStructVars = 4;
+  int nStructVars = 10;
   const Vector<std::string> var_names = VariableNames(nStructVars);
   // Print() << "SF names specified\n";
   Vector<Real> var_scaling(nStructVars*(nStructVars+1)/2);

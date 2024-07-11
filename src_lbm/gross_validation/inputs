@@ -1,14 +1,14 @@
 # box dims
-nx = 32
-max_grid_size = 32
+nx = 16
+max_grid_size = 16
 init_cond = 0
 
 # timesteps
-nsteps = 1000
-plot_int = 10
+nsteps = 10000
+plot_int = 100
 
 # model_params
-kappa = 0.03
+kappa = 0.0
 B = 0.015
 rhov = 0.1
 rhol = 1.0
