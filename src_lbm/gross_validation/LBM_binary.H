@@ -24,6 +24,15 @@ Array1D<Real,0,1> chemical_potentials(const Array1D<Real,0,1>& fields,
 
 #include "LBM_fluctuations.H"
 
+Real thermal_cs2(Real rho){
+  Real square_term = (rho - rhol)*(rho - rhov);
+  Real expr1 = Beta*square_term*(rhol + rhov - 6.0*rho);
+  Real expr2 = Beta*(rho - rhol)*(2.0*rho*(-2.0*rho + rhol + rhov) + square_term);
+  Real expr3 = Beta*(rho - rhov)*(2.0*rho*(-2.0*rho + rhol + rhov) + square_term);
+  Real out = -expr1 - expr2 - expr3;
+  return out;
+}
+
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 RealVect gradient(int x, int y, int z, const Array4<Real>& field, int icomp) {
   RealVect gradient = { 0.0, 0.0, 0.0 };

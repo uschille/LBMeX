@@ -8,7 +8,7 @@ nsteps = 10000
 plot_int = 100
 
 # model_params
-kappa = 0.0
+kappa = 0.03
 B = 0.015
 rhov = 0.1
 rhol = 1.0
