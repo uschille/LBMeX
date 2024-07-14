@@ -217,7 +217,11 @@ void relax_moments(int x, int y, int z,
   mfEq = fequilibrium_moments(fields, gradients, laplacians, u);
 
   for (int i=0; i<nvel; ++i) {
-    mf(i) = mf(i) - 1./tau_r * (mf(i) - mfEq(i));
+    // Real L;
+    // if (i < ncons){L = 0.0;}
+    // else{L = -1./tau_r;}
+    const Real L = -1./tau_r; 
+    mf(i) = mf(i) + L*(mf(i) - mfEq(i));
   }
 
 }
@@ -244,6 +248,7 @@ void thermalize_moments(int x, int y, int z,
   for (int i=ncons; i<nvel; ++i) {
     // Print() << noise(x,y,z,i) << " on index " << i << "\n";
     mf(i) += (1. - 0.5/tau_r) * noise(x,y,z,i); //might have to correct for time discretization here. Check in Gross paper once everything else isn't broken
+    // mf(i) += noise(x,y,z,i); //might have to correct for time discretization here. Check in Gross paper once everything else isn't broken
   }
 }
 

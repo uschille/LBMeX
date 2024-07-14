@@ -5,7 +5,7 @@ init_cond = 0
 
 # timesteps
 nsteps = 10000
-plot_int = 100
+plot_int = 10000
 
 # model_params
 kappa = 0.03
