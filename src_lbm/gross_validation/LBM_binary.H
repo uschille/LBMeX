@@ -13,6 +13,7 @@ AMREX_GPU_MANAGED Real Beta = 0.01;
 AMREX_GPU_MANAGED Real temperature = 0.0;
 AMREX_GPU_MANAGED Real rhov = 0.1;
 AMREX_GPU_MANAGED Real rhol = 1.1;
+AMREX_GPU_MANAGED int ideal = 0;
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 Real pressure(Real rho, Real phi);
@@ -91,7 +92,6 @@ Real pressure(Real rho) {
 
   return p0;
 }
-
 
 #if 0 // equilibrium populations not necessary for MRT
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
@@ -247,8 +247,8 @@ void thermalize_moments(int x, int y, int z,
   // nonconserved moments 4..18 in noise at 8..22 (f) and 23..37 (g)
   for (int i=ncons; i<nvel; ++i) {
     // Print() << noise(x,y,z,i) << " on index " << i << "\n";
-    mf(i) += (1. - 0.5/tau_r) * noise(x,y,z,i); //might have to correct for time discretization here. Check in Gross paper once everything else isn't broken
-    // mf(i) += noise(x,y,z,i); //might have to correct for time discretization here. Check in Gross paper once everything else isn't broken
+    // mf(i) += (1. - 0.5/tau_r) * noise(x,y,z,i); //might have to correct for time discretization here. Check in Gross paper once everything else isn't broken
+    mf(i) += noise(x,y,z,i); //might have to correct for time discretization here. Check in Gross paper once everything else isn't broken
   }
 }
 
@@ -406,19 +406,19 @@ inline void LBM_init_flat_interface(const Geometry& geom,
   ParallelFor(mf, IntVect(0), [=] AMREX_GPU_DEVICE(int nbx, int x, int y, int z) {
     const Real rx = x-box[0]/2;
     const Real ry = y-box[1]/2;
-#if (AMREX_SPACEDIM == 2)
-    const Real r2 = rx*rx+ry*ry;
-#elif (AMREX_SPACEDIM == 3)
-    const Real rz = z-box[0]/2;
-    const Real r2 = rx*rx+ry*ry+rz*rz;
-#endif
+  #if (AMREX_SPACEDIM == 2)
+      const Real r2 = rx*rx+ry*ry;
+  #elif (AMREX_SPACEDIM == 3)
+      const Real rz = z-box[0]/2;
+      const Real r2 = rx*rx+ry*ry+rz*rz;
+  #endif
 
-    for (int i=0; i<nvel; i++) {
-      if (rx < 0.){f[nbx](x,y,z,i) = w[i]*rhol;}
-      else{f[nbx](x,y,z,i) = w[i]*rhov;}
-    }
+      for (int i=0; i<nvel; i++) {
+        if (rx < 0.){f[nbx](x,y,z,i) = w[i]*rhol;}
+        else{f[nbx](x,y,z,i) = w[i]*rhov;}
+      }
 
-  });
+    });
   hydrovars(mf, hydrovs);
 }
 
@@ -437,22 +437,22 @@ inline void LBM_init_droplet(const Real r,
   ParallelFor(mf, IntVect(0), [=] AMREX_GPU_DEVICE(int nbx, int x, int y, int z) {
     const Real rx = x-box[0]/2;
     const Real ry = y-box[1]/2;
-#if (AMREX_SPACEDIM == 2)
-    const Real r2 = rx*rx+ry*ry;
-#elif (AMREX_SPACEDIM == 3)
-    const Real rz = z-box[0]/2;
-    const Real r2 = rx*rx+ry*ry+rz*rz;
-#endif
-    const Real r = sqrt(r2);
-    const Real profile = tanh((R-r)/sqrt(kappa));
+  #if (AMREX_SPACEDIM == 2)
+      const Real r2 = rx*rx+ry*ry;
+  #elif (AMREX_SPACEDIM == 3)
+      const Real rz = z-box[0]/2;
+      const Real r2 = rx*rx+ry*ry+rz*rz;
+  #endif
+      const Real r = sqrt(r2);
+      const Real profile = tanh((R-r)/sqrt(kappa));
 
-    for (int i=0; i<nvel; i++) {
-      if (profile < 0.0){f[nbx](x,y,z,i) = w[i]*rhol;}
-      else {f[nbx](x,y,z,i) = w[i]*rhov;}
-    }
+      for (int i=0; i<nvel; i++) {
+        if (profile < 0.0){f[nbx](x,y,z,i) = w[i]*rhol;}
+        else {f[nbx](x,y,z,i) = w[i]*rhov;}
+      }
 
-  });
-  hydrovars(mf, hydrovs);
+    });
+    hydrovars(mf, hydrovs);
 }
 
 #endif

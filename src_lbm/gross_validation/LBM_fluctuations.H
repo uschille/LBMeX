@@ -217,72 +217,115 @@ GpuArray<Real,nvel*nvel> noise_covariance(int kx, int ky, int kz) {
   const GpuArray<Real,nvel*nvel> C = noise_covariance(G);
   return C;
 }
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+GpuArray<Real,ncomp*ncomp> noise_covariance_ideal(int kx, int ky, int kz) {
+  const Real gamma = 1. - 1./tau;
+  const Real rho0 = rhol;
+
+  // Noise covariance of the modes in k-space
+  GpuArray<Real,ncomp*ncomp> Xi = {};
+  Xi.fill(0);
+	for (int i=ncons; i<ncomp; ++i) {
+	  // noise covariance for ideal fluid
+	  Xi[i*ncomp+i] = b[i]*temperature/cs2*(1.-gamma*gamma);
+	}
+
+  return Xi;
+}
 #endif
 
 // construct noise covariance matrix of the modes in k-space
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 GpuArray<Real,nvel*nvel> noise_covariance(int kx, int ky, int kz) { // TODO: add function arguments: rho, phi, k, others?
-  const Real lambda_r = -1.0/tau_r;
-  Real lambda_a = lambda_r*(2.0 + lambda_r);
-  Real lambda_ee = lambda_r + lambda_r + lambda_r*lambda_r;
-  // Print() << "La: " << lambda_a << " Lee: " << lambda_ee << " \n";
-  // Real lambda_a = lambda_r;
-  // Real lambda_ee = lambda_r;
   const Real kT = temperature;
-  /* NOTE: the expressions below are valid for lambda_e = lambda_b */
-
-  const Array1D<Real,0,1> fields = {1};
-
-  const Real k[3] = { (Real)kx, (Real)ky, (Real)kz };
-  // const Real k2 = kx*kx + ky*ky + kz*kz;
-  // const Real kx_conv, ky_conv, kz_conv;
-  // Real kx_conv = (kx < nx) ? static_cast<Real>(kx) : static_cast<Real>(nx) - static_cast<Real>(kx);
-  // Real ky_conv = (kx < nx) ? static_cast<Real>(ky) : static_cast<Real>(nx) - static_cast<Real>(ky);
-  // Real kz_conv = (kx < nx) ? static_cast<Real>(kz) : static_cast<Real>(nx) - static_cast<Real>(kz);
-
-  Real kx_conv = (static_cast<Real>(kx) - static_cast<Real>(nx/2))/static_cast<Real>(nx);
-  Real ky_conv = (static_cast<Real>(ky) - static_cast<Real>(nx/2))/static_cast<Real>(nx);
-  Real kz_conv = (static_cast<Real>(kz) - static_cast<Real>(nx/2))/static_cast<Real>(nx);
-
-  // Print() << "kx: " << kx_conv << " ky:" << ky_conv << " kz:" << kz_conv << "\n";
-  const Real k2 = kx_conv*kx_conv + ky_conv*ky_conv + kz_conv*kz_conv;
-
-  // const Real rho0 = 0.5*rhol + 0.5*rhov;
   const Real rho0 = rhol;
   const Real system_cs2 = 2.*rho0*Beta*pow(rhol - rhov, 2);
-  // const Real system_cs2 = cs2;
-  const Real cs2_k = system_cs2;//+ rho0*kappa*k2;
-  // const Real cs2_k = system_cs2 + rho0*kappa*k2;
-  const Real T = -rho0*kT/cs2; //according to paper this is correct
-  const Real S = -rho0*kT/cs2_k;
-  // const Real T = rho0*kT/std::abs(cs2_k);
-  // Print() << "k dependent cs2: " << cs2_k << "\n";
-
+  const Real lambda_r = -1.0/tau_r;
+  
   // Noise covariance of the modes in k-space
   GpuArray<Real,nvel*nvel> Xi = {};
-  
   Xi.fill(0);
+  
+  if (ideal){
+    // const Real gamma = 1. - 1./tau_r;
+    const Real gamma = 1. + lambda_r;
+    for (int i=ncons; i<nvel; ++i) {
+      // noise covariance for ideal fluid
+      Xi[i*nvel+i] = b[i]*kT/cs2*(1.-gamma*gamma);
+    }
+  }
+  else {
+    Real lambda_a = lambda_r*(2.0 + lambda_r);
+    Real lambda_ee = lambda_r + lambda_r + lambda_r*lambda_r;
+    // Print() << "La: " << lambda_a << " Lee: " << lambda_ee << " \n";
+    // Real lambda_a = lambda_r;
+    // Real lambda_ee = lambda_r;
+    /* NOTE: the expressions below are valid for lambda_e = lambda_b */
 
-  // diagonal part
-  Xi[ 4*nvel +  4] = b[4]*T*lambda_a*(5. - 9.*cs2_k);
-  Xi[ 5*nvel +  5] = 2.0*b[5]*T*lambda_a;
-  Xi[ 6*nvel +  6] = 2.0*b[6]*T*lambda_a;
-  Xi[ 7*nvel +  7] = 2.0*b[7]*T*lambda_a;
-  Xi[ 8*nvel +  8] = Xi[ 7*nvel +  7];
-  Xi[ 9*nvel +  9] = Xi[ 7*nvel +  7];
-  Xi[10*nvel + 10] = 2.0*b[10]*T*lambda_a;
-  Xi[11*nvel + 11] = Xi[10*nvel + 10];
-  Xi[12*nvel + 12] = Xi[10*nvel + 10];
-  Xi[13*nvel + 13] = 2.0*b[13]*T*lambda_a;
-  Xi[14*nvel + 14] = Xi[13*nvel + 13];
-  Xi[15*nvel + 15] = Xi[13*nvel + 13];
-  Xi[16*nvel + 16] = 6.0*T*lambda_a*(1. - cs2_k);
-  Xi[17*nvel + 17] = 2.0*T*b[17]*lambda_a;
-  Xi[18*nvel + 18] = 2.0*T*b[18]*lambda_a;
+    const Array1D<Real,0,1> fields = {1};
 
-  // off diagonal parts
-  Xi[16*nvel +  4] = 6.0*T*lambda_ee*(cs2_k - cs2);
-  Xi[4*nvel +  16] = Xi[16*nvel +  4];
+    const Real k[3] = { (Real)kx, (Real)ky, (Real)kz };
+    kx = static_cast<Real>(kx)/static_cast<Real>(nx);
+    ky = static_cast<Real>(ky)/static_cast<Real>(nx);
+    kz = static_cast<Real>(kz)/static_cast<Real>(nx);
+
+    const Real k2 = kx*kx + ky*ky + kz*kz;
+    // Print() << "kx: " << kx_conv << " ky:" << ky_conv << " kz:" << kz_conv << "\n";
+
+    const Real cs2_k = system_cs2+ rho0*kappa*k2;
+    const Real T = -rho0*kT/cs2; //according to paper this is correct
+    const Real S = -rho0*kT/cs2_k;
+    // Print() << "k dependent cs2: " << cs2_k << "\n";
+
+    // // diagonal part
+    // Xi[ 4*nvel +  4] = b[4]*T*lambda_a*(5. - 9.*cs2_k);
+    // // Print() << "Xi[4, 4]: " << Xi[ 4*nvel +  4] << "\n";
+    // Xi[ 5*nvel +  5] = 2.0*b[5]*T*lambda_a;
+    // Xi[ 6*nvel +  6] = 2.0*b[6]*T*lambda_a;
+    // Xi[ 7*nvel +  7] = 2.0*b[7]*T*lambda_a;
+    // // Print() << "Xi[7, 7]: " << Xi[ 7*nvel +  7] << "\n";
+    // Xi[ 8*nvel +  8] = Xi[ 7*nvel +  7];
+    // // Print() << "Xi[8, 8]: " << Xi[ 8*nvel +  8] << "\n";
+    // Xi[ 9*nvel +  9] = Xi[ 7*nvel +  7];
+    // // Print() << "Xi[9, 9]: " << Xi[ 9*nvel +  9] << "\n";
+    // Xi[10*nvel + 10] = 2.0*b[10]*T*lambda_a;
+    // Xi[11*nvel + 11] = Xi[10*nvel + 10];
+    // Xi[12*nvel + 12] = Xi[10*nvel + 10];
+    // Xi[13*nvel + 13] = 2.0*b[13]*T*lambda_a;
+    // Xi[14*nvel + 14] = Xi[13*nvel + 13];
+    // Xi[15*nvel + 15] = Xi[13*nvel + 13];
+    // Xi[16*nvel + 16] = 2.0*6.0*T*lambda_a*(1. - cs2_k);
+    // Xi[17*nvel + 17] = 2.0*T*b[17]*lambda_a;
+    // Xi[18*nvel + 18] = 2.0*T*b[18]*lambda_a;
+
+    // // off diagonal parts
+    // Xi[16*nvel +  4] = 6.0*T*lambda_ee*(cs2_k - cs2);
+    // Xi[4*nvel +  16] = Xi[16*nvel +  4];
+
+    // diagonal part
+    Xi[ 4*nvel +  4] = b[4]*T*lambda_a*(5. - 9.*cs2_k);
+    
+    Xi[ 7*nvel +  7] = 2.0*b[5]*T*lambda_a;
+    Xi[ 9*nvel +  9] = 2.0*b[6]*T*lambda_a;
+    Xi[ 5*nvel +  5] = 2.0*b[7]*T*lambda_a;
+    Xi[ 6*nvel +  6] = 2.0*b[8]*T*lambda_a;
+    Xi[ 8*nvel +  8] = 2.0*b[9]*T*lambda_a;
+
+    Xi[10*nvel + 10] = 2.0*b[10]*T*lambda_a;
+    Xi[11*nvel + 11] = Xi[10*nvel + 10];
+    Xi[12*nvel + 12] = Xi[10*nvel + 10];
+    Xi[13*nvel + 13] = 2.0*b[13]*T*lambda_a;
+    Xi[14*nvel + 14] = Xi[13*nvel + 13];
+    Xi[15*nvel + 15] = Xi[13*nvel + 13];
+    Xi[16*nvel + 16] = 2.0*6.0*T*lambda_a*(1. - cs2_k);
+    Xi[17*nvel + 17] = 2.0*T*b[17]*lambda_a;
+    Xi[18*nvel + 18] = 2.0*T*b[18]*lambda_a;
+
+    // off diagonal parts
+    Xi[16*nvel +  4] = 6.0*T*lambda_ee*(cs2_k - cs2);
+    Xi[4*nvel +  16] = Xi[16*nvel +  4];
+  }
 
   return Xi;
 }
@@ -290,7 +333,7 @@ GpuArray<Real,nvel*nvel> noise_covariance(int kx, int ky, int kz) { // TODO: add
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 GpuArray<GpuComplex<Real>,nvel> kspace_white_noise(int kx, int ky, int kz, const Box& domain, RandomEngine const& engine) {
   GpuArray<GpuComplex<Real>,nvel> r = {};
-  for (int i=ncons+1; i<nvel; ++i) {
+  for (int i=ncons; i<nvel; ++i) {
     // symmetry points are purely real
     if (     ((kx == 0) || (kx == domain.length(0) - kx))
           && ((ky == 0) || (ky == domain.length(1) - ky))
@@ -299,8 +342,8 @@ GpuArray<GpuComplex<Real>,nvel> kspace_white_noise(int kx, int ky, int kz, const
       r[i] = { RandomNormal(0., 1., engine), RandomNormal(0., 0., engine) };
     } else {
       // complex Gaussian random variables with zero mean and variance 0.5
-      // r[i] = { RandomNormal(0., std::sqrt(0.5), engine), RandomNormal(0., std::sqrt(0.5), engine) };
-      r[i] = { RandomNormal(0., 1, engine), RandomNormal(0., 0, engine) };
+      r[i] = { RandomNormal(0., std::sqrt(0.5), engine), RandomNormal(0., std::sqrt(0.5), engine) };
+      // r[i] = { RandomNormal(0., 1, engine), RandomNormal(0., 0, engine) };
     }
   }
   return r;
@@ -328,6 +371,7 @@ GpuArray<GpuComplex<Real>,nvel> correlated_noise(int kx, int ky, int kz,
     for (int j=0; j<=i; ++j) {
       xi[i] += C[i*nvel+j]*r[j];
     }
+    // Print() << "xi " << i << " " << xi[i] << "\n";
   }
   return xi;
 }

@@ -60,10 +60,11 @@ inline Vector<std::string> VariableNames(const int numVars) {
 
 inline void WriteOutput(int step,
 			const MultiFab& hydrovs,
-			const Geometry& geom) {
+			const Geometry& geom,
+      std::string plt_name) {
   // set up variable names for output
   const Vector<std::string> var_names = VariableNames(nvel);
-  const std::string& pltfile = amrex::Concatenate("hydro_plt",step,7);
+  const std::string& pltfile = amrex::Concatenate(plt_name,step,7);
   WriteSingleLevelPlotfile(pltfile, hydrovs, var_names, geom, Real(step), step);
 }
 
@@ -83,6 +84,7 @@ void main_driver(const char* argv) {
   // default time stepping parameters
   int nsteps = 100;
   int plot_int = 10;
+  std::string plt_name;
 
   // fft test input
   int reps = 1;
@@ -100,6 +102,7 @@ void main_driver(const char* argv) {
   pp.query("temperature", temperature);
   pp.query("init_cond", init_cond);
   pp.query("droplet_radius", radius);
+  pp.query("ideal", ideal);
   // pp.query("reps", reps);
   Print() << "parameters parsed\n";
   // set up Box and Geomtry
@@ -165,13 +168,19 @@ void main_driver(const char* argv) {
   // Print() << "thermodynamic cs2: " << system_cs2 << "\n";
 
   // Write a plotfile of the initial data if plot_int > 0
-  if (plot_int > 0) {WriteOutput(0, hydrovs, geom);}
+  plt_name = "hydro_plt";
+  if (plot_int > 0) {WriteOutput(0, hydrovs, geom, plt_name);}
   // Print() << "LB initialized\n";
 
   // TIMESTEP
   for (int step=1; step <= nsteps; ++step) {
     LBM_timestep(geom, fold, fnew, hydrovs, noise);
-    if (plot_int > 0 && step%plot_int ==0) {WriteOutput(step, hydrovs, geom);}
+    if (plot_int > 0 && step%plot_int ==0) {
+      plt_name = "hydro_plt";
+      WriteOutput(step, hydrovs, geom, plt_name);
+      plt_name = "xi_plt";
+      WriteOutput(step, noise, geom, plt_name);
+      }
     if (step > 0.9*nsteps){structFact.FortStructure(hydrovs, geom);}
     Print() << "LB step " << step << "\n";
   }

@@ -4,8 +4,8 @@ max_grid_size = 16
 init_cond = 0
 
 # timesteps
-nsteps = 10000
-plot_int = 10000
+nsteps = 1000
+plot_int = 10
 
 # model_params
 kappa = 0.03
