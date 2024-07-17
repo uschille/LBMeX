@@ -102,7 +102,7 @@ void main_driver(const char* argv) {
   pp.query("temperature", temperature);
   pp.query("init_cond", init_cond);
   pp.query("droplet_radius", radius);
-  pp.query("ideal", ideal);
+  
   // pp.query("reps", reps);
   Print() << "parameters parsed\n";
   // set up Box and Geomtry
@@ -181,7 +181,7 @@ void main_driver(const char* argv) {
       plt_name = "xi_plt";
       WriteOutput(step, noise, geom, plt_name);
       }
-    if (step > 0.9*nsteps){structFact.FortStructure(hydrovs, geom);}
+    if (step > 0.1*nsteps){structFact.FortStructure(hydrovs, geom);}
     Print() << "LB step " << step << "\n";
   }
 

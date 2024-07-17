@@ -13,7 +13,6 @@ AMREX_GPU_MANAGED Real Beta = 0.01;
 AMREX_GPU_MANAGED Real temperature = 0.0;
 AMREX_GPU_MANAGED Real rhov = 0.1;
 AMREX_GPU_MANAGED Real rhol = 1.1;
-AMREX_GPU_MANAGED int ideal = 0;
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 Real pressure(Real rho, Real phi);
@@ -25,19 +24,9 @@ Array1D<Real,0,1> chemical_potentials(const Array1D<Real,0,1>& fields,
 
 #include "LBM_fluctuations.H"
 
-Real thermal_cs2(Real rho){
-  Real square_term = (rho - rhol)*(rho - rhov);
-  Real expr1 = Beta*square_term*(rhol + rhov - 6.0*rho);
-  Real expr2 = Beta*(rho - rhol)*(2.0*rho*(-2.0*rho + rhol + rhov) + square_term);
-  Real expr3 = Beta*(rho - rhov)*(2.0*rho*(-2.0*rho + rhol + rhov) + square_term);
-  Real out = -expr1 - expr2 - expr3;
-  return out;
-}
-
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 RealVect gradient(int x, int y, int z, const Array4<Real>& field, int icomp) {
   RealVect gradient = { 0.0, 0.0, 0.0 };
-  const Real system_cs2 = 2.0*Beta*pow(rhol - rhov, 2);
   for (int i=0; i<nvel; i++) {
     int xp = x + c[i][0];
     int yp = y + c[i][1];
@@ -52,7 +41,6 @@ RealVect gradient(int x, int y, int z, const Array4<Real>& field, int icomp) {
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 Real laplacian(int x, int y, int z, const Array4<Real>& field, int icomp) {
   Real laplacian = 0.0;
-  const Real system_cs2 = 2.0*Beta*pow(rhol - rhov, 2);
   for (int i=0; i<nvel; i++) {
     int xp = x + c[i][0];
     int yp = y + c[i][1];
@@ -100,8 +88,6 @@ Array1D<Real,0,nvel> fequilibrium(const Array1D<Real,0,1>& fields,
 			      const Array1D<Real,0,1>& laplacians,
 			      const RealVect& u) {
   Array1D<Real,0,nvel> fEq;
-
-  const Real system_cs2 = Beta*pow(rhol - rhov, 2);
 
   const Real rho = fields(0);
   const RealVect Drho = gradients(0);
