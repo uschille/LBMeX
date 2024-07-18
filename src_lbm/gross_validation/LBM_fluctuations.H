@@ -56,14 +56,16 @@ void cholesky_decomp(GpuArray<Real,nvel*nvel>& A, const int n, const int bstart)
 
 Real fourier_laplace_operator(int kx, int ky, int kz){
   Real out;
-  Real cosx = cos(kx/nx*M_PI);
-  Real cosy = cos(ky/nx*M_PI);
-  Real cosz = cos(kz/nx*M_PI);
+
+  Real cosx = cos((Real)kx/(Real)nx*M_PI);
+  Real cosy = cos((Real)ky/(Real)nx*M_PI);
+  Real cosz = cos((Real)kz/(Real)nx*M_PI);
+  // Print() << "cosx: " << cos((Real)kx/(Real)nx*M_PI) << " cosy: " << cos((Real)ky/(Real)nx*M_PI) << " cosz: " << cos((Real)kz/(Real)nx*M_PI) << "\n";
 
   Real expr1 = cosx + cosy + cosz;
   Real expr2 = cosx*cosy + cosy*cosz + cosx*cosz;
-  out = 2./9.*expr1 + 2./9.*expr2 - 2./3.;
-  return out;
+  out = 2./9.*expr1 + 2./9.*expr2 - 4./3.;
+  return -out/cs2;
 }
 
 Real thermal_cs2(Real rho){
@@ -272,6 +274,7 @@ GpuArray<Real,nvel*nvel> noise_covariance(int kx, int ky, int kz, Real rho) { //
   Real lambda_ee = lambda_r + lambda_r + lambda_r*lambda_r;
 
   const Real k2 = fourier_laplace_operator(kx, ky, kz);
+  // Print() << "kx: " << kx << " ky: " << ky << " kz: " << kz << " k2: " << k2 << "\n";
   // const Real k2 = 0.0;
   // Print() << "kx: " << kx_conv << " ky:" << ky_conv << " kz:" << kz_conv << "\n";
 
