@@ -73,6 +73,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 Real pressure(Real rho) {
 
   // Real p0 = rho*T; // Eq. (40) in Swift et al.
+  // Real p0 = rho*Beta; // Eq. (40) in Swift et al.
   // note that gradient terms are included in fequilibrium
   Real square_term = (rho - rhol)*(rho - rhov);
   Real p0 = Beta*square_term*(2*rho*(2*rho - rhol - rhov) - square_term); // eq 2 and para after in Gross 1010

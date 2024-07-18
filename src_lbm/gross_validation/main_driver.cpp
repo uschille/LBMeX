@@ -180,17 +180,20 @@ void main_driver(const char* argv) {
       WriteOutput(step, hydrovs, geom, plt_name);
       plt_name = "xi_plt";
       WriteOutput(step, noise, geom, plt_name);
+      structFact.WritePlotFile(step, static_cast<Real>(step), geom, "SF_plt");
+      StructFact structFact(ba, dm, var_names, var_scaling);
+      structFact.FortStructure(hydrovs, geom);
       }
-    if (step > 0.1*nsteps){structFact.FortStructure(hydrovs, geom);}
+    structFact.FortStructure(hydrovs, geom);
     Print() << "LB step " << step << "\n";
-  }
+    }
 
   // structFact.WritePlotFile(nsteps, nsteps, geom, "SF_plt");
-  structFact.WritePlotFile(nsteps, static_cast<Real>(nsteps), geom, "SF_plt");
+  // structFact.WritePlotFile(nsteps, static_cast<Real>(nsteps), geom, "SF_plt");
   // Call the timer again and compute the maximum difference between the start time 
   // and stop time over all processors
   Real stop_time = ParallelDescriptor::second() - strt_time;
   ParallelDescriptor::ReduceRealMax(stop_time);
   amrex::Print() << "Run time = " << stop_time << std::endl;
-  
-}
+
+  }
