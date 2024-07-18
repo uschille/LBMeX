@@ -56,8 +56,12 @@ void cholesky_decomp(GpuArray<Real,nvel*nvel>& A, const int n, const int bstart)
 
 Real fourier_laplace_operator(int kx, int ky, int kz){
   Real out;
-  Real expr1 = cos(kx/nx*M_PI) + cos(ky/nx*M_PI) + cos(kz/nx*M_PI);
-  Real expr2 = cos(kx/nx*M_PI)*cos(ky/nx*M_PI) + cos(ky/nx*M_PI)*cos(kz/nx*M_PI) + cos(kx/nx*M_PI)*cos(kz/nx*M_PI);
+  Real cosx = cos(kx/nx*M_PI);
+  Real cosy = cos(ky/nx*M_PI);
+  Real cosz = cos(kz/nx*M_PI);
+
+  Real expr1 = cosx + cosy + cosz;
+  Real expr2 = cosx*cosy + cosy*cosz + cosx*cosz;
   out = 2./9.*expr1 + 2./9.*expr2 - 2./3.;
   return out;
 }
@@ -328,7 +332,30 @@ GpuArray<GpuComplex<Real>,nvel> correlated_noise(int kx, int ky, int kz,
 
   // Cholesky decomposition of noise covariance matrix
   C = noise_covariance(kx,ky,kz,rho);
+
+  // Print() << "Xi diag 4: " << C[ 4*nvel+ 4] << "\n";
+  // Print() << "Xi diag 5: " << C[ 5*nvel+ 5] << "\n";
+  // Print() << "Xi diag 6: " << C[ 6*nvel+ 6] << "\n";
+  // Print() << "Xi diag 7: " << C[ 7*nvel+ 7] << "\n";
+  // Print() << "Xi diag 10: " << C[ 10*nvel+ 10] << "\n";
+  // Print() << "Xi diag 13: " << C[ 13*nvel+ 13] << "\n";
+  // Print() << "Xi diag 16: " << C[ 16*nvel+ 16] << "\n";
+  // Print() << "Xi diag 17: " << C[ 17*nvel+ 17] << "\n";
+  // Print() << "Xi diag 18: " << C[ 18*nvel+ 18] << "\n";
+  // Print() << "Xi off diag 4,16: " << C[ 4*nvel+16] << "\n";
+
   cholesky_decomp(C,nvel,ncons);
+  // Print() << "After decomposition" << "\n";
+  // Print() << "Xi diag 4: " << C[ 4*nvel+ 4] << "\n";
+  // Print() << "Xi diag 5: " << C[ 5*nvel+ 5] << "\n";
+  // Print() << "Xi diag 6: " << C[ 6*nvel+ 6] << "\n";
+  // Print() << "Xi diag 7: " << C[ 7*nvel+ 7] << "\n";
+  // Print() << "Xi diag 10: " << C[ 10*nvel+ 10] << "\n";
+  // Print() << "Xi diag 13: " << C[ 13*nvel+ 13] << "\n";
+  // Print() << "Xi diag 16: " << C[ 16*nvel+ 16] << "\n";
+  // Print() << "Xi diag 17: " << C[ 17*nvel+ 17] << "\n";
+  // Print() << "Xi diag 18: " << C[ 18*nvel+ 18] << "\n";
+  // Print() << "Xi off diag 4,16: " << C[ 4*nvel+16] << "\n";
 
   // need to generate the correct symmetries here? [uschill 07/25/2022]
   // possibly the case if C(k) != C(-k) [uschill 07/27/2022]
