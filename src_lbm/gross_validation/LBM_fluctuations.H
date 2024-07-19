@@ -315,8 +315,8 @@ GpuArray<GpuComplex<Real>,nvel> kspace_white_noise(int kx, int ky, int kz, const
       r[i] = { RandomNormal(0., 1., engine), RandomNormal(0., 0., engine) };
     } else {
       // complex Gaussian random variables with zero mean and variance 0.5
-      // r[i] = { RandomNormal(0., std::sqrt(0.5), engine), RandomNormal(0., std::sqrt(0.5), engine) };
-      r[i] = { RandomNormal(0., 1, engine), RandomNormal(0., 0, engine) };
+      r[i] = { RandomNormal(0., std::sqrt(0.5), engine), RandomNormal(0., std::sqrt(0.5), engine) };
+      // r[i] = { RandomNormal(0., 1, engine), RandomNormal(0., 0, engine) };
     }
   }
   return r;

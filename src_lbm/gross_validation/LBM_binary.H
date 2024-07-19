@@ -4,7 +4,7 @@
 #include "LBM_d3q19.H"
 // #include "rng_functions.H"
 
-AMREX_GPU_MANAGED Real tau_r = 1.0; // What is used in Gross 2010 for all relaxation rates
+AMREX_GPU_MANAGED Real tau_r = 0.78888; // What is used in Gross 2010 for all relaxation rates
 // AMREX_GPU_MANAGED Real tau_p = 1.0;
 
 AMREX_GPU_MANAGED int nx = 16;
@@ -72,11 +72,12 @@ Array1D<Real,0,1> chemical_potentials(const Array1D<Real,0,1>& fields,
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 Real pressure(Real rho) {
 
+  Real p0 = rho*pow(thermal_cs2(rho), 2);
   // Real p0 = rho*T; // Eq. (40) in Swift et al.
   // Real p0 = rho*Beta; // Eq. (40) in Swift et al.
   // note that gradient terms are included in fequilibrium
-  Real square_term = (rho - rhol)*(rho - rhov);
-  Real p0 = Beta*square_term*(2*rho*(2*rho - rhol - rhov) - square_term); // eq 2 and para after in Gross 1010
+  // Real square_term = (rho - rhol)*(rho - rhov);
+  // Real p0 = Beta*square_term*(2*rho*(2*rho - rhol - rhov) - square_term); // eq 2 and para after in Gross 1010
   // Print() << "Bulk pressure: " << p0 << "\n";
 
   return p0;
