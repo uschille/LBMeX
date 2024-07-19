@@ -274,7 +274,7 @@ GpuArray<Real,nvel*nvel> noise_covariance(int kx, int ky, int kz, Real rho) { //
 
   // const Real system_cs2 = 2.*rho0*Beta*pow(rhol - rhov, 2);
   const Real system_cs2 = thermal_cs2(rho);
-  const Real cs2_k = system_cs2 + rho0*kappa*k2;
+  const Real cs2_k = system_cs2 + rho*kappa*k2;
   // Print() << "k dependent cs2: " << cs2_k << "\n";
  
  // Noise covariance of the modes in k-space
