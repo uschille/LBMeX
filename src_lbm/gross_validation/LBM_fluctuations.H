@@ -60,9 +60,9 @@ Real fourier_laplace_operator(int kx, int ky, int kz){
   Real kxr = (Real)kx; Real kyr = (Real)ky; Real kzr = (Real)kz; Real nxr = (Real)nx;
   Real dpi = 2.*M_PI;
 
-  if (kx <= nx){kxr = kxr/nxr;}else{kxr = (kxr - nxr)/nxr;}
-  if (ky <= nx){kyr = kyr/nxr;}else{kyr = (kyr - nxr)/nxr;}
-  if (kz <= nx){kzr = kzr/nxr;}else{kzr = (kzr - nxr)/nxr;}
+  if (kx < nx/2){kxr = kxr/nxr;}else{kxr = (kxr - nxr)/nxr;}
+  if (ky < nx/2){kyr = kyr/nxr;}else{kyr = (kyr - nxr)/nxr;}
+  if (kz < nx/2){kzr = kzr/nxr;}else{kzr = (kzr - nxr)/nxr;}
 
   Real cosx = cos(kxr*dpi);
   Real cosy = cos(kyr*dpi);
@@ -73,7 +73,13 @@ Real fourier_laplace_operator(int kx, int ky, int kz){
   Real expr2 = cosx*cosy + cosy*cosz + cosx*cosz;
   out = 2./9.*expr1 + 2./9.*expr2 - 4./3.;
   out /= -cs2;
-  // Print() << "kx:" << kx << " ky:" << ky << " kz:" << kz << " cs2k:" << out << "\n";
+
+  // Print() << "nx: " << nxr << "\n";
+  // Print() << "kx: " << kx << " kxr:" << kxr << "\n";
+  // Print() << "ky: " << ky << " kyr:" << kyr << "\n";
+  // Print() << "kz: " << kz << " kzr:" << kzr << "\n";
+  // Print() << "cs2k: " << out << "\n";
+  // Print() << "kxr:" << kxr << " kyr:" << kyr << " kzr:" << kzr << " cs2k:" << out << "\n";
   return out;
 }
 
