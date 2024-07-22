@@ -302,6 +302,14 @@ GpuArray<Real,nvel*nvel> noise_covariance(int kx, int ky, int kz, Real rho) { //
   Xi[ 7*nvel+ 7] = -1./3.*rho0*temperature*lambda_s*(lambda_s+2.);
   Xi[ 8*nvel+ 8] = -1./3.*rho0*temperature*lambda_s*(lambda_s+2.);
   Xi[ 9*nvel+ 9] = -1./3.*rho0*temperature*lambda_s*(lambda_s+2.);
+  // int idx = 4;
+  // Xi[ idx*nvel+ idx] = -rho0*temperature*(5.-9.*cs2)*lambda_b*(lambda_b+2.); idx++;
+  // Xi[ idx*nvel+ idx] = -1./3.*rho0*temperature*lambda_s*(lambda_s+2.);   idx++;
+  // Xi[ idx*nvel+ idx] = -1./3.*rho0*temperature*lambda_s*(lambda_s+2.);   idx++;
+  // Xi[ idx*nvel+ idx] = -4.*rho0*temperature*lambda_s*(lambda_s+2.);      idx++;
+  // Xi[ idx*nvel+ idx] = -4./3.*rho0*temperature*lambda_s*(lambda_s+2.);   idx++;
+  // Xi[ idx*nvel+ idx] = -1./3.*rho0*temperature*lambda_s*(lambda_s+2.);   idx++;
+
   Xi[10*nvel+10] = -2.*rho0*temperature*lambda_o*(lambda_o+2.);
   Xi[11*nvel+11] = -2.*rho0*temperature*lambda_o*(lambda_o+2.);
   Xi[12*nvel+12] = -2.*rho0*temperature*lambda_o*(lambda_o+2.);
