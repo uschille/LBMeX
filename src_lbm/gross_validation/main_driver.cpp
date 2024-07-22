@@ -4,6 +4,7 @@
 #include <AMReX_Print.H>
 #include <AMReX_ParmParse.H>
 #include <AMReX_PlotFileUtil.H>
+// #include <AMReX_AmrCore.H>
 #include "StructFact.H"
 
 using namespace amrex;
@@ -183,6 +184,7 @@ void main_driver(const char* argv) {
       structFact.WritePlotFile(step, static_cast<Real>(step), geom, "SF_plt");
       StructFact structFact(ba, dm, var_names, var_scaling);
       structFact.FortStructure(hydrovs, geom);
+      // WriteCheckpointFile()
       }
     structFact.FortStructure(hydrovs, geom);
     Print() << "LB step " << step << "\n";

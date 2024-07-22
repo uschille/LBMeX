@@ -55,17 +55,26 @@ void cholesky_decomp(GpuArray<Real,nvel*nvel>& A, const int n, const int bstart)
 }
 
 Real fourier_laplace_operator(int kx, int ky, int kz){
+  // https://www.uni-muenster.de/Physik.TP/archive/fileadmin/lehre/NumMethoden/SoSe10/Skript/Ordening.pdf
   Real out;
+  Real kxr = (Real)kx; Real kyr = (Real)ky; Real kzr = (Real)kz; Real nxr = (Real)nx;
+  Real dpi = 2.*M_PI;
 
-  Real cosx = cos((Real)kx/(Real)nx*M_PI);
-  Real cosy = cos((Real)ky/(Real)nx*M_PI);
-  Real cosz = cos((Real)kz/(Real)nx*M_PI);
+  if (kx <= nx){kxr = kxr/nxr;}else{kxr = (kxr - nxr)/nxr;}
+  if (ky <= nx){kyr = kyr/nxr;}else{kyr = (kyr - nxr)/nxr;}
+  if (kz <= nx){kzr = kzr/nxr;}else{kzr = (kzr - nxr)/nxr;}
+
+  Real cosx = cos(kxr*dpi);
+  Real cosy = cos(kyr*dpi);
+  Real cosz = cos(kzr*dpi);
   // Print() << "cosx: " << cos((Real)kx/(Real)nx*M_PI) << " cosy: " << cos((Real)ky/(Real)nx*M_PI) << " cosz: " << cos((Real)kz/(Real)nx*M_PI) << "\n";
 
   Real expr1 = cosx + cosy + cosz;
   Real expr2 = cosx*cosy + cosy*cosz + cosx*cosz;
   out = 2./9.*expr1 + 2./9.*expr2 - 4./3.;
-  return -out/cs2;
+  out /= -cs2;
+  // Print() << "kx:" << kx << " ky:" << ky << " kz:" << kz << " cs2k:" << out << "\n";
+  return out;
 }
 
 Real thermal_cs2(Real rho){

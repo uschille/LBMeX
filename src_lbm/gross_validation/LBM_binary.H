@@ -71,16 +71,9 @@ Array1D<Real,0,1> chemical_potentials(const Array1D<Real,0,1>& fields,
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 Real pressure(Real rho) {
-
-  // Real p0 = 0.0;
-  Real p0 = rho*cs2;
-  // p0 = rho*thermal_cs2(rho);
-  // Real square_term = (rho - rhol)*(rho - rhov);
-  // p0 += Beta*square_term*(2*rho*(2*rho - rhol - rhov) - square_term); // eq 2 and para after in Gross 1010
-  // p0 += (rho - 1.)*thermal_cs2(rho);
-  // p0 += (rho - 1.)*cs2;
-  // Print() << "Bulk pressure: " << p0 << "\n";
-
+  Real p0 = 0.0;
+  Real square_term = (rho - rhol)*(rho - rhov);
+  p0 += Beta*(square_term*(2*rho*(2*rho - rhol - rhov) - square_term)); // eq 2 and para after in Gross 1010
   return p0;
 }
 

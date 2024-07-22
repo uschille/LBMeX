@@ -18,6 +18,10 @@ include $(AMREX_HOME)/Tools/GNUMake/Make.defs
 
 include ./Make.package
 
+#include $(FHDEX_HOME)/src_deankow/multilevel/Make.package
+#VPATH_LOCATIONS   += $(FHDEX_HOME)/src_deankow/
+#INCLUDE_LOCATIONS += $(FHDEX_HOME)/src_deankow/
+
 include $(FHDEX_HOME)/src_common/Make.package
 VPATH_LOCATIONS   += $(FHDEX_HOME)/src_common/
 INCLUDE_LOCATIONS += $(FHDEX_HOME)/src_common/
