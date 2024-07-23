@@ -474,26 +474,22 @@ inline void compute_ifft(const Geometry& geom, MultiFab& realspace_noise,
 
       // Box for the complex conjugate spectral field (x-size is halved plus one)
       IntVect fft_size = domain.length();
-      IntVect fft_adjust = { fft_size[0]/2 - 1, 0, 0 };
-      Box fft_box = Box(IntVect(0), fft_size-fft_adjust-IntVect(1));
+      IntVect spectral_bx_size = fft_size;
+      spectral_bx_size[0] = fft_size[0]/2 + 1;
+
+      Box spectral_box = Box(IntVect(0), spectral_bx_size-IntVect(1));
 
       // container to store the complex k-space noise for inverse FFT
       Vector<std::unique_ptr<BaseFab<GpuComplex<Real>>>> spectral_field;
 
       // is this a memory leak? [uschill 07/24/2022]
-      spectral_field.emplace_back(new BaseFab<GpuComplex<Real>>(fft_box,1,The_Device_Arena()));
+      spectral_field.emplace_back(new BaseFab<GpuComplex<Real>>(spectral_box,1,The_Device_Arena()));
 
       // for CUDA builds we only need to build the plan once; track whether we did
       bool built_plan = false;
       Vector<FFTplan> fftw_plans;
-      FFTplan plan;
 
       for (int k=0; k<nvel; ++k) {
-
-        // first copy the k-th conponent of the noise to one grid
-        // may be faster to generate the noise here? [uschill 07/27/2022]
-        kspace_noise_real_onegrid.ParallelCopy(kspace_noise_real,k,0,1);
-        kspace_noise_imag_onegrid.ParallelCopy(kspace_noise_imag,k,0,1);
 
         // create the FFT plans
         if (!built_plan) {
@@ -506,6 +502,7 @@ inline void compute_ifft(const Geometry& geom, MultiFab& realspace_noise,
                 << cufftErrorToString(result) << "\n";
             }
   #else
+            FFTplan plan;
             plan = fftw_plan_dft_c2r_3d(fft_size[2], fft_size[1], fft_size[0],
                 reinterpret_cast<FFTcomplex*>
                 (spectral_field.back()->dataPtr()),
@@ -517,6 +514,11 @@ inline void compute_ifft(const Geometry& geom, MultiFab& realspace_noise,
           built_plan = true;
         }
 
+        // first copy the k-th conponent of the noise to one grid
+        // may be faster to generate the noise here? [uschill 07/27/2022]
+        kspace_noise_real_onegrid.ParallelCopy(kspace_noise_real,k,0,1);
+        kspace_noise_imag_onegrid.ParallelCopy(kspace_noise_imag,k,0,1);
+
         ParallelDescriptor::Barrier(); // is this needed? [uschill 07/25/2022]
 
         // copy the complex noise to the spectral field for complex-to-real FFT
@@ -525,7 +527,7 @@ inline void compute_ifft(const Geometry& geom, MultiFab& realspace_noise,
           Array4<Real> const& xi_real = kspace_noise_real_onegrid.array(mfi);
           Array4<Real> const& xi_imag = kspace_noise_imag_onegrid.array(mfi);
           Array4<GpuComplex<Real>> const& xi = (*spectral_field[0]).array();
-          ParallelFor(fft_box, [=] AMREX_GPU_DEVICE(int kx, int ky, int kz) {
+          ParallelFor(spectral_box, [=] AMREX_GPU_DEVICE(int kx, int ky, int kz) {
             //if (kx <= domain.length(0)/2)
             {
               // regular points
