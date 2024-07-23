@@ -96,7 +96,7 @@ void main_driver(const char* argv) {
   pp.query("kappa", kappa);
   pp.query("rhov", rhov);
   pp.query("rhol", rhol);
-  pp.query("B", Beta);
+  pp.query("B", beta);
   pp.query("temperature", temperature);
   pp.query("init_cond", init_cond);
   pp.query("droplet_radius", radius);

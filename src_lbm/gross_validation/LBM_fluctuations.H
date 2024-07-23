@@ -54,6 +54,7 @@ void cholesky_decomp(GpuArray<Real,nvel*nvel>& A, const int n, const int bstart)
   }
 }
 
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 Real fourier_laplace_operator(int ikx, int iky, int ikz){
   // https://www.uni-muenster.de/Physik.TP/archive/fileadmin/lehre/NumMethoden/SoSe10/Skript/Ordening.pdf
   Real k2;
@@ -73,13 +74,14 @@ Real fourier_laplace_operator(int ikx, int iky, int ikz){
   return k2;
 }
 
-Real thermal_cs2(Real rho){
-  Real square_term = (rho - rhol)*(rho - rhov);
-  Real expr1 = Beta*square_term*(rhol + rhov - 6.0*rho);
-  Real expr2 = Beta*(rho - rhol)*(2.0*rho*(-2.0*rho + rhol + rhov) + square_term);
-  Real expr3 = Beta*(rho - rhov)*(2.0*rho*(-2.0*rho + rhol + rhov) + square_term);
-  Real out = -expr1 - expr2 - expr3;
-  return out;
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+Real soundspeed_squared(Real rho) {
+  const Real dl = rho - rhol;
+  const Real dv = rho - rhov;
+
+  Real cs2 =  2.*beta*rho*(dl*dl + 4*dl*dv + dv*dv);
+
+  return cs2;
 }
 
 #if 0
@@ -257,7 +259,7 @@ GpuArray<Real,nvel*nvel> noise_covariance(int kx, int ky, int kz, Real rho) { //
 
   const Real rho0 = rhol;
   const Real k2 = fourier_laplace_operator(kx, ky, kz);
-  const Real cs2 = thermal_cs2(rho0) + rho0*kappa*k2;
+  const Real cs2 = soundspeed_squared(rho0) + rho0*kappa*k2;
 
   // Noise covariance of the modes in k-space
   GpuArray<Real,nvel*nvel> Xi = {};
