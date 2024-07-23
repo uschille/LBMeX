@@ -283,12 +283,10 @@ inline void LBM_timestep(const Geometry& geom,
 			 MultiFab& fnew,
 			 MultiFab& hydrovs, MultiFab& noise) {
   
-  if (temperature > 0.0) {generate_fluctuations(geom, hydrovs, noise);}
-  else {noise.setVal(0.);}
-  // Print() << "Noise generated for moments\n";
+  generate_fluctuations(geom, noise);
   collide_stream(geom, fold, fnew, hydrovs, noise);
-  // Print() << "Collide stream completed\n";
   hydrovars(fold, hydrovs);
+
 }
 
 // homogeneous mixture of C1 and C2 with random concentration fluctuations
