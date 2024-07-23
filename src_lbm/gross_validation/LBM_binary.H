@@ -82,14 +82,14 @@ Array1D<Real,0,nvel> fequilibrium(const Array1D<Real,0,1>& fields,
   Real fi, sumf = 0.0;
   
   for (int i=1; i<nvel; ++i) {
-    fi = w[i]/sysem_cs2 * pbulk;
-    fi += w[i]/sysem_cs2 * rho * (u[0]*c[i][0]+u[1]*c[i][1]+u[2]*c[i][2]);
-    fi += w[i]/(2*sysem_cs2**4)*((ruu[0][0]*c[i][0]+2.*ruu[0][1]*c[i][1])*c[i][0]
+    fi = w[i]/cs2 * pbulk;
+    fi += w[i]/cs2 * rho * (u[0]*c[i][0]+u[1]*c[i][1]+u[2]*c[i][2]);
+    fi += w[i]/(2*cs2**4)*((ruu[0][0]*c[i][0]+2.*ruu[0][1]*c[i][1])*c[i][0]
 		     +(ruu[1][1]*c[i][1]+2.*ruu[1][2]*c[i][2])*c[i][1]
 		     +(ruu[2][2]*c[i][2]+2.*ruu[2][0]*c[i][0])*c[i][2]);
-    fi -= w[i]/(2*sysem_cs2**2)*(ruu[0][0]+ruu[1][1]+ruu[2][2]);
+    fi -= w[i]/(2*cs2**2)*(ruu[0][0]+ruu[1][1]+ruu[2][2]);
     // gradient terms
-    fi -= w[i]/(sysem_cs2**2)*(kappa*rho*D2rho);
+    fi -= w[i]/(cs2**2)*(kappa*rho*D2rho);
     fi += 3.*(wg[i][0][0]*G[0][0]+wg[i][1][1]*G[1][1]+wg[i][2][2]*G[2][2]
 	     +wg[i][0][1]*G[0][1]+wg[i][1][2]*G[1][2]+wg[i][2][0]*G[2][0]);
     fEq(i) = fi;
@@ -114,12 +114,6 @@ Array1D<Real,0,nvel> fequilibrium_moments(const Array1D<Real,0,1>& fields,
 
   const Real D2rho = laplacians(0);
   const Real pbulk = pressure(rho);
-
-  // Print() << "drho/dx: " << Drho[0] << "\n";
-  // Print() << "drho/dy: " << Drho[1] << "\n";
-  // Print() << "drho/dz: " << Drho[2] << "\n";
-
-  // Print() << "d2rho/dx: " << D2rho << "\n";
 
   Real G[3][3], traceG=0.; // Eq. (39) in Swift et al.
   G[0][0] = kappa*Drho[0]*Drho[0]; traceG  = G[0][0];
@@ -221,8 +215,7 @@ void collide_stream(int x, int y, int z,
 		    const Array4<Real>& fOld,
 		    const Array4<Real>& fNew,
 		    const Array4<Real>& h,
-        const Array4<Real>& noise,
-		    RandomEngine const& rng) {
+        const Array4<Real>& noise) {
   collide(x, y, z, fOld, h, noise); // collide populations on current site
   // Print() << "Collision step complete\n";
   stream_push(x, y, z, fOld, fNew); // push populations to neighbors
@@ -235,20 +228,17 @@ inline void collide_stream(const Geometry& geom,
 			   MultiFab& fnew,
 			   MultiFab& hydrovs, MultiFab& noise) {
   const int halo = 1; // need to push from first halo layer into domain
-  // Print() << "Entered collide stream function\n";
   fold.FillBoundary(geom.periodicity());
   noise.FillBoundary(geom.periodicity());
   hydrovs.FillBoundary(geom.periodicity());
-  // Print() << "Periodic domain boundaries filled\n";
   for (MFIter mfi(fold); mfi.isValid(); ++mfi) {
     const Array4<Real>& fOld = fold.array(mfi);
     const Array4<Real>& fNew = fnew.array(mfi);
     const Array4<Real>& h = hydrovs.array(mfi);
     const Array4<Real>& xi = noise.array(mfi);
     const Box& valid_box = mfi.growntilebox(halo);
-    ParallelForRNG(valid_box, [=] AMREX_GPU_DEVICE(int x, int y, int z, RandomEngine const& engine) {
-      // Print() << x << y << z << "\n";
-      collide_stream(x, y, z, fOld, fNew, h, xi, engine);
+    ParallelFor(valid_box, [=] AMREX_GPU_DEVICE(int x, int y, int z) {
+      collide_stream(x, y, z, fOld, fNew, h, xi);
     });
   }
   MultiFab::Swap(fold, fnew, 0, 0, nvel, 0);
@@ -292,15 +282,12 @@ inline void LBM_timestep(const Geometry& geom,
 // homogeneous mixture of C1 and C2 with random concentration fluctuations
 inline void LBM_init_liquid(MultiFab& mf,
 			     MultiFab& hydrovs) {
-  // const Real C1 = 0.5*rhol + 0.5*rhov;
-  const Real C1 = rhol;
   for (MFIter mfi(mf); mfi.isValid(); ++mfi) {
     const Box& valid_box = mfi.validbox();
     const Array4<Real>& f = mf.array(mfi);
     ParallelForRNG(valid_box, [=] AMREX_GPU_DEVICE(int x, int y, int z, RandomEngine const& engine) {
-      const Real rho = C1;
       for (int i=0; i<nvel; i++) {
-        f(x,y,z,i) = w[i]*rho;
+        f(x,y,z,i) = w[i]*rhol;
       }
     });
   }
