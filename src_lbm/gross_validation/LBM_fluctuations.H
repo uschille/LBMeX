@@ -55,13 +55,14 @@ void cholesky_decomp(GpuArray<Real,nvel*nvel>& A, const int n, const int bstart)
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-Real fourier_laplace_operator(int ikx, int iky, int ikz){
-  // https://www.uni-muenster.de/Physik.TP/archive/fileadmin/lehre/NumMethoden/SoSe10/Skript/Ordening.pdf
+Real fourier_laplace_operator(int ikx, int iky, int ikz) {
   Real k2;
 
-  Real kx = (ikx < nx/2) ? 2.*M_PI/nx*ikx : 2.*M_PI/nx*(ikx-nx);
-  Real ky = (iky < nx/2) ? 2.*M_PI/nx*ikx : 2.*M_PI/nx*(ikx-nx);
-  Real kz = (ikz < nx/2) ? 2.*M_PI/nx*ikx : 2.*M_PI/nx*(ikx-nx);
+  // FFTW convention for ordering of wave vectors
+  IntVect n(nx,nx,nx);
+  Real kx = (ikx < (n[0]+1)/2) ? 2.*M_PI/n[0]*ikx : 2.*M_PI/n[0]*(ikx-n[0]);
+  Real ky = (iky < (n[1]+1)/2) ? 2.*M_PI/n[1]*iky : 2.*M_PI/n[1]*(iky-n[1]);
+  Real kz = (ikz < (n[2]+1)/2) ? 2.*M_PI/n[2]*ikz : 2.*M_PI/n[2]*(ikz-n[2]);
 
   Real cosx = cos(kx);
   Real cosy = cos(ky);
