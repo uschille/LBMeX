@@ -257,31 +257,32 @@ GpuArray<Real,nvel*nvel> noise_covariance(int kx, int ky, int kz) { // TODO: add
   const Real lambda_o = lambda_s;
   const Real lambda_e = lambda_s;
 
-  const Real rho0 = rhol;
   const Real k2 = fourier_laplace_operator(kx, ky, kz);
+
+  const Real rho0 = rhol;
   const Real cs2 = soundspeed_squared(rho0) + rho0*kappa*k2;
 
   // Noise covariance of the modes in k-space
   GpuArray<Real,nvel*nvel> Xi = {};
   Xi.fill(0);
 
-  Xi[ 4*nvel+ 4] = -rho0*temperature*(5.-9.*cs2)*lambda_b*(lambda_b+2.);
-  Xi[ 5*nvel+ 5] = -4.*rho0*temperature*lambda_s*(lambda_s+2.);
-  Xi[ 6*nvel+ 6] = -4./3.*rho0*temperature*lambda_s*(lambda_s+2.);
-  Xi[ 7*nvel+ 7] = -1./3.*rho0*temperature*lambda_s*(lambda_s+2.);
-  Xi[ 8*nvel+ 8] = -1./3.*rho0*temperature*lambda_s*(lambda_s+2.);
-  Xi[ 9*nvel+ 9] = -1./3.*rho0*temperature*lambda_s*(lambda_s+2.);
-  Xi[10*nvel+10] = -2.*rho0*temperature*lambda_o*(lambda_o+2.);
-  Xi[11*nvel+11] = -2.*rho0*temperature*lambda_o*(lambda_o+2.);
-  Xi[12*nvel+12] = -2.*rho0*temperature*lambda_o*(lambda_o+2.);
-  Xi[13*nvel+13] = -2./3.*rho0*temperature*lambda_o*(lambda_o+2.);
-  Xi[14*nvel+14] = -2./3.*rho0*temperature*lambda_o*(lambda_o+2.);
-  Xi[15*nvel+15] = -2./3.*rho0*temperature*lambda_o*(lambda_o+2.);
-  Xi[16*nvel+16] = -9.*rho0*temperature*(1-cs2)*lambda_e*(lambda_e+2.);
-  Xi[17*nvel+17] = -4.*rho0*temperature*lambda_e*(lambda_e+2.);
-  Xi[18*nvel+18] = -4./3.*rho0*temperature*lambda_e*(lambda_e+2.);
+  Xi[ 4*nvel+ 4] = -rho0*temperature*(5.-9.*cs2)*lambda_b*(lambda_b-2.);
+  Xi[ 5*nvel+ 5] = -4.*rho0*temperature*lambda_s*(lambda_s-2.);
+  Xi[ 6*nvel+ 6] = -4./3.*rho0*temperature*lambda_s*(lambda_s-2.);
+  Xi[ 7*nvel+ 7] = -1./3.*rho0*temperature*lambda_s*(lambda_s-2.);
+  Xi[ 8*nvel+ 8] = -1./3.*rho0*temperature*lambda_s*(lambda_s-2.);
+  Xi[ 9*nvel+ 9] = -1./3.*rho0*temperature*lambda_s*(lambda_s-2.);
+  Xi[10*nvel+10] = -2.*rho0*temperature*lambda_o*(lambda_o-2.);
+  Xi[11*nvel+11] = -2.*rho0*temperature*lambda_o*(lambda_o-2.);
+  Xi[12*nvel+12] = -2.*rho0*temperature*lambda_o*(lambda_o-2.);
+  Xi[13*nvel+13] = -2./3.*rho0*temperature*lambda_o*(lambda_o-2.);
+  Xi[14*nvel+14] = -2./3.*rho0*temperature*lambda_o*(lambda_o-2.);
+  Xi[15*nvel+15] = -2./3.*rho0*temperature*lambda_o*(lambda_o-2.);
+  Xi[16*nvel+16] = -9.*rho0*temperature*(1-cs2)*lambda_e*(lambda_e-2.);
+  Xi[17*nvel+17] = -4.*rho0*temperature*lambda_e*(lambda_e-2.);
+  Xi[18*nvel+18] = -4./3.*rho0*temperature*lambda_e*(lambda_e-2.);
 
-  Xi[ 4*nvel+16] = -3.*rho0*temperature*(3.*cs2-1.)*(lambda_b*lambda_e+lambda_b+lambda_e);
+  Xi[ 4*nvel+16] = -3.*rho0*temperature*(3.*cs2-1.)*(lambda_b*lambda_e-lambda_b-lambda_e);
   Xi[16*nvel+ 4] = Xi[ 4*nvel+16];
 
   return Xi;
