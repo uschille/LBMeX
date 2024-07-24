@@ -307,10 +307,15 @@ void thermalize_moments(Array1D<Real,0,nvel>& mf,
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 void thermalize_moments(int x, int y, int z,
       Array1D<Real,0,nvel>& mf, Array1D<Real,0,nvel>& mg,
-      Array1D<Real,0,ndof>& noise) {
-  for (int i=4; i<nvel; ++i) {
-    mf(i) += noise(i);
-    mg(i) += noise(nvel+i);
+      const Array4<Real>& noise) {
+  // diffusive moments 1,2,3 in noise at 5,6,7
+  for (int i=1; i<ncons; ++i) {
+    mg(i) += (1. - 0.5/tau_p) * noise(x,y,z,ncons+i);
+  }
+  // nonconserved moments 4..18 in noise at 8..22 (f) and 23..37 (g)
+  for (int i=ncons; i<nvel; ++i) {
+    mf(i) += (1. - 0.5/tau_r) * noise(x,y,z,ncons+i);
+    mg(i) += (1. - 0.5/tau_p) * noise(x,y,z,nvel+i);
   }
 }
 
@@ -321,15 +326,13 @@ void collide(int x, int y, int z,
 	     const Array4<Real>& h,
        const Array4<Real>& noise) {
   Array1D<Real,0,nvel> mf, mg;
-  Array1D<Real,0,ndof> xi;
-
-  for (int i=0; i<nvel; ++i) xi(i) = noise(x,y,z,i);
 
   mf = moments(x,y,z,f);
   mg = moments(x,y,z,g);
 
   relax_moments(x,y,z,mf,mg,h);
-  thermalize_moments(x,y,z,mf,mg,xi);
+
+  thermalize_moments(x,y,z,mf,mg,noise);
 
   populations(x,y,z,f,mf);
   populations(x,y,z,g,mg);
@@ -370,6 +373,7 @@ inline void collide_stream(const Geometry& geom,
   const int halo = 1; // need to push from first halo layer into domain
   fold.FillBoundary(geom.periodicity());
   gold.FillBoundary(geom.periodicity());
+  noise.FillBoundary(geom.periodicity());
   hydrovs.FillBoundary(geom.periodicity());
   for (MFIter mfi(fold); mfi.isValid(); ++mfi) {
     const Array4<Real>& fOld = fold.array(mfi);
@@ -396,12 +400,13 @@ void hydrovars(int x, int y, int z,
   const Array1D<Real,0,nvel> mg = moments(x,y,z,g);
   h(x,y,z,0) = mf(0);
   h(x,y,z,1) = mg(0);
-  for (int i=1; i<nvel; ++i) {
-    h(x,y,z,i+1) = mf(i);
-    h(x,y,z,nvel+i) = mg(i);
-  }
-  for (int i=1; i<4; ++i) {
+  for (int i=1; i<ncons; ++i) {
     h(x,y,z,i+1) = mf(i)/mf(0);
+    h(x,y,z,i+ncons) = mg(i);
+  }
+  for (int i=ncons; i<nvel; ++i) {
+    h(x,y,z,i+ncons) = mf(i);
+    h(x,y,z,i+nvel) = mg(i);
   }
 }
 
