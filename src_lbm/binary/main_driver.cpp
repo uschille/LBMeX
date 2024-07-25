@@ -93,13 +93,20 @@ void main_driver(const char* argv) {
 
   // input parameters
   ParmParse pp;
+  // box parameters
   pp.query("nx", nx);
   pp.query("max_grid_size", max_grid_size);
+
+  // plot parameters
   pp.query("nsteps", nsteps);
   pp.query("plot_int", plot_int);
+
+  // model parameters
   pp.query("kappa", kappa);
-  pp.query("lambda", lambda);
-  pp.query("T", T);
+  // pp.query("lambda", lambda);
+  // pp.query("T", T);
+  pp.query("A", A);
+  pp.query("B", B);
   pp.query("temperature", temperature);
 
   // set up Box and Geomtry

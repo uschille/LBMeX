@@ -3,16 +3,22 @@
 
 #include "LBM_d3q19.H"
 
+// relaxation parameters
 AMREX_GPU_MANAGED Real tau_r = 0.7886751345948129; // tau=0.5*(1.+1./sqrt(3.)) minimizes spurious currents according to Swift et al.
 AMREX_GPU_MANAGED Real tau_p = 1.0;
 
-AMREX_GPU_MANAGED Real kappa = 0.0;
+// box parameters
+AMREX_GPU_MANAGED int nx = 16;
 
-AMREX_GPU_MANAGED Real lambda = 1.1;
-AMREX_GPU_MANAGED Real T = 0.6;
-
+// thermodynamic model
+AMREX_GPU_MANAGED Real kappa = 0.03;
 AMREX_GPU_MANAGED Real Gamma = 1.0;
+AMREX_GPU_MANAGED Real A = 0.01;
+AMREX_GPU_MANAGED Real B = 0.05;
+// AMREX_GPU_MANAGED Real lambda = 1.1; //swift model
+// AMREX_GPU_MANAGED Real T = 0.6; // swift model
 
+// system temperature for fluctations
 AMREX_GPU_MANAGED Real temperature = 0.0;
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
@@ -61,24 +67,24 @@ Array1D<Real,0,2> chemical_potentials(const Array1D<Real,0,2>& fields,
   const Real D2phi = laplacians(1);
 
   Array1D<Real,0,2> mu = { 0.0, 0.0 } ;
-#if 0
-  /* mu_rho is not needed for the calculations.
-     The following expression has not been tested. */
-  mu(0) = lambda/4.*(1.+phi2/rho2) + T/2*log((rho2-phi2)/4) - kappa*D2rho;
-#endif
 
-  mu(1) = // Eq. (38) in Swift et al.
-    - lambda/2.*phi/rho + T/2*log((rho+phi)/(rho-phi)) - kappa*D2phi;
+  #if 0
+    /* mu_rho is not needed for the calculations.
+      The following expression has not been tested. */
+    // mu(0) = lambda/4.*(1.+phi2/rho2) + T/2*log((rho2-phi2)/4) - kappa*D2rho; // Message above is for swift model not LG model
+    mu(0) = rho*(A + B*pow(rho, 2)) - kappa*D2rho; 
+  #endif
+    mu(1) = - kappa*D2phi;
+  // mu(1) = - lambda/2.*phi/rho + T/2*log((rho+phi)/(rho-phi)) - kappa*D2phi; // Eq. (38) in Swift et al.
 
   return mu;
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 Real pressure(Real rho, Real phi) {
-
-  Real p0 = rho*T; // Eq. (40) in Swift et al.
+  Real p0 = pow(phi, 2)*(-2.*A -B*pow(phi, 2))/4.;
+  // Real p0 = rho*T; // Eq. (40) in Swift et al.
   // note that gradient terms are included in fequilibrium
-
   return p0;
 }
 
