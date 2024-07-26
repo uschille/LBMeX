@@ -380,7 +380,8 @@ GpuArray<GpuComplex<Real>,ndof> correlated_noise(int kx, int ky, int kz,
 
   // Cholesky decomposition of noise covariance matrix
   C = noise_covariance(kx,ky,kz,h);
-  cholesky_decomp(C,ndof,ncons+1);
+  for(int i = 0; i<ndof;i++){C[i*ndof + i] = sqrt(C[i*ndof + i]);}
+  // cholesky_decomp(C,ndof,ncons+1);
 
   // need to generate the correct symmetries here? [uschill 07/25/2022]
   // possibly the case if C(k) != C(-k) [uschill 07/27/2022]
