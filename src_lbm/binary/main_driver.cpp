@@ -69,10 +69,11 @@ inline Vector<std::string> VariableNames(const int numVars) {
 
 inline void WriteOutput(int step,
 			const MultiFab& hydrovs,
-			const Geometry& geom) {
+			const Geometry& geom,
+      const std::string pltname) {
   // set up variable names for output
   const Vector<std::string> var_names = VariableNames(2*nvel);
-  const std::string& pltfile = amrex::Concatenate("plt",step,5);
+  const std::string& pltfile = amrex::Concatenate(pltname,step,7);
   WriteSingleLevelPlotfile(pltfile, hydrovs, var_names, geom, Real(step), step);
 }
 
@@ -96,6 +97,7 @@ void main_driver(const char* argv) {
   // box parameters
   pp.query("nx", nx);
   pp.query("max_grid_size", max_grid_size);
+  pp.query("init_cond", ic);
 
   // plot parameters
   pp.query("nsteps", nsteps);
@@ -103,11 +105,11 @@ void main_driver(const char* argv) {
 
   // model parameters
   pp.query("kappa", kappa);
-  // pp.query("lambda", lambda);
-  // pp.query("T", T);
-  pp.query("A", A);
-  pp.query("B", B);
+  pp.query("lambda", lambda);
+  pp.query("T", T);
   pp.query("temperature", temperature);
+  pp.query("gamma", Gamma);
+  pp.query("use_p", use_p);
 
   // set up Box and Geomtry
   IntVect dom_lo(0, 0, 0);
@@ -147,9 +149,19 @@ void main_driver(const char* argv) {
   StructFact structFact(ba, dm, var_names, var_scaling);
 
   // INITIALIZE
-  LBM_init_mixture(fold, gold, hydrovs);
+  switch(ic){
+    case 0:
+      LBM_init_mixture(fold, gold, hydrovs);
+      break;
+    case 1:
+      LBM_init_flat_interface(geom, fold, gold, hydrovs);
+      break;
+    case 2:
+      LBM_init_droplet(0.3, geom, fold, gold, hydrovs);
+  }
+
   // Write a plotfile of the initial data if plot_int > 0
-  if (plot_int > 0) WriteOutput(0, hydrovs, geom);
+  if (plot_int > 0) WriteOutput(0, hydrovs, geom, "hydro_plt");
   Print() << "LB initialized\n";
 
   // TIMESTEP
@@ -157,13 +169,13 @@ void main_driver(const char* argv) {
     LBM_timestep(geom, fold, gold, fnew, gnew, hydrovs, noise);
     structFact.FortStructure(hydrovs, geom);
     if (plot_int > 0 && step%plot_int ==0) {
-      WriteOutput(step, hydrovs, geom);
+      WriteOutput(step, hydrovs, geom, "hydro_plt");
       structFact.WritePlotFile(step, static_cast<Real>(step), geom, "plt_SF");
     }
     Print() << "LB step " << step << "\n";
   }
 
-  structFact.WritePlotFile(nsteps, nsteps, geom, "SF_plt");
+  // structFact.WritePlotFile(nsteps, nsteps, geom, "plt_SF");
 
   // Call the timer again and compute the maximum difference between the start time 
   // and stop time over all processors

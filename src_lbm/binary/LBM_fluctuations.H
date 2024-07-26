@@ -74,16 +74,6 @@ Real fourier_laplace_operator(int ikx, int iky, int ikz){
   return k2;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-Real soundspeed_squared(Real phi) {
-  // const Real dl = rho - rhol;
-  // const Real dv = rho - rhov;
-  // Real cs2 =  2.*beta*rho*(dl*dl + 4*dl*dv + dv*dv);
-
-  Real cs2 = phi*(3.*B*pow(phi, 2) + A);
-  return cs2;
-}
-
 #if 0
 // generate a pure sine wave in k-space
 inline void create_kspace_sin(const Geometry& geom,
@@ -115,6 +105,15 @@ inline void create_kspace_sin(const Geometry& geom,
       }
     });
   }
+}
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+Real soundspeed_squared(Real phi) {
+  // const Real dl = rho - rhol;
+  // const Real dv = rho - rhov;
+  // Real cs2 =  2.*beta*rho*(dl*dl + 4*dl*dv + dv*dv);
+
+  Real cs2 = phi*(3.*B*pow(phi, 2) + A);
+  return cs2;
 }
 #endif
 
@@ -251,13 +250,24 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz) {
 
 // construct noise covariance matrix of the modes in k-space
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz) { // TODO: add function arguments: rho, phi, k, others?
+GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz, const Array4<Real>& h) { // TODO: add function arguments: rho, phi, k, others?
   const uint Q = nvel;
-
   const Real kT = temperature;
+  const Real k2 = fourier_laplace_operator(kx, ky, kz);
+  const Real C0 = 0.5;
+  const Real rho0 = 1.0;
+  const Real mu = 0.0;
+  const Real lambda_p = 1/tau_p;
+  const Real lambda_r = 1/tau_r;
+
+  // thermodynamic quantities
+  const Real rho = h(kx, ky, kz, 0);
+  const Real C = h(kx, ky, kz, 1);
+  const Real phi = 2.*C - rho;
+  const Real mu_C = T*log(C/(rho - C)) - (lambda*phi)/rho - k2*kappa*phi;
+
 
   /* NOTE: the expressions below are valid for lambda_e = lambda_b */
-
   // Noise covariance of the modes in k-space
   GpuArray<Real,ndof*ndof> Xi = {};
   Xi.fill(0);
@@ -297,41 +307,41 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz) { // TODO: add
   Xi[(Q+17)*ndof+(Q+17)] = 8.*Gamma*kT*lambda_p*mu/(C0*mu_C*rho0);
   Xi[(Q+18)*ndof+(Q+18)] = (8.0/3.0)*Gamma*kT*lambda_p*mu/(C0*mu_C*rho0);
 
-  // rho-rho sector
-  Xi[(   1)*ndof+(   8)] = -3.*kT*(C0*k2*kappa + p_C)/(mu_C*rho0)*lambda_r;
-  Xi[(   8)*ndof+(   1)] = -3.*kT*(C0*k2*kappa + p_C)/(mu_C*rho0)*lambda_r;
-  Xi[(   2)*ndof+(   5)] = -C0*kT*lambda_p;
-  Xi[(   3)*ndof+(   6)] = -C0*kT*lambda_p;
-  Xi[(   4)*ndof+(   7)] = -C0*kT*lambda_p;
-  Xi[(   5)*ndof+(   2)] = -C0*kT*lambda_p;
-  Xi[(   6)*ndof+(   3)] = -C0*kT*lambda_p;
-  Xi[(   7)*ndof+(   4)] = -C0*kT*lambda_p;
+  // // rho-rho sector
+  // Xi[(   1)*ndof+(   8)] = -3.*kT*(C0*k2*kappa + p_C)/(mu_C*rho0)*lambda_r;
+  // Xi[(   8)*ndof+(   1)] = -3.*kT*(C0*k2*kappa + p_C)/(mu_C*rho0)*lambda_r;
+  // Xi[(   2)*ndof+(   5)] = -C0*kT*lambda_p;
+  // Xi[(   3)*ndof+(   6)] = -C0*kT*lambda_p;
+  // Xi[(   4)*ndof+(   7)] = -C0*kT*lambda_p;
+  // Xi[(   5)*ndof+(   2)] = -C0*kT*lambda_p;
+  // Xi[(   6)*ndof+(   3)] = -C0*kT*lambda_p;
+  // Xi[(   7)*ndof+(   4)] = -C0*kT*lambda_p;
 
-  // rho-phi sector
-  Xi[(   0)*ndof+(Q+ 4)] = -3.*Gamma*kT*lambda_p*mu_rho*rho0/cs2;
-  Xi[(   0)*ndof+(Q+16)] = 3.*Gamma*kT*lambda_p*mu_rho*rho0/cs2;
-  Xi[(   1)*ndof+(Q+ 1)] = 3.*kT*lambda_r*(C0*k2*kappa + p_C)/(mu_C*rho0);
-  Xi[(   1)*ndof+(Q+ 4)] = 3.*Gamma*kT*lambda_p*(-C0*mu_C + mu)/(C0*mu_C*rho0);
-  Xi[(   1)*ndof+(Q+16)] = 3.*Gamma*kT*lambda_p*(C0*mu_C - mu)/(C0*mu_C*rho0);
-  Xi[(   8)*ndof+(Q+ 1)] = 6.*kT*lambda_r*rho0*(3*cs2 - 1);
-  Xi[(   8)*ndof+(Q+ 4)] = -3.*kT*(C0*Gamma*lambda_p*mu_C*mu_rho*pow(rho0, 2)*(3*cs2 - 1) - cs2*lambda_r*(C0 - 3*Gamma*mu)*(C0*k2*kappa + p_C))/(C0*cs2*mu_C*rho0);
-  Xi[(   8)*ndof+(Q+16)] = 3.*kT*(C0*Gamma*lambda_p*mu_C*mu_rho*pow(rho0, 2)*(3*cs2 - 1) - cs2*lambda_r*(C0 - 3*Gamma*mu)*(C0*k2*kappa + p_C))/(C0*cs2*mu_C*rho0);
-  Xi[(Q+ 1)*ndof+(   1)] = 3.*kT*lambda_r*(C0*k2*kappa + p_C)/(mu_C*rho0);
-  Xi[(Q+ 1)*ndof+(   8)] = 6.*kT*lambda_r*rho0*(3*cs2 - 1);
-  Xi[(Q+ 4)*ndof+(   0)] = -3.*Gamma*kT*lambda_p*mu_rho*rho0/cs2;
-  Xi[(Q+ 4)*ndof+(   1)] = 3.*Gamma*kT*lambda_p*(-C0*mu_C + mu)/(C0*mu_C*rho0);
-  Xi[(Q+ 4)*ndof+(   8)] = -3.*kT*(C0*Gamma*lambda_p*mu_C*mu_rho*pow(rho0, 2)*(3*cs2 - 1) - cs2*lambda_r*(C0 - 3*Gamma*mu)*(C0*k2*kappa + p_C))/(C0*cs2*mu_C*rho0);
-  Xi[(Q+16)*ndof+(   0)] = 3.*Gamma*kT*lambda_p*mu_rho*rho0/cs2;
-  Xi[(Q+16)*ndof+(   1)] = 3.*Gamma*kT*lambda_p*(C0*mu_C - mu)/(C0*mu_C*rho0);
-  Xi[(Q+16)*ndof+(   8)] = 3.*kT*(C0*Gamma*lambda_p*mu_C*mu_rho*pow(rho0, 2)*(3*cs2 - 1) - cs2*lambda_r*(C0 - 3*Gamma*mu)*(C0*k2*kappa + p_C))/(C0*cs2*mu_C*rho0);
+  // // rho-phi sector
+  // Xi[(   0)*ndof+(Q+ 4)] = -3.*Gamma*kT*lambda_p*mu_rho*rho0/cs2;
+  // Xi[(   0)*ndof+(Q+16)] = 3.*Gamma*kT*lambda_p*mu_rho*rho0/cs2;
+  // Xi[(   1)*ndof+(Q+ 1)] = 3.*kT*lambda_r*(C0*k2*kappa + p_C)/(mu_C*rho0);
+  // Xi[(   1)*ndof+(Q+ 4)] = 3.*Gamma*kT*lambda_p*(-C0*mu_C + mu)/(C0*mu_C*rho0);
+  // Xi[(   1)*ndof+(Q+16)] = 3.*Gamma*kT*lambda_p*(C0*mu_C - mu)/(C0*mu_C*rho0);
+  // Xi[(   8)*ndof+(Q+ 1)] = 6.*kT*lambda_r*rho0*(3*cs2 - 1);
+  // Xi[(   8)*ndof+(Q+ 4)] = -3.*kT*(C0*Gamma*lambda_p*mu_C*mu_rho*pow(rho0, 2)*(3*cs2 - 1) - cs2*lambda_r*(C0 - 3*Gamma*mu)*(C0*k2*kappa + p_C))/(C0*cs2*mu_C*rho0);
+  // Xi[(   8)*ndof+(Q+16)] = 3.*kT*(C0*Gamma*lambda_p*mu_C*mu_rho*pow(rho0, 2)*(3*cs2 - 1) - cs2*lambda_r*(C0 - 3*Gamma*mu)*(C0*k2*kappa + p_C))/(C0*cs2*mu_C*rho0);
+  // Xi[(Q+ 1)*ndof+(   1)] = 3.*kT*lambda_r*(C0*k2*kappa + p_C)/(mu_C*rho0);
+  // Xi[(Q+ 1)*ndof+(   8)] = 6.*kT*lambda_r*rho0*(3*cs2 - 1);
+  // Xi[(Q+ 4)*ndof+(   0)] = -3.*Gamma*kT*lambda_p*mu_rho*rho0/cs2;
+  // Xi[(Q+ 4)*ndof+(   1)] = 3.*Gamma*kT*lambda_p*(-C0*mu_C + mu)/(C0*mu_C*rho0);
+  // Xi[(Q+ 4)*ndof+(   8)] = -3.*kT*(C0*Gamma*lambda_p*mu_C*mu_rho*pow(rho0, 2)*(3*cs2 - 1) - cs2*lambda_r*(C0 - 3*Gamma*mu)*(C0*k2*kappa + p_C))/(C0*cs2*mu_C*rho0);
+  // Xi[(Q+16)*ndof+(   0)] = 3.*Gamma*kT*lambda_p*mu_rho*rho0/cs2;
+  // Xi[(Q+16)*ndof+(   1)] = 3.*Gamma*kT*lambda_p*(C0*mu_C - mu)/(C0*mu_C*rho0);
+  // Xi[(Q+16)*ndof+(   8)] = 3.*kT*(C0*Gamma*lambda_p*mu_C*mu_rho*pow(rho0, 2)*(3*cs2 - 1) - cs2*lambda_r*(C0 - 3*Gamma*mu)*(C0*k2*kappa + p_C))/(C0*cs2*mu_C*rho0);
 
-  // phi-phi sector
-  Xi[(Q+ 1)*ndof+(Q+ 4)] = 3.*kT*(C0*Gamma*lambda_p*mu_C*mu_rho*pow(rho0, 2)*(3*cs2 - 1) - cs2*lambda_r*(C0 - 3*Gamma*mu)*(C0*k2*kappa + p_C))/(C0*cs2*mu_C*rho0);
-  Xi[(Q+ 1)*ndof+(Q+16)] = -3.*kT*(C0*Gamma*lambda_p*mu_C*mu_rho*pow(rho0, 2)*(3*cs2 - 1) - cs2*lambda_r*(C0 - 3*Gamma*mu)*(C0*k2*kappa + p_C))/(C0*cs2*mu_C*rho0);
-  Xi[(Q+ 4)*ndof+(Q+ 1)] = 3.*kT*(C0*Gamma*lambda_p*mu_C*mu_rho*pow(rho0, 2)*(3*cs2 - 1) - cs2*lambda_r*(C0 - 3*Gamma*mu)*(C0*k2*kappa + p_C))/(C0*cs2*mu_C*rho0);
-  Xi[(Q+ 4)*ndof+(Q+16)] = 6.*Gamma*kT*lambda_p*(-C0 + 3*Gamma*mu)/(C0*rho0);
-  Xi[(Q+16)*ndof+(Q+ 1)] = -3.*kT*(C0*Gamma*lambda_p*mu_C*mu_rho*pow(rho0, 2)*(3*cs2 - 1) - cs2*lambda_r*(C0 - 3*Gamma*mu)*(C0*k2*kappa + p_C))/(C0*cs2*mu_C*rho0);
-  Xi[(Q+16)*ndof+(Q+ 4)] = 6.*Gamma*kT*lambda_p*(-C0 + 3*Gamma*mu)/(C0*rho0);
+  // // phi-phi sector
+  // Xi[(Q+ 1)*ndof+(Q+ 4)] = 3.*kT*(C0*Gamma*lambda_p*mu_C*mu_rho*pow(rho0, 2)*(3*cs2 - 1) - cs2*lambda_r*(C0 - 3*Gamma*mu)*(C0*k2*kappa + p_C))/(C0*cs2*mu_C*rho0);
+  // Xi[(Q+ 1)*ndof+(Q+16)] = -3.*kT*(C0*Gamma*lambda_p*mu_C*mu_rho*pow(rho0, 2)*(3*cs2 - 1) - cs2*lambda_r*(C0 - 3*Gamma*mu)*(C0*k2*kappa + p_C))/(C0*cs2*mu_C*rho0);
+  // Xi[(Q+ 4)*ndof+(Q+ 1)] = 3.*kT*(C0*Gamma*lambda_p*mu_C*mu_rho*pow(rho0, 2)*(3*cs2 - 1) - cs2*lambda_r*(C0 - 3*Gamma*mu)*(C0*k2*kappa + p_C))/(C0*cs2*mu_C*rho0);
+  // Xi[(Q+ 4)*ndof+(Q+16)] = 6.*Gamma*kT*lambda_p*(-C0 + 3*Gamma*mu)/(C0*rho0);
+  // Xi[(Q+16)*ndof+(Q+ 1)] = -3.*kT*(C0*Gamma*lambda_p*mu_C*mu_rho*pow(rho0, 2)*(3*cs2 - 1) - cs2*lambda_r*(C0 - 3*Gamma*mu)*(C0*k2*kappa + p_C))/(C0*cs2*mu_C*rho0);
+  // Xi[(Q+16)*ndof+(Q+ 4)] = 6.*Gamma*kT*lambda_p*(-C0 + 3*Gamma*mu)/(C0*rho0);
 
   return Xi;
 }
@@ -358,12 +368,13 @@ GpuArray<GpuComplex<Real>,ndof> kspace_white_noise(int kx, int ky, int kz, const
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 GpuArray<GpuComplex<Real>,ndof> correlated_noise(int kx, int ky, int kz,
 						   const Box& domain,
-						   const RandomEngine& engine) {
+						   const RandomEngine& engine,
+               const Array4<Real>& h) {
   GpuArray<GpuComplex<Real>,ndof> r, xi;
   GpuArray<Real,ndof*ndof> C;
 
   // Cholesky decomposition of noise covariance matrix
-  C = noise_covariance(kx,ky,kz);
+  C = noise_covariance(kx,ky,kz,h);
   cholesky_decomp(C,ndof,ncons+1);
 
   // need to generate the correct symmetries here? [uschill 07/25/2022]
@@ -386,7 +397,8 @@ GpuArray<GpuComplex<Real>,ndof> correlated_noise(int kx, int ky, int kz,
 // the symmetries are handled when copying to one whole grid
 inline void generate_kspace_noise(const Geometry& geom,
 				  MultiFab& kspace_noise_real,
-				  MultiFab& kspace_noise_imag) {
+				  MultiFab& kspace_noise_imag,
+          MultiFab& hydrovs) {
   const Box domain = geom.Domain();
 
   // include density? [uschill 07/26/2022]
@@ -397,13 +409,14 @@ inline void generate_kspace_noise(const Geometry& geom,
     const Box& box = mfi.validbox();
     const Array4<Real>& xi_real = kspace_noise_real.array(mfi);
     const Array4<Real>& xi_imag = kspace_noise_imag.array(mfi);
+    const Array4<Real>& h = hydrovs.array(mfi);
     // construct noise in k-space
     ParallelForRNG(box, [=] AMREX_GPU_DEVICE(int kx, int ky, int kz, RandomEngine const& engine) {
       if (kx <= domain.length(0)/2) { // need only half of k-space for c2r FFT
         GpuArray<GpuComplex<Real>,ndof> xi = {};
 
 	      // compute correlated noise in k-space
-	      xi = correlated_noise(kx,ky,kz,domain,engine);
+	      xi = correlated_noise(kx,ky,kz,domain,engine,h);
 
         for (int i=0; i<ndof; ++i) {
           xi_real(kx,ky,kz,i) = xi[i].real();
@@ -654,7 +667,7 @@ inline void generate_fluctuations(const Geometry& geom,
   // TODO: check if this takes care of ndof entries!?
 
   // generate noise in k-space
-  generate_kspace_noise(geom, kspace_noise_real, kspace_noise_imag);
+  generate_kspace_noise(geom, kspace_noise_real, kspace_noise_imag, hydrovs);
 
   // note that the k-space noise is generated without the required symmetries
   // (this is to allow for parallel generation of noise)

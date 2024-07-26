@@ -9,14 +9,14 @@ AMREX_GPU_MANAGED Real tau_p = 1.0;
 
 // box parameters
 AMREX_GPU_MANAGED int nx = 16;
+AMREX_GPU_MANAGED int ic = 0;
 
 // thermodynamic model
 AMREX_GPU_MANAGED Real kappa = 0.03;
 AMREX_GPU_MANAGED Real Gamma = 1.0;
-AMREX_GPU_MANAGED Real A = 0.01;
-AMREX_GPU_MANAGED Real B = 0.05;
-// AMREX_GPU_MANAGED Real lambda = 1.1; //swift model
-// AMREX_GPU_MANAGED Real T = 0.6; // swift model
+AMREX_GPU_MANAGED Real lambda = 1.1; //swift model
+AMREX_GPU_MANAGED Real T = 0.6; // swift model
+AMREX_GPU_MANAGED int use_p = 1;
 
 // system temperature for fluctations
 AMREX_GPU_MANAGED Real temperature = 0.0;
@@ -28,8 +28,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 Array1D<Real,0,2> chemical_potentials(const Array1D<Real,0,2>& fields,
 				  const Array1D<RealVect,0,2>& gradients,
 				  const Array1D<Real,0,2>& laplacians);
-
-#include "LBM_fluctuations.H"
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 RealVect gradient(int x, int y, int z, const Array4<Real>& field, int icomp) {
@@ -60,7 +58,7 @@ Real laplacian(int x, int y, int z, const Array4<Real>& field, int icomp) {
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 Array1D<Real,0,2> chemical_potentials(const Array1D<Real,0,2>& fields,
 				  const Array1D<RealVect,0,2>& gradients,
-				  const Array1D<Real,0,2>& laplacians) {
+          const Array1D<Real,0,2>& laplacians) {
   const Real rho = fields(0);
   const Real phi = fields(1);
   const Real D2rho = laplacians(0);
@@ -72,21 +70,24 @@ Array1D<Real,0,2> chemical_potentials(const Array1D<Real,0,2>& fields,
     /* mu_rho is not needed for the calculations.
       The following expression has not been tested. */
     // mu(0) = lambda/4.*(1.+phi2/rho2) + T/2*log((rho2-phi2)/4) - kappa*D2rho; // Message above is for swift model not LG model
-    mu(0) = rho*(A + B*pow(rho, 2)) - kappa*D2rho; 
+    mu(0) = pow(C, 2)*lambda/pow(rho, 2) + T*log(rho - C) - kappa*D2rho; 
   #endif
-    mu(1) = - kappa*D2phi;
-  // mu(1) = - lambda/2.*phi/rho + T/2*log((rho+phi)/(rho-phi)) - kappa*D2phi; // Eq. (38) in Swift et al.
-
+    if (use_p){mu(1) = - lambda/2.*phi/rho + T/2*log((rho+phi)/(rho-phi)) - kappa*D2phi;} // Eq. (38) in Swift et al.
+    else {mu(1) = (T*rho*log(phi/(rho - phi)) - lambda*(2.*phi - rho))/rho - kappa*D2phi;}
+    // Print() << "Chemical potential of C1: " << mu(1) << " rho: " << rho << " phi: " << phi << "\n";
   return mu;
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-Real pressure(Real rho, Real phi) {
-  Real p0 = pow(phi, 2)*(-2.*A -B*pow(phi, 2))/4.;
-  // Real p0 = rho*T; // Eq. (40) in Swift et al.
+Real pressure(Real rho, Real C) {
+  Real p0 = 0.0;
+  // p0 += C*lambda*(2.*C/rho - 1) + C*T*log((rho - C)/C);
+  p0 += rho*T; // Eq. (40) in Swift et al.
   // note that gradient terms are included in fequilibrium
   return p0;
 }
+
+#include "LBM_fluctuations.H"
 
 #if 0 // equilibrium populations not necessary for MRT
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
@@ -431,7 +432,8 @@ inline void LBM_timestep(const Geometry& geom,
 			 MultiFab& fold, MultiFab& gold,
 			 MultiFab& fnew, MultiFab& gnew,
 			 MultiFab& hydrovs, MultiFab& noise) {
-  generate_fluctuations(geom, hydrovs, noise);
+  if (temperature == 0){noise.setVal(0.);}
+  else {generate_fluctuations(geom, hydrovs, noise);}
   collide_stream(geom, fold, gold, fnew, gnew, hydrovs, noise);
   hydrovars(fold, gold, hydrovs);
 }
@@ -448,7 +450,9 @@ inline void LBM_init_mixture(MultiFab& mf,
     const Array4<Real>& g = mg.array(mfi);
     ParallelForRNG(valid_box, [=] AMREX_GPU_DEVICE(int x, int y, int z, RandomEngine const& engine) {
       const Real rho = C1 + C2;
-      const Real phi = (C1-C2)+0.001*RandomNormal(0., 1., engine);
+      Real phi = 0.0;
+      if (use_p){phi = (C1-C2)+0.001*RandomNormal(0., 1., engine);}
+      else {phi = C1+0.001*RandomNormal(0., 1., engine);}
       for (int i=0; i<nvel; i++) {
         f(x,y,z,i) = w[i]*rho;
         g(x,y,z,i) = w[i]*phi;
@@ -471,29 +475,30 @@ inline void LBM_init_flat_interface(const Geometry& geom,
   ParallelFor(mf, IntVect(0), [=] AMREX_GPU_DEVICE(int nbx, int x, int y, int z) {
     const Real rx = x-box[0]/2;
     const Real ry = y-box[1]/2;
-#if (AMREX_SPACEDIM == 2)
-    const Real r2 = rx*rx+ry*ry;
-#elif (AMREX_SPACEDIM == 3)
-    const Real rz = z-box[0]/2;
-    const Real r2 = rx*rx+ry*ry+rz*rz;
-#endif
+  #if (AMREX_SPACEDIM == 2)
+      const Real r2 = rx*rx+ry*ry;
+  #elif (AMREX_SPACEDIM == 3)
+      const Real rz = z-box[0]/2;
+      const Real r2 = rx*rx+ry*ry+rz*rz;
+  #endif
 
-    const Real rho=1.0;
-    Real phi;
+      const Real rho=1.0;
+      Real phi = 0.0;
+      if (rx < 0.) {
+        if (use_p) {phi = 0.5;}
+        else {phi = 0.49;}
+      } else {
+        if (use_p) {phi = -0.5;}
+        else {phi = 0.01;}
+      }
 
-    if (rx < 0.) {
-      phi = 0.5;
-    } else {
-      phi = -0.5;
-    }
+      for (int i=0; i<nvel; i++) {
+        f[nbx](x,y,z,i) = w[i]*rho;
+        g[nbx](x,y,z,i) = w[i]*phi;
+      }
 
-    for (int i=0; i<nvel; i++) {
-      f[nbx](x,y,z,i) = w[i]*rho;
-      g[nbx](x,y,z,i) = w[i]*phi;
-    }
-
-  });
-  hydrovars(mf, mg, hydrovs);
+    });
+    hydrovars(mf, mg, hydrovs);
 }
 
 // binary droplet of C1 and C2
@@ -505,31 +510,39 @@ inline void LBM_init_droplet(const Real r,
   const IntVect box = geom.Domain().length();
   const Real R = r*box[0];
 
-  auto const & f = mf.arrays();
-  auto const & g = mg.arrays();
-  GpuArray<Real,3> dx = geom.CellSizeArray();
-  ParallelFor(mf, IntVect(0), [=] AMREX_GPU_DEVICE(int nbx, int x, int y, int z) {
-    const Real rx = x-box[0]/2;
-    const Real ry = y-box[1]/2;
-#if (AMREX_SPACEDIM == 2)
-    const Real r2 = rx*rx+ry*ry;
-#elif (AMREX_SPACEDIM == 3)
-    const Real rz = z-box[0]/2;
-    const Real r2 = rx*rx+ry*ry+rz*rz;
-#endif
-    const Real r = sqrt(r2);
+    auto const & f = mf.arrays();
+    auto const & g = mg.arrays();
+    GpuArray<Real,3> dx = geom.CellSizeArray();
+    ParallelFor(mf, IntVect(0), [=] AMREX_GPU_DEVICE(int nbx, int x, int y, int z) {
+      const Real rx = x-box[0]/2;
+      const Real ry = y-box[1]/2;
+  #if (AMREX_SPACEDIM == 2)
+      const Real r2 = rx*rx+ry*ry;
+  #elif (AMREX_SPACEDIM == 3)
+      const Real rz = z-box[0]/2;
+      const Real r2 = rx*rx+ry*ry+rz*rz;
+  #endif
+      const Real r = sqrt(r2);
 
-    const Real rho = 1.0;
-    const Real phi0 = 0.5;
-    const Real phi = phi0*tanh((R-r)/sqrt(kappa));
+      const Real rho = 1.0;
+      const Real phi0 = 0.5;
+      // const Real phi = phi0*tanh((R-r)/sqrt(kappa));
 
-    for (int i=0; i<nvel; i++) {
-      f[nbx](x,y,z,i) = w[i]*rho;
-      g[nbx](x,y,z,i) = w[i]*phi;
-    }
+      Real phi = 0.0;
+      if (use_p) {phi = phi0*tanh((R-r)/sqrt(kappa));}
+      else{
+        const Real test = tanh((R-r)/sqrt(kappa));
+        if (test > 0){phi = 0.49;}
+        else{phi = 0.01;}
+      }
 
-  });
-  hydrovars(mf, mg, hydrovs);
+      for (int i=0; i<nvel; i++) {
+        f[nbx](x,y,z,i) = w[i]*rho;
+        g[nbx](x,y,z,i) = w[i]*phi;
+      }
+
+    });
+    hydrovars(mf, mg, hydrovs);
 }
 
 #endif
