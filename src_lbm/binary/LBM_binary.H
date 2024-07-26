@@ -452,7 +452,7 @@ inline void LBM_init_mixture(MultiFab& mf,
       const Real rho = C1 + C2;
       Real phi = 0.0;
       if (use_p){phi = (C1-C2)+0.001*RandomNormal(0., 1., engine);}
-      else {phi = C1;}
+      else {phi = C1+0.001*RandomNormal(0., 1., engine);}
       for (int i=0; i<nvel; i++) {
         f(x,y,z,i) = w[i]*rho;
         g(x,y,z,i) = w[i]*phi;
