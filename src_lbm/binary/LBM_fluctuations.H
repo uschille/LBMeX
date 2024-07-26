@@ -39,6 +39,7 @@ void cholesky_decomp(GpuArray<Real,ndof*ndof>& A, const int n, const int bstart)
 	      if (A[j*n+j]>0) {
 	        A[i*n+j] = sum/A[j*n+j];
 	      } else {
+          Print() << "Row " << i << "\n";
           Print() << "Cholesky decomposition should not reach " << __FILE__ <<":"<< __LINE__ << std::endl;
 	        exit(-1);
 	      }
@@ -108,11 +109,9 @@ inline void create_kspace_sin(const Geometry& geom,
 }
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 Real soundspeed_squared(Real phi) {
-  // const Real dl = rho - rhol;
-  // const Real dv = rho - rhov;
-  // Real cs2 =  2.*beta*rho*(dl*dl + 4*dl*dv + dv*dv);
-
-  Real cs2 = phi*(3.*B*pow(phi, 2) + A);
+  const Real dl = rho - rhol;
+  const Real dv = rho - rhov;
+  Real cs2 =  2.*beta*rho*(dl*dl + 4*dl*dv + dv*dv);
   return cs2;
 }
 #endif
@@ -257,25 +256,31 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz, const Array4<R
   const Real C0 = 0.5;
   const Real rho0 = 1.0;
   const Real mu = 0.0;
+  // const Real mu = 0.00000001;
   const Real lambda_p = 1/tau_p;
   const Real lambda_r = 1/tau_r;
 
   // thermodynamic quantities
   const Real rho = h(kx, ky, kz, 0);
   const Real C = h(kx, ky, kz, 1);
-  const Real phi = 2.*C - rho;
-  const Real mu_C = T*log(C/(rho - C)) - (lambda*phi)/rho - k2*kappa*phi;
-
-
+  const Array1D<Real,0,2> fields = {rho, C};
+  const Array1D<RealVect,0,2> gradients = {gradient(kx,ky,kz,h,0), gradient(kx,ky,kz,h,1)};
+  const Array1D<Real,0,2> laplacians = {laplacian(kx,ky,kz,h,0), laplacian(kx,ky,kz,h,1)};
+  // Print() << "x: " << x << " y: " << y << " z: " << z << "\n";
+  const Real mu_C = chemical_potentials(fields, gradients, laplacians)(1);
+  Print() << "mu_C: " << mu_C << "\n";
   /* NOTE: the expressions below are valid for lambda_e = lambda_b */
   // Noise covariance of the modes in k-space
   GpuArray<Real,ndof*ndof> Xi = {};
   Xi.fill(0);
-
+  int idx = 5;
   // diagonal part
   Xi[(   5)*ndof+(   5)] = 2.*Gamma*kT*lambda_p*mu/(C0*mu_C*rho0);
+  Print() << "Diagonal " << idx << ": " << Xi[(   idx)*ndof+(   idx)] << "\n";idx++;
   Xi[(   6)*ndof+(   6)] = 2.*Gamma*kT*lambda_p*mu/(C0*mu_C*rho0);
+  Print() << "Diagonal " << idx << ": " << Xi[(   idx)*ndof+(   idx)] << "\n";idx++;
   Xi[(   7)*ndof+(   7)] = 2.*Gamma*kT*lambda_p*mu/(C0*mu_C*rho0);
+  Print() << "Diagonal " << idx << ": " << Xi[(   idx)*ndof+(   idx)] << "\n";idx++;
   Xi[(   8)*ndof+(   8)] = 2.*kT*lambda_r*rho0*(5 - 9*cs2);
   Xi[(   9)*ndof+(   9)] = 8.*kT*lambda_r*rho0;
   Xi[(  10)*ndof+(  10)] = (8.0/3.0)*kT*lambda_r*rho0;

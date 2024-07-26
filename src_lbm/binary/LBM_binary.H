@@ -65,7 +65,7 @@ Array1D<Real,0,2> chemical_potentials(const Array1D<Real,0,2>& fields,
   const Real D2phi = laplacians(1);
 
   Array1D<Real,0,2> mu = { 0.0, 0.0 } ;
-
+  const Real C = 2.0;
   #if 0
     /* mu_rho is not needed for the calculations.
       The following expression has not been tested. */
@@ -73,8 +73,8 @@ Array1D<Real,0,2> chemical_potentials(const Array1D<Real,0,2>& fields,
     mu(0) = pow(C, 2)*lambda/pow(rho, 2) + T*log(rho - C) - kappa*D2rho; 
   #endif
     if (use_p){mu(1) = - lambda/2.*phi/rho + T/2*log((rho+phi)/(rho-phi)) - kappa*D2phi;} // Eq. (38) in Swift et al.
-    else {mu(1) = (T*rho*log(phi/(rho - phi)) - lambda*(2.*phi - rho))/rho - kappa*D2phi;}
-    // Print() << "Chemical potential of C1: " << mu(1) << " rho: " << rho << " phi: " << phi << "\n";
+    else {mu(1) = (-T*rho*log((rho - phi)/phi) - lambda*(2.*phi - rho))/(C*rho) - C*kappa*D2phi;} //phi here is C1
+    // Print() << "d2phi: " << C*D2phi << " mu_phi: " << mu(1) << " rho: " << rho << " phi: " << phi << "\n";
   return mu;
 }
 
@@ -280,7 +280,7 @@ void relax_moments(int x, int y, int z,
     laplacian(x,y,z,h,0),
     laplacian(x,y,z,h,1),
   };
-
+  // Print() << "x: " << x << " y: " << y << " z: " << z << "\n";
   const Array1D<Real,0,2> mu = chemical_potentials(fields, gradients, laplacians);
 
   Array1D<Real,0,nvel> mfEq, mgEq;
@@ -452,7 +452,7 @@ inline void LBM_init_mixture(MultiFab& mf,
       const Real rho = C1 + C2;
       Real phi = 0.0;
       if (use_p){phi = (C1-C2)+0.001*RandomNormal(0., 1., engine);}
-      else {phi = C1+0.001*RandomNormal(0., 1., engine);}
+      else {phi = C1;}
       for (int i=0; i<nvel; i++) {
         f(x,y,z,i) = w[i]*rho;
         g(x,y,z,i) = w[i]*phi;
@@ -485,11 +485,11 @@ inline void LBM_init_flat_interface(const Geometry& geom,
       const Real rho=1.0;
       Real phi = 0.0;
       if (rx < 0.) {
-        if (use_p) {phi = 0.5;}
-        else {phi = 0.49;}
+        if (use_p) {phi = 0.49;}
+        else {phi = (1. + 0.49)/2.;}
       } else {
-        if (use_p) {phi = -0.5;}
-        else {phi = 0.01;}
+        if (use_p) {phi = -0.49;}
+        else {phi = (1. - 0.49)/2.;}
       }
 
       for (int i=0; i<nvel; i++) {
@@ -532,8 +532,8 @@ inline void LBM_init_droplet(const Real r,
       if (use_p) {phi = phi0*tanh((R-r)/sqrt(kappa));}
       else{
         const Real test = tanh((R-r)/sqrt(kappa));
-        if (test > 0){phi = 0.49;}
-        else{phi = 0.01;}
+        if (test > 0){phi = (1.0 + 0.50)/2.;}
+        else{phi = (1.0 - 0.50)/2.;}
       }
 
       for (int i=0; i<nvel; i++) {
