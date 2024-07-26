@@ -109,7 +109,6 @@ void main_driver(const char* argv) {
   pp.query("T", T);
   pp.query("temperature", temperature);
   pp.query("gamma", Gamma);
-  pp.query("use_p", use_p);
 
   // set up Box and Geomtry
   IntVect dom_lo(0, 0, 0);
@@ -170,7 +169,8 @@ void main_driver(const char* argv) {
     structFact.FortStructure(hydrovs, geom);
     if (plot_int > 0 && step%plot_int ==0) {
       WriteOutput(step, hydrovs, geom, "hydro_plt");
-      structFact.WritePlotFile(step, static_cast<Real>(step), geom, "plt_SF");
+      structFact.WritePlotFile(step, static_cast<Real>(step), geom, "SF_plt");
+      StructFact structFact(ba, dm, var_names, var_scaling);
     }
     Print() << "LB step " << step << "\n";
   }

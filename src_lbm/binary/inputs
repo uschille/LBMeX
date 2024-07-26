@@ -1,0 +1,17 @@
+# box parameters
+nx = 32
+max_grid_size = 32
+init_cond = 0
+
+# time parameters
+nsteps = 1000
+plot_int = 100
+
+# model parameters
+lambda = 1.1
+T = 0.6
+kappa = 0.01
+gamma = 1
+
+# noise parameters
+temperature = 1e-7

@@ -16,7 +16,6 @@ AMREX_GPU_MANAGED Real kappa = 0.03;
 AMREX_GPU_MANAGED Real Gamma = 1.0;
 AMREX_GPU_MANAGED Real lambda = 1.1; //swift model
 AMREX_GPU_MANAGED Real T = 0.6; // swift model
-AMREX_GPU_MANAGED int use_p = 1;
 
 // system temperature for fluctations
 AMREX_GPU_MANAGED Real temperature = 0.0;
@@ -65,15 +64,13 @@ Array1D<Real,0,2> chemical_potentials(const Array1D<Real,0,2>& fields,
   const Real D2phi = laplacians(1);
 
   Array1D<Real,0,2> mu = { 0.0, 0.0 } ;
-  const Real C = 2.0;
   #if 0
     /* mu_rho is not needed for the calculations.
       The following expression has not been tested. */
     // mu(0) = lambda/4.*(1.+phi2/rho2) + T/2*log((rho2-phi2)/4) - kappa*D2rho; // Message above is for swift model not LG model
     mu(0) = pow(C, 2)*lambda/pow(rho, 2) + T*log(rho - C) - kappa*D2rho; 
   #endif
-    if (use_p){mu(1) = - lambda/2.*phi/rho + T/2*log((rho+phi)/(rho-phi)) - kappa*D2phi;} // Eq. (38) in Swift et al.
-    else {mu(1) = (-T*rho*log((rho - phi)/phi) - lambda*(2.*phi - rho))/(C*rho) - C*kappa*D2phi;} //phi here is C1
+    mu(1) = (-T*rho*log((rho - phi)/phi) - lambda*(2.*phi - rho))/(2*rho) - 2*kappa*D2phi; //phi here is C1
     // Print() << "d2phi: " << C*D2phi << " mu_phi: " << mu(1) << " rho: " << rho << " phi: " << phi << "\n";
   return mu;
 }
@@ -451,8 +448,7 @@ inline void LBM_init_mixture(MultiFab& mf,
     ParallelForRNG(valid_box, [=] AMREX_GPU_DEVICE(int x, int y, int z, RandomEngine const& engine) {
       const Real rho = C1 + C2;
       Real phi = 0.0;
-      if (use_p){phi = (C1-C2)+0.001*RandomNormal(0., 1., engine);}
-      else {phi = C1+0.001*RandomNormal(0., 1., engine);}
+      phi = C1+0.001*RandomNormal(0., 1., engine);
       for (int i=0; i<nvel; i++) {
         f(x,y,z,i) = w[i]*rho;
         g(x,y,z,i) = w[i]*phi;
@@ -485,11 +481,9 @@ inline void LBM_init_flat_interface(const Geometry& geom,
       const Real rho=1.0;
       Real phi = 0.0;
       if (rx < 0.) {
-        if (use_p) {phi = 0.49;}
-        else {phi = (1. + 0.49)/2.;}
+        phi = (1. + 0.49)/2.;
       } else {
-        if (use_p) {phi = -0.49;}
-        else {phi = (1. - 0.49)/2.;}
+        phi = (1. - 0.49)/2.;
       }
 
       for (int i=0; i<nvel; i++) {
@@ -529,12 +523,9 @@ inline void LBM_init_droplet(const Real r,
       // const Real phi = phi0*tanh((R-r)/sqrt(kappa));
 
       Real phi = 0.0;
-      if (use_p) {phi = phi0*tanh((R-r)/sqrt(kappa));}
-      else{
-        const Real test = tanh((R-r)/sqrt(kappa));
-        if (test > 0){phi = (1.0 + 0.50)/2.;}
-        else{phi = (1.0 - 0.50)/2.;}
-      }
+      const Real test = tanh((R-r)/sqrt(kappa));
+      if (test > 0){phi = (1.0 + 0.50)/2.;}
+      else{phi = (1.0 - 0.50)/2.;}
 
       for (int i=0; i<nvel; i++) {
         f[nbx](x,y,z,i) = w[i]*rho;
