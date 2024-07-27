@@ -254,6 +254,7 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz, const Box& dom
   // TODO: generalize to non-homogeneous reference state
   const Real rho0 = 1.0;
   const Real C0 = 0.5;
+  const Real cs2 = T*rho0/(rho0-C0) - 2.*chi*C0/rho0*C0/rho0 + kappa*k2*rho0;
 
   Real mu_rho = - T/(rho0-C0) + 2*chi*C0/(rho0*rho0) - kappa*k2;
   Real mu_C = T*rho0/C0/(rho0-C0) - 2*chi/rho0 + 2*kappa*k2;
