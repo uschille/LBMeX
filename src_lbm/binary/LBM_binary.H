@@ -8,7 +8,7 @@ AMREX_GPU_MANAGED Real tau_p = 1.0;
 
 AMREX_GPU_MANAGED Real kappa = 0.0;
 
-AMREX_GPU_MANAGED Real lambda = 1.1;
+AMREX_GPU_MANAGED Real chi = 1.1;
 AMREX_GPU_MANAGED Real T = 0.6;
 
 AMREX_GPU_MANAGED Real Gamma = 1.0;
@@ -64,11 +64,11 @@ Array1D<Real,0,2> chemical_potentials(const Array1D<Real,0,2>& fields,
 #if 0
   /* mu_rho is not needed for the calculations.
      The following expression has not been tested. */
-  mu(0) = lambda/4.*(1.+phi2/rho2) + T/2*log((rho2-phi2)/4) - kappa*D2rho;
+  mu(0) = chi/4.*(1.+phi2/rho2) + T/2*log((rho2-phi2)/4) - kappa*D2rho;
 #endif
 
   mu(1) = // Eq. (38) in Swift et al.
-    - lambda/2.*phi/rho + T/2*log((rho+phi)/(rho-phi)) - kappa*D2phi;
+    - chi/2.*phi/rho + T/2*log((rho+phi)/(rho-phi)) - kappa*D2phi;
 
   return mu;
 }

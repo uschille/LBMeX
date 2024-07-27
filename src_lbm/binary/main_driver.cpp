@@ -84,7 +84,7 @@ void main_driver(const char* argv) {
   pp.query("nsteps", nsteps);
   pp.query("plot_int", plot_int);
   pp.query("kappa", kappa);
-  pp.query("lambda", lambda);
+  pp.query("lambda", chi);
   pp.query("T", T);
   pp.query("temperature", temperature);
 
