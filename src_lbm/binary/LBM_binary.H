@@ -78,7 +78,7 @@ Array1D<Real,0,2> chemical_potentials(const Array1D<Real,0,2>& fields,
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 Real pressure(Real rho, Real C) {
   Real p0 = 0.0;
-  // p0 += C*lambda*(2.*C/rho - 1) + C*T*log((rho - C)/C);
+  // p0 += C*lambda*(2.*C/pow(rho, 2) - 1) + C*T*log((rho - C)/C);
   p0 += rho*T; // Eq. (40) in Swift et al.
   // note that gradient terms are included in fequilibrium
   return p0;
