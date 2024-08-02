@@ -7,9 +7,10 @@
 AMREX_GPU_MANAGED Real tau_r = 0.7886751345948129; // tau=0.5*(1.+1./sqrt(3.)) minimizes spurious currents according to Swift et al.
 AMREX_GPU_MANAGED Real tau_p = 1.0;
 
-// box parameters
-AMREX_GPU_MANAGED int nx = 16;
-AMREX_GPU_MANAGED int ic = 0;
+AMREX_GPU_MANAGED Real kappa = 0.0;
+
+AMREX_GPU_MANAGED Real chi = 1.1;
+AMREX_GPU_MANAGED Real T = 0.6;
 
 // thermodynamic model
 AMREX_GPU_MANAGED Real kappa = 0.03;
@@ -64,14 +65,15 @@ Array1D<Real,0,2> chemical_potentials(const Array1D<Real,0,2>& fields,
   const Real D2phi = laplacians(1);
 
   Array1D<Real,0,2> mu = { 0.0, 0.0 } ;
-  #if 0
-    /* mu_rho is not needed for the calculations.
-      The following expression has not been tested. */
-    // mu(0) = lambda/4.*(1.+phi2/rho2) + T/2*log((rho2-phi2)/4) - kappa*D2rho; // Message above is for swift model not LG model
-    mu(0) = pow(C, 2)*lambda/pow(rho, 2) + T*log(rho - C) - kappa*D2rho; 
-  #endif
-    mu(1) = (-T*rho*log((rho - phi)/phi) - lambda*(2.*phi - rho))/(2*rho) - 2*kappa*D2phi; //phi here is C1
-    // Print() << "d2phi: " << C*D2phi << " mu_phi: " << mu(1) << " rho: " << rho << " phi: " << phi << "\n";
+#if 0
+  /* mu_rho is not needed for the calculations.
+     The following expression has not been tested. */
+  mu(0) = chi/4.*(1.+phi2/rho2) + T/2*log((rho2-phi2)/4) - kappa*D2rho;
+#endif
+
+  mu(1) = // Eq. (38) in Swift et al.
+    - chi/2.*phi/rho + T/2*log((rho+phi)/(rho-phi)) - kappa*D2phi;
+
   return mu;
 }
 

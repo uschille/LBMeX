@@ -105,7 +105,7 @@ void main_driver(const char* argv) {
 
   // model parameters
   pp.query("kappa", kappa);
-  pp.query("lambda", lambda);
+  pp.query("lambda", chi);
   pp.query("T", T);
   pp.query("temperature", temperature);
   pp.query("gamma", Gamma);
