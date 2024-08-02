@@ -8,8 +8,8 @@ nsteps = 4000
 plot_int = 400
 
 # model parameters
-lambda = 0.6
-T = 0.3
+lambda = 0.9
+T = 0.45
 kappa = 0.01
 gamma = 1
 
