@@ -6,17 +6,14 @@
 // relaxation parameters
 AMREX_GPU_MANAGED Real tau_r = 0.7886751345948129; // tau=0.5*(1.+1./sqrt(3.)) minimizes spurious currents according to Swift et al.
 AMREX_GPU_MANAGED Real tau_p = 1.0;
-
-AMREX_GPU_MANAGED Real kappa = 0.0;
-
-AMREX_GPU_MANAGED Real chi = 1.1;
-AMREX_GPU_MANAGED Real T = 0.6;
+AMREX_GPU_MANAGED int nx = 16;
+AMREX_GPU_MANAGED int ic = 0;
 
 // thermodynamic model
 AMREX_GPU_MANAGED Real kappa = 0.03;
 AMREX_GPU_MANAGED Real Gamma = 1.0;
-AMREX_GPU_MANAGED Real lambda = 1.1; //swift model
-AMREX_GPU_MANAGED Real T = 0.6; // swift model
+AMREX_GPU_MANAGED Real chi = 1.1;
+AMREX_GPU_MANAGED Real T = 0.6;
 
 // system temperature for fluctations
 AMREX_GPU_MANAGED Real temperature = 0.0;

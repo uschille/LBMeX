@@ -87,6 +87,7 @@ void main_driver(const char* argv) {
   // default grid parameters
   int nx = 16;
   int max_grid_size = 8;
+  int ic = 0;
 
   // default time stepping parameters
   int nsteps = 100;
