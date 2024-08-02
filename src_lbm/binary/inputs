@@ -9,7 +9,7 @@ plot_int = 400
 
 # model parameters
 lambda = 0.9
-T = 0.45
+T = 0.5
 kappa = 0.01
 gamma = 1
 
