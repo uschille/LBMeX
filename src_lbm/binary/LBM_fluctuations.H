@@ -254,11 +254,11 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz, const Box& dom
   // TODO: generalize to non-homogeneous reference state
   const Real rho0 = 1.0;
   const Real C0 = 0.5;
-  const Real cs2 = T*rho0/(rho0-C0) - 2.*chi*C0/rho0*C0/rho0 + kappa*k2*rho0;
 
-  Real mu_rho = - T/(rho0-C0) + 2*chi*C0/(rho0*rho0) - kappa*k2;
-  Real mu_C = T*rho0/C0/(rho0-C0) - 2*chi/rho0 + 2*kappa*k2;
-  Real p_C = chi*(4*C0/rho0-1) - T*(log(C0)+1) + T*(log(rho0-C0)+C0/(rho0-C0));
+  Real cs2 = T + 2.*kappa*k2*(rho0-C0);
+  Real p_C = 2.*kappa*k2*(2.*C0-rho0);
+  Real mu_rho = - T/(rho0-C0) + 2.*chi*C0/(rho0*rho0) - 2.*kappa*k2;
+  Real mu_C = T*rho0/C0/(rho0-C0) - 2.*chi/rho0 + 4.*kappa*k2;
 
   // Noise covariance of the modes in k-space
   GpuArray<Real,ndof*ndof> Xi = {};
