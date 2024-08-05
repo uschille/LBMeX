@@ -396,7 +396,7 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz, const Box& dom
   // Real mu_rho = (2.*C0*chi - C0*pow(rho0, 2)*k2*kappa - 2.*C0*pow(rho0, 2)*chi + T*pow(rho0, 2) + pow(rho0, 3)*k2*kappa)/(pow(rho0, 2)*(C0 - rho0));
   Real mu_C = T*rho0/C0/(rho0-C0) - 2*chi/rho0 + 2*kappa*k2;
   Real p_C = chi*(4*C0/rho0-1) - T*(log(C0)+1) + T*(log(rho0-C0)+C0/(rho0-C0));
-  // Real p_C = 0.0;
+  // Real p_C = -C0*k2*kappa;
 
   // Noise covariance of the modes in k-space
   GpuArray<Real,ndof*ndof> Xi = {};
@@ -423,7 +423,7 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz, const Box& dom
   Xi[(  21)*ndof+(  21)] = 8.*rho0*kT*lambda_r;
   // Print() << "Xi[21,21] = " << Xi[(  21)*ndof+(  21)] << "\n"; 
   Xi[(  22)*ndof+(  22)] = 8./3.*rho0*kT*lambda_r;
-  Xi[(  23)*ndof+(  23)] = 2.*Gamma*kT*lambda_p*(-9.*Gamma*mu_C + 5.)/rho0;
+  Xi[(  23)*ndof+(  23)] = 2.*Gamma*kT*lambda_p*(5. -9.*Gamma*mu_C)/rho0;
   Xi[(  24)*ndof+(  24)] = 8.*Gamma*kT*lambda_p/rho0;
   Xi[(  25)*ndof+(  25)] = 8./3.*Gamma*kT*lambda_p/rho0;
   Xi[(  26)*ndof+(  26)] = 2./3.*Gamma*kT*lambda_p/rho0;
@@ -479,7 +479,7 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz, const Box& dom
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 GpuArray<GpuComplex<Real>,ndof> kspace_white_noise(int kx, int ky, int kz, const Box& domain, RandomEngine const& engine) {
   GpuArray<GpuComplex<Real>,ndof> r = {};
-  for (int i=ncons+1; i<ndof; ++i) {
+  for (int i=ncons; i<ndof; ++i) {
     // symmetry points are purely real
     if (     ((kx == 0) || (kx == domain.length(0) - kx))
           && ((ky == 0) || (ky == domain.length(1) - ky))
@@ -505,7 +505,7 @@ GpuArray<GpuComplex<Real>,ndof> correlated_noise(int kx, int ky, int kz,
 
   // Cholesky decomposition of noise covariance matrix
   C = noise_covariance(kx,ky,kz,domain);
-  cholesky_decomp(C,ndof,ncons+1);
+  cholesky_decomp(C,ndof,ncons);
 
   // need to generate the correct symmetries here? [uschill 07/25/2022]
   // possibly the case if C(k) != C(-k) [uschill 07/27/2022]

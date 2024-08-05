@@ -5,9 +5,7 @@
 #include <AMReX_ParmParse.H>
 #include <AMReX_PlotFileUtil.H>
 #include "StructFact.H"
-
 using namespace amrex;
-
 #include "LBM_binary.H"
 #include "tests.H"
 
@@ -34,36 +32,29 @@ inline Vector<std::string> VariableNames(const int numVars) {
   if (cnt<numVars) var_names[cnt++] = "density";
   if (cnt<numVars) var_names[cnt++] = "phi";
   // velx, vely, velz
-  for (int d=0; d<AMREX_SPACEDIM, cnt<numVars; d++) {
+  for (int d=0; d<AMREX_SPACEDIM; d++) {
     name = "u";
     name += (120+d);
     var_names[cnt++] = name;
   }
-  for (int d=0; d<AMREX_SPACEDIM, cnt<numVars; d++) {
+  if (numVars == 5){return var_names;}
+  for (int d=0; d<AMREX_SPACEDIM; d++) {
     name = "phi*u";
     name += (120+d);
     var_names[cnt++] = name;
   }
-  // pxx, pxy, pxz, pyy, pyz, pzz
-  // for (int i=0; i<AMREX_SPACEDIM; ++i) {
-  //   for (int j=i; j<AMREX_SPACEDIM; ++j) {
-  //     name = "p";
-  //     name += (120+i);
-  //     name += (120+j);
-  //     var_names[cnt++] = name;
-  //   }
-  // }
   // remaining moments
-  for (; cnt<nvel+ncons, cnt<numVars;) {
+  for (int d=4; d < nvel; d++){
     name = "mf";
-    name += std::to_string(cnt-ncons);
+    name += std::to_string(d);
     var_names[cnt++] = name;
   }
-  for (; cnt<numVars;) {
+  for (int d=4; d < nvel; d++){
     name = "mg";
-    name += std::to_string(cnt-nvel);
+    name += std::to_string(d);
     var_names[cnt++] = name;
   }
+
   return var_names;
 }
 
@@ -170,8 +161,11 @@ void main_driver(const char* argv) {
     structFact.FortStructure(hydrovs, geom);
     if (plot_int > 0 && step%plot_int ==0) {
       WriteOutput(step, hydrovs, geom, "hydro_plt");
+      WriteOutput(step, noise, geom, "xi_plt");
       structFact.WritePlotFile(step, static_cast<Real>(step), geom, "SF_plt");
       StructFact structFact(ba, dm, var_names, var_scaling);
+      // const std::string& pltfile = amrex::Concatenate("noise_plt",step,7);
+      // visMF::Write(noise, pltfile)
     }
     Print() << "LB step " << step << "\n";
   }

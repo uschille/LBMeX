@@ -62,14 +62,13 @@ Array1D<Real,0,2> chemical_potentials(const Array1D<Real,0,2>& fields,
   const Real D2phi = laplacians(1);
 
   Array1D<Real,0,2> mu = { 0.0, 0.0 } ;
-#if 0
-  /* mu_rho is not needed for the calculations.
-     The following expression has not been tested. */
-  mu(0) = chi/4.*(1.+phi2/rho2) + T/2*log((rho2-phi2)/4) - kappa*D2rho;
-#endif
-
-  mu(1) = // Eq. (38) in Swift et al.
-    - chi/2.*phi/rho + T/2*log((rho+phi)/(rho-phi)) - kappa*D2phi;
+  #if 0
+    /* mu_rho is not needed for the calculations.
+      The following expression has not been tested. */
+    mu(0) = chi/4.*(1.+phi2/rho2) + T/2*log((rho2-phi2)/4) - kappa*D2rho;
+  #endif
+    mu(1) = // Eq. (38) in Swift et al.
+      - chi/2.*phi/rho + T/2*log((rho+phi)/(rho-phi)) - kappa*D2phi;
 
   return mu;
 }
@@ -314,7 +313,15 @@ void thermalize_moments(int x, int y, int z,
   // diffusive moments 1,2,3 in noise at 5,6,7
   const Real gamma_r = 1. - 1./tau_r;
   const Real gamma_p = 1. - 1./tau_p;
-  
+
+  // for (int i=0; i<3; i++){
+  //   mg(i+1) += sqrt(0.5)*(1. + gamma_p)*noise(x,y,z,ncons+i);
+  // }
+  // for (int i=4; i<nvel; i++){
+  //   mf(i) += sqrt(0.5)*(1. + gamma_r)*noise(x,y,z,i+4);
+  //   mg(i) += sqrt(0.5)*(1. + gamma_p)*noise(x,y,z,nvel+i+4);
+  // }
+
   for (int i=1; i<ncons; ++i) {
     // mg(i) += (1. - 0.5/tau_p) * noise(x,y,z,ncons+i);
     mg(i) += sqrt(0.5)*(1. + gamma_p)*noise(x,y,z,ncons+i);
@@ -409,6 +416,16 @@ void hydrovars(int x, int y, int z,
   const Array1D<Real,0,nvel> mg = moments(x,y,z,g);
   h(x,y,z,0) = mf(0);
   h(x,y,z,1) = mg(0);
+
+  // for (int i=2; i<ncons; i++) {
+  //   h(x,y,z,i) = mf(i)/mf(0);
+  //   h(x,y,z,i+3) = mg(i);
+  // }
+  // for (int i=4; i<nvel; ++i) {
+  //   h(x,y,z,i+4) = mf(i);
+  //   h(x,y,z,i+nvel) = mg(i);
+  // }
+
   for (int i=1; i<ncons; ++i) {
     h(x,y,z,i+1) = mf(i)/mf(0);
     h(x,y,z,i+ncons) = mg(i);
