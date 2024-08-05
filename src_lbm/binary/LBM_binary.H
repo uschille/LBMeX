@@ -312,13 +312,19 @@ void thermalize_moments(int x, int y, int z,
       Array1D<Real,0,nvel>& mf, Array1D<Real,0,nvel>& mg,
       const Array4<Real>& noise) {
   // diffusive moments 1,2,3 in noise at 5,6,7
+  const Real gamma_r = 1. - 1./tau_r;
+  const Real gamma_p = 1. - 1./tau_p;
+  
   for (int i=1; i<ncons; ++i) {
-    mg(i) += (1. - 0.5/tau_p) * noise(x,y,z,ncons+i);
+    // mg(i) += (1. - 0.5/tau_p) * noise(x,y,z,ncons+i);
+    mg(i) += sqrt(0.5)*(1. + gamma_p)*noise(x,y,z,ncons+i);
   }
   // nonconserved moments 4..18 in noise at 8..22 (f) and 23..37 (g)
   for (int i=ncons; i<nvel; ++i) {
-    mf(i) += (1. - 0.5/tau_r) * noise(x,y,z,ncons+i);
-    mg(i) += (1. - 0.5/tau_p) * noise(x,y,z,nvel+i);
+    // mf(i) += (1. - 0.5/tau_r) * noise(x,y,z,ncons+i);
+    // mg(i) += (1. - 0.5/tau_p) * noise(x,y,z,nvel+i);
+    mf(i) += sqrt(0.5)*(1. + gamma_r)*noise(x,y,z,ncons+i);
+    mg(i) += sqrt(0.5)*(1. + gamma_p)*noise(x,y,z,nvel+i);
   }
 }
 
