@@ -21,7 +21,7 @@ inline void WriteDist(int step,
 
       pltfile = amrex::Concatenate("g_plt_",step,5);
       WriteSingleLevelPlotfile(pltfile, gold, var_names, geom, time, step);
-      }
+}
 
 inline Vector<std::string> VariableNames(const int numVars) {
   // set variable names for output
@@ -164,13 +164,9 @@ void main_driver(const char* argv) {
       WriteOutput(step, noise, geom, "xi_plt");
       structFact.WritePlotFile(step, static_cast<Real>(step), geom, "SF_plt");
       StructFact structFact(ba, dm, var_names, var_scaling);
-      // const std::string& pltfile = amrex::Concatenate("noise_plt",step,7);
-      // visMF::Write(noise, pltfile)
     }
     Print() << "LB step " << step << "\n";
   }
-
-  // structFact.WritePlotFile(nsteps, nsteps, geom, "plt_SF");
 
   // Call the timer again and compute the maximum difference between the start time 
   // and stop time over all processors

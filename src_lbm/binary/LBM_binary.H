@@ -5,6 +5,7 @@
 
 // relaxation parameters
 AMREX_GPU_MANAGED Real tau_r = 0.7886751345948129; // tau=0.5*(1.+1./sqrt(3.)) minimizes spurious currents according to Swift et al.
+// AMREX_GPU_MANAGED Real tau_r = 1.0; 
 AMREX_GPU_MANAGED Real tau_p = 1.0;
 AMREX_GPU_MANAGED int nx = 16;
 AMREX_GPU_MANAGED int ic = 0;
@@ -311,28 +312,35 @@ void thermalize_moments(int x, int y, int z,
       Array1D<Real,0,nvel>& mf, Array1D<Real,0,nvel>& mg,
       const Array4<Real>& noise) {
   // diffusive moments 1,2,3 in noise at 5,6,7
-  const Real gamma_r = 1. - 1./tau_r;
-  const Real gamma_p = 1. - 1./tau_p;
+  // const Real gamma_r = 1. - 1./tau_r;
+  // const Real gamma_p = 1. - 1./tau_p;
+  // const Real discretization_factor_r = sqrt(0.5)*(1. + gamma_r);
+  // const Real discretization_factor_p = sqrt(0.5)*(1. + gamma_p);
 
-  // for (int i=0; i<3; i++){
-  //   mg(i+1) += sqrt(0.5)*(1. + gamma_p)*noise(x,y,z,ncons+i);
-  // }
-  // for (int i=4; i<nvel; i++){
-  //   mf(i) += sqrt(0.5)*(1. + gamma_r)*noise(x,y,z,i+4);
-  //   mg(i) += sqrt(0.5)*(1. + gamma_p)*noise(x,y,z,nvel+i+4);
-  // }
+  const Real discretization_factor_r = (1. - 0.5/tau_r);
+  const Real discretization_factor_p = (1. - 0.5/tau_p);
 
-  for (int i=1; i<ncons; ++i) {
-    // mg(i) += (1. - 0.5/tau_p) * noise(x,y,z,ncons+i);
-    mg(i) += sqrt(0.5)*(1. + gamma_p)*noise(x,y,z,ncons+i);
+  // nk implementation
+  for (int i=0; i<3; i++){
+    mg(i+1) += discretization_factor_p*noise(x,y,z,ncons+i);
   }
-  // nonconserved moments 4..18 in noise at 8..22 (f) and 23..37 (g)
-  for (int i=ncons; i<nvel; ++i) {
-    // mf(i) += (1. - 0.5/tau_r) * noise(x,y,z,ncons+i);
-    // mg(i) += (1. - 0.5/tau_p) * noise(x,y,z,nvel+i);
-    mf(i) += sqrt(0.5)*(1. + gamma_r)*noise(x,y,z,ncons+i);
-    mg(i) += sqrt(0.5)*(1. + gamma_p)*noise(x,y,z,nvel+i);
+  for (int i=4; i<nvel; i++){
+    mf(i) += discretization_factor_r*noise(x,y,z,i+4);
+    mg(i) += discretization_factor_p*noise(x,y,z,nvel+i);
   }
+
+  // // us implementation
+  // for (int i=1; i<ncons; ++i) {
+  //   // mg(i) += (1. - 0.5/tau_p) * noise(x,y,z,ncons+i);
+  //   mg(i) += sqrt(0.5)*(1. + gamma_p)*noise(x,y,z,ncons+i);
+  // }
+  // // nonconserved moments 4..18 in noise at 8..22 (f) and 23..37 (g)
+  // for (int i=ncons; i<nvel; ++i) {
+  //   // mf(i) += (1. - 0.5/tau_r) * noise(x,y,z,ncons+i);
+  //   // mg(i) += (1. - 0.5/tau_p) * noise(x,y,z,nvel+i);
+  //   mf(i) += sqrt(0.5)*(1. + gamma_r)*noise(x,y,z,ncons+i);
+  //   mg(i) += sqrt(0.5)*(1. + gamma_p)*noise(x,y,z,nvel+i);
+  // }
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
@@ -417,23 +425,28 @@ void hydrovars(int x, int y, int z,
   h(x,y,z,0) = mf(0);
   h(x,y,z,1) = mg(0);
 
-  // for (int i=2; i<ncons; i++) {
-  //   h(x,y,z,i) = mf(i)/mf(0);
-  //   h(x,y,z,i+3) = mg(i);
-  // }
-  // for (int i=4; i<nvel; ++i) {
-  //   h(x,y,z,i+4) = mf(i);
-  //   h(x,y,z,i+nvel) = mg(i);
-  // }
-
-  for (int i=1; i<ncons; ++i) {
+  // nk implementation
+  for (int i=1; i<4; i++) {
+    // Print() << "Index to h: " << i + 1 << " Index in mf: " << i << "\n";
     h(x,y,z,i+1) = mf(i)/mf(0);
-    h(x,y,z,i+ncons) = mg(i);
+    // Print() << "Index to h: " << i + 4 << " Index in mg: " << i << "\n";
+    h(x,y,z,i+4) = mg(i)/mg(0);
   }
-  for (int i=ncons; i<nvel; ++i) {
-    h(x,y,z,i+ncons) = mf(i);
+  for (int i=4; i<nvel; i++) {
+    // Print() << "Index to h: " << i + 4 << " Index in mf: " << i << "\n";
+    h(x,y,z,i+4) = mf(i);
+    // Print() << "Index to h: " << i + nvel  << " Index in mg: " << i << "\n";
     h(x,y,z,i+nvel) = mg(i);
   }
+  // // us implementation
+  // for (int i=1; i<ncons; ++i) {
+  //   h(x,y,z,i+1) = mf(i)/mf(0);
+  //   h(x,y,z,i+ncons) = mg(i);
+  // }
+  // for (int i=ncons; i<nvel; ++i) {
+  //   h(x,y,z,i+ncons) = mf(i);
+  //   h(x,y,z,i+nvel) = mg(i);
+  // }
 }
 
 // calculate hydrodynamic moments for whole lattice
