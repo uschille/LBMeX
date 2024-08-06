@@ -306,8 +306,8 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz, const Box& dom
   Xi[(Q+ 1)*ndof+(   8)] = -6.*kT*rho0*(3*cs2 - 1)*lambda_r*(2+lambda_r)/2;
 
   // rho-phi sector
-  Xi[(   1)*ndof+(   8)] = 3.*kT*(C0*k2*kappa + p_C)/(mu_C*rho0)*lambda_r;
-  Xi[(   8)*ndof+(   1)] = 3.*kT*(C0*k2*kappa + p_C)/(mu_C*rho0)*lambda_r;
+  Xi[(   1)*ndof+(   8)] = 3.*kT*p_C/(mu_C*rho0)*lambda_r;
+  Xi[(   8)*ndof+(   1)] = 3.*kT*p_C/(mu_C*rho0)*lambda_r;
   Xi[(   2)*ndof+(   5)] = C0*kT*lambda_p;
   Xi[(   3)*ndof+(   6)] = C0*kT*lambda_p;
   Xi[(   4)*ndof+(   7)] = C0*kT*lambda_p;
@@ -318,18 +318,18 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz, const Box& dom
   Xi[(   0)*ndof+(Q+16)] = -3.*Gamma*kT*rho0*mu_rho/cs2*lambda_p;
   Xi[(Q+ 4)*ndof+(   0)] = 3.*Gamma*kT*rho0*mu_rho/cs2*lambda_p;
   Xi[(Q+16)*ndof+(   0)] = -3.*Gamma*kT*rho0*mu_rho/cs2*lambda_p;
-  Xi[(   1)*ndof+(Q+ 1)] = -3.*kT*(C0*k2*kappa + p_C)/(mu_C*rho0)*lambda_r;
-  Xi[(Q+ 1)*ndof+(   1)] = -3.*kT*(C0*k2*kappa + p_C)/(mu_C*rho0)*lambda_r;
+  Xi[(   1)*ndof+(Q+ 1)] = -3.*kT*p_C/(mu_C*rho0)*lambda_r;
+  Xi[(Q+ 1)*ndof+(   1)] = -3.*kT*p_C/(mu_C*rho0)*lambda_r;
 
-  Xi[(   8)*ndof+(Q+ 4)] = 3.*kT*(Gamma*mu_C*pow(rho0, 2)*(3*cs2 - 1)*mu_rho*lambda_p*(2+lambda_r)/2 + cs2*(3*Gamma*mu_C - 1)*(C0*k2*kappa + p_C)*lambda_r*(2+lambda_p)/2)/(cs2*mu_C*rho0);
-  Xi[(   8)*ndof+(Q+16)] = -3.*kT*(Gamma*mu_C*pow(rho0, 2)*(3*cs2 - 1)*mu_rho*lambda_p*(2+lambda_r)/2 + cs2*(3*Gamma*mu_C - 1)*(C0*k2*kappa + p_C)*lambda_r*(2+lambda_p)/2)/(cs2*mu_C*rho0);
-  Xi[(Q+ 4)*ndof+(   8)] = 3.*kT*(Gamma*mu_C*pow(rho0, 2)*(3*cs2 - 1)*mu_rho*lambda_p*(2+lambda_r)/2 + cs2*(3*Gamma*mu_C - 1)*(C0*k2*kappa + p_C)*lambda_r*(2+lambda_p)/2)/(cs2*mu_C*rho0);
-  Xi[(Q+16)*ndof+(   8)] = -3.*kT*(Gamma*mu_C*pow(rho0, 2)*(3*cs2 - 1)*mu_rho*lambda_p*(2+lambda_r)/2 + cs2*(3*Gamma*mu_C - 1)*(C0*k2*kappa + p_C)*lambda_r*(2+lambda_p)/2)/(cs2*mu_C*rho0);
+  Xi[(   8)*ndof+(Q+ 4)] = 3.*kT*(Gamma*mu_C*pow(rho0, 2)*(3*cs2 - 1)*mu_rho*lambda_p*(2+lambda_r)/2 + cs2*(3*Gamma*mu_C - 1)*p_C*lambda_r*(2+lambda_p)/2)/(cs2*mu_C*rho0);
+  Xi[(   8)*ndof+(Q+16)] = -3.*kT*(Gamma*mu_C*pow(rho0, 2)*(3*cs2 - 1)*mu_rho*lambda_p*(2+lambda_r)/2 + cs2*(3*Gamma*mu_C - 1)*p_C*lambda_r*(2+lambda_p)/2)/(cs2*mu_C*rho0);
+  Xi[(Q+ 4)*ndof+(   8)] = 3.*kT*(Gamma*mu_C*pow(rho0, 2)*(3*cs2 - 1)*mu_rho*lambda_p*(2+lambda_r)/2 + cs2*(3*Gamma*mu_C - 1)*p_C*lambda_r*(2+lambda_p)/2)/(cs2*mu_C*rho0);
+  Xi[(Q+16)*ndof+(   8)] = -3.*kT*(Gamma*mu_C*pow(rho0, 2)*(3*cs2 - 1)*mu_rho*lambda_p*(2+lambda_r)/2 + cs2*(3*Gamma*mu_C - 1)*p_C*lambda_r*(2+lambda_p)/2)/(cs2*mu_C*rho0);
 
-  Xi[(Q+ 1)*ndof+(Q+ 4)] = -3.*kT*(Gamma*mu_C*pow(rho0, 2)*(3*cs2 - 1)*mu_rho*lambda_p*(2+lambda_r)/2 + cs2*(3*Gamma*mu_C - 1)*(C0*k2*kappa + p_C)*lambda_r*(2+lambda_p)/2)/(cs2*mu_C*rho0);
-  Xi[(Q+ 1)*ndof+(Q+16)] = 3.*kT*(Gamma*mu_C*pow(rho0, 2)*(3*cs2 - 1)*mu_rho*lambda_p*(2+lambda_r)/2 + cs2*(3*Gamma*mu_C - 1)*(C0*k2*kappa + p_C)*lambda_r*(2+lambda_p)/2)/(cs2*mu_C*rho0);
-  Xi[(Q+ 4)*ndof+(Q+ 1)] = -3.*kT*(Gamma*mu_C*pow(rho0, 2)*(3*cs2 - 1)*mu_rho*lambda_p*(2+lambda_r)/2 + cs2*(3*Gamma*mu_C - 1)*(C0*k2*kappa + p_C)*lambda_r*(2+lambda_p)/2)/(cs2*mu_C*rho0);
-  Xi[(Q+16)*ndof+(Q+ 1)] = 3.*kT*(Gamma*mu_C*pow(rho0, 2)*(3*cs2 - 1)*mu_rho*lambda_p*(2+lambda_r)/2 + cs2*(3*Gamma*mu_C - 1)*(C0*k2*kappa + p_C)*lambda_r*(2+lambda_p)/2)/(cs2*mu_C*rho0);
+  Xi[(Q+ 1)*ndof+(Q+ 4)] = -3.*kT*(Gamma*mu_C*pow(rho0, 2)*(3*cs2 - 1)*mu_rho*lambda_p*(2+lambda_r)/2 + cs2*(3*Gamma*mu_C - 1)*p_C*lambda_r*(2+lambda_p)/2)/(cs2*mu_C*rho0);
+  Xi[(Q+ 1)*ndof+(Q+16)] = 3.*kT*(Gamma*mu_C*pow(rho0, 2)*(3*cs2 - 1)*mu_rho*lambda_p*(2+lambda_r)/2 + cs2*(3*Gamma*mu_C - 1)*p_C*lambda_r*(2+lambda_p)/2)/(cs2*mu_C*rho0);
+  Xi[(Q+ 4)*ndof+(Q+ 1)] = -3.*kT*(Gamma*mu_C*pow(rho0, 2)*(3*cs2 - 1)*mu_rho*lambda_p*(2+lambda_r)/2 + cs2*(3*Gamma*mu_C - 1)*p_C*lambda_r*(2+lambda_p)/2)/(cs2*mu_C*rho0);
+  Xi[(Q+16)*ndof+(Q+ 1)] = 3.*kT*(Gamma*mu_C*pow(rho0, 2)*(3*cs2 - 1)*mu_rho*lambda_p*(2+lambda_r)/2 + cs2*(3*Gamma*mu_C - 1)*p_C*lambda_r*(2+lambda_p)/2)/(cs2*mu_C*rho0);
 
   // phi-phi sector
   Xi[(Q+ 4)*ndof+(Q+16)] = -6.*Gamma*kT/rho0*(3*Gamma*mu_C - 1)*lambda_p*(2+lambda_p)/2;
