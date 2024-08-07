@@ -4,8 +4,8 @@
 #include "LBM_d3q19.H"
 
 // relaxation parameters
-AMREX_GPU_MANAGED Real tau_r = 0.7886751345948129; // tau=0.5*(1.+1./sqrt(3.)) minimizes spurious currents according to Swift et al.
-// AMREX_GPU_MANAGED Real tau_r = 1.0; 
+// AMREX_GPU_MANAGED Real tau_r = 0.7886751345948129; // tau=0.5*(1.+1./sqrt(3.)) minimizes spurious currents according to Swift et al.
+AMREX_GPU_MANAGED Real tau_r = 1.0; 
 AMREX_GPU_MANAGED Real tau_p = 1.0;
 AMREX_GPU_MANAGED int nx = 16;
 AMREX_GPU_MANAGED int ic = 0;
@@ -68,8 +68,8 @@ Array1D<Real,0,2> chemical_potentials(const Array1D<Real,0,2>& fields,
       The following expression has not been tested. */
     mu(0) = chi/4.*(1.+phi2/rho2) + T/2*log((rho2-phi2)/4) - kappa*D2rho;
   #endif
-    mu(1) = (-T*rho*log((rho - phi)/phi) - chi*(2.*phi - rho))/(2.*rho) - 2.*kappa*D2phi;
-    // mu(1) = (-T*rho*log((rho - phi)/phi) - chi*(2.*phi - rho))/(2.*rho) - 2.*kappa*D2phi;
+    // mu(1) = - chi/2.*phi/rho + T/2*log((rho+phi)/(rho-phi)) - 2.*kappa*D2phi;
+    mu(1) = (-T*rho*log((rho - phi)/phi) - chi*(2.*phi - rho))/(rho) - 4.*kappa*D2phi + 2.*kappa*D2rho;
     // Print() << "d2phi: " << D2phi << " mu_phi: " << mu(1) << " rho: " << rho << " phi: " << phi << "\n";
   return mu;
 }
@@ -315,10 +315,11 @@ void thermalize_moments(int x, int y, int z,
   // const Real gamma_r = 1. - 1./tau_r; const Real discretization_factor_r = sqrt(0.5)*(1. + gamma_r);
   // const Real gamma_p = 1. - 1./tau_p; const Real discretization_factor_p = sqrt(0.5)*(1. + gamma_p);
 
-  const Real discretization_factor_r = (1. - 0.5/tau_r); //rho relaxation time
-  const Real discretization_factor_p = (1. - 0.5/tau_p); //phi relaxation time
-  // const Real discretization_factor_r = 1/(tau_r - 0.5); //rho relaxation time
-  // const Real discretization_factor_p = 1/(tau_p - 0.5); //phi relaxation time
+  // const Real discretization_factor_r = (1. - 0.5/tau_r); //rho relaxation time
+  // const Real discretization_factor_p = (1. - 0.5/tau_p); //phi relaxation time
+
+  const Real discretization_factor_r = sqrt(1./3.); //rho relaxation time
+  const Real discretization_factor_p = sqrt(1./3.); //phi relaxation time
 
   // nk implementation
   for (int i=0; i<3; i++){

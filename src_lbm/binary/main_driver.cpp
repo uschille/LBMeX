@@ -162,7 +162,8 @@ void main_driver(const char* argv) {
     if (plot_int > 0 && step%plot_int ==0) {
       WriteOutput(step, hydrovs, geom, "hydro_plt");
       WriteOutput(step, noise, geom, "xi_plt");
-      structFact.WritePlotFile(step, static_cast<Real>(step), geom, "SF_plt", 0);
+      structFact.WritePlotFile(step, static_cast<Real>(step), geom, "SF_plt");
+      // structFact.WritePlotFile(step, static_cast<Real>(step), geom, "SF_plt", 0);
       StructFact structFact(ba, dm, var_names, var_scaling);
     }
     Print() << "LB step " << step << "\n";

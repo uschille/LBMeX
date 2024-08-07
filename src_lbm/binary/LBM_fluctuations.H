@@ -376,21 +376,20 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz, const Box& dom
   const Real k2 = fourier_laplace_operator(kx, ky, kz, domain);
 
   // TODO: generalize to MRT
-  const Real lambda_r = 1./tau_r;
-  const Real lambda_p = 1./tau_p;
+  // const Real lambda_r = 1./tau_r;
+  // const Real lambda_p = 1./tau_p;
+
+  const Real lambda_r = 2./(2.*tau_r - 1.);
+  const Real lambda_p = 2./(2.*tau_p - 1.);
 
   // TODO: generalize to non-homogeneous reference state
   const Real rho0 = 1.0;
   const Real C0 = 0.5;
-  // const Real cs2k = T + kappa*k2*rho0;
-  const Real cs2k = T + kappa*k2*rho0 + kappa*k2*(2*C0-rho0);
+  const Real cs2k = T + 2.*kappa*k2*(rho0 - C0); //checked after conversion
 
-  Real mu0 = (chi*(2.*C0 - rho0)/rho0 + T*log(C0/(rho0 - C0)))/2. + 2.*k2*kappa;
-  Real mu_rho = -T/(rho0-C0) + 2*chi*C0/(rho0*rho0) - kappa*k2;
-  // Real mu_rho = (2.*C0*chi - C0*pow(rho0, 2)*k2*kappa - 2.*C0*pow(rho0, 2)*chi + T*pow(rho0, 2) + pow(rho0, 3)*k2*kappa)/(pow(rho0, 2)*(C0 - rho0));
-  Real mu_C = (T*rho0/(C0*(rho0-C0)) - 2.*chi/rho0)/2. + 2.*kappa*k2;
-  Real p_C = 0.0;
-  // Real p_C = kappa*k2*C0;
+  Real mu_rho = -(T/(rho0-C0) + 2*chi*C0/(rho0*rho0))/1. - 2.*kappa*k2; //checked after conversion
+  Real mu_C = (T*rho0/(C0*(rho0-C0)) - 2.*chi/rho0)/1. + 4.*kappa*k2; //checked after conversion
+  Real p_C = 4.*kappa*k2*C0 - 2.*kappa*k2*rho0; //checked after conversion
 
   // Noise covariance of the modes in k-space
   GpuArray<Real,ndof*ndof> Xi = {};
