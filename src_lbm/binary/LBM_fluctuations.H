@@ -110,12 +110,6 @@ inline void create_kspace_sin(const Geometry& geom,
     });
   }
 }
-
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-Real soundspeed_squared(Real rho, Real C) {
-  const Real cs2 = lambda*(pow(C, 2)*(-2.*C + 2.*rho) - pow(rho, 3))/(pow(rho, 2)*(C - rho));
-  return cs2;
-}
 #endif
 
 #if 0
@@ -391,12 +385,12 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz, const Box& dom
   // const Real cs2k = T + kappa*k2*rho0;
   const Real cs2k = T + kappa*k2*rho0 + kappa*k2*(2*C0-rho0);
 
-  Real mu0 = -chi*(2.*C0 - rho0)/rho0 + T*log(C0/(rho0 - C0)) + C0*k2*kappa;
+  Real mu0 = (chi*(2.*C0 - rho0)/rho0 + T*log(C0/(rho0 - C0)))/2. + 2.*k2*kappa;
   Real mu_rho = -T/(rho0-C0) + 2*chi*C0/(rho0*rho0) - kappa*k2;
   // Real mu_rho = (2.*C0*chi - C0*pow(rho0, 2)*k2*kappa - 2.*C0*pow(rho0, 2)*chi + T*pow(rho0, 2) + pow(rho0, 3)*k2*kappa)/(pow(rho0, 2)*(C0 - rho0));
-  Real mu_C = T*rho0/(C0*(rho0-C0)) - 2.*chi/rho0 + 2.*kappa*k2;
-  // Real p_C = 0.0;
-  Real p_C = kappa*k2*C0;
+  Real mu_C = (T*rho0/(C0*(rho0-C0)) - 2.*chi/rho0)/2. + 2.*kappa*k2;
+  Real p_C = 0.0;
+  // Real p_C = kappa*k2*C0;
 
   // Noise covariance of the modes in k-space
   GpuArray<Real,ndof*ndof> Xi = {};

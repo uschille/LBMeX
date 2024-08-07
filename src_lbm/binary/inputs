@@ -4,7 +4,7 @@ max_grid_size = 16
 init_cond = 0
 
 # time parameters
-nsteps = 10000
+nsteps = 2000
 plot_int = 400
 
 # model parameters

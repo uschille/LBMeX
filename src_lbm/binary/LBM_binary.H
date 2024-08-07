@@ -68,9 +68,9 @@ Array1D<Real,0,2> chemical_potentials(const Array1D<Real,0,2>& fields,
       The following expression has not been tested. */
     mu(0) = chi/4.*(1.+phi2/rho2) + T/2*log((rho2-phi2)/4) - kappa*D2rho;
   #endif
-    mu(1) = // Eq. (38) in Swift et al.
-      - chi/2.*phi/rho + T/2*log((rho+phi)/(rho-phi)) - kappa*D2phi;
-
+    mu(1) = (-T*rho*log((rho - phi)/phi) - chi*(2.*phi - rho))/(2.*rho) - 2.*kappa*D2phi;
+    // mu(1) = (-T*rho*log((rho - phi)/phi) - chi*(2.*phi - rho))/(2.*rho) - 2.*kappa*D2phi;
+    // Print() << "d2phi: " << D2phi << " mu_phi: " << mu(1) << " rho: " << rho << " phi: " << phi << "\n";
   return mu;
 }
 
@@ -317,6 +317,8 @@ void thermalize_moments(int x, int y, int z,
 
   const Real discretization_factor_r = (1. - 0.5/tau_r); //rho relaxation time
   const Real discretization_factor_p = (1. - 0.5/tau_p); //phi relaxation time
+  // const Real discretization_factor_r = 1/(tau_r - 0.5); //rho relaxation time
+  // const Real discretization_factor_p = 1/(tau_p - 0.5); //phi relaxation time
 
   // nk implementation
   for (int i=0; i<3; i++){
