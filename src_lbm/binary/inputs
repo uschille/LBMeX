@@ -4,14 +4,14 @@ max_grid_size = 16
 init_cond = 0
 
 # time parameters
-nsteps = 2000
+nsteps = 10000
 plot_int = 400
 
 # model parameters
 lambda = 0.4
 T = 0.25
 kappa = 0.0
-gamma = 1
+gamma = 1.0
 
 # noise parameters
 temperature = 1e-7

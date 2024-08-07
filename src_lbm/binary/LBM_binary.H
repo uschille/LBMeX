@@ -312,13 +312,11 @@ void thermalize_moments(int x, int y, int z,
       Array1D<Real,0,nvel>& mf, Array1D<Real,0,nvel>& mg,
       const Array4<Real>& noise) {
   // diffusive moments 1,2,3 in noise at 5,6,7
-  // const Real gamma_r = 1. - 1./tau_r;
-  // const Real gamma_p = 1. - 1./tau_p;
-  // const Real discretization_factor_r = sqrt(0.5)*(1. + gamma_r);
-  // const Real discretization_factor_p = sqrt(0.5)*(1. + gamma_p);
+  // const Real gamma_r = 1. - 1./tau_r; const Real discretization_factor_r = sqrt(0.5)*(1. + gamma_r);
+  // const Real gamma_p = 1. - 1./tau_p; const Real discretization_factor_p = sqrt(0.5)*(1. + gamma_p);
 
-  const Real discretization_factor_r = (1. - 0.5/tau_r);
-  const Real discretization_factor_p = (1. - 0.5/tau_p);
+  const Real discretization_factor_r = (1. - 0.5/tau_r); //rho relaxation time
+  const Real discretization_factor_p = (1. - 0.5/tau_p); //phi relaxation time
 
   // nk implementation
   for (int i=0; i<3; i++){
@@ -331,15 +329,12 @@ void thermalize_moments(int x, int y, int z,
 
   // // us implementation
   // for (int i=1; i<ncons; ++i) {
-  //   // mg(i) += (1. - 0.5/tau_p) * noise(x,y,z,ncons+i);
-  //   mg(i) += sqrt(0.5)*(1. + gamma_p)*noise(x,y,z,ncons+i);
+  //   mg(i) += discretization_factor_p*noise(x,y,z,ncons+i);
   // }
   // // nonconserved moments 4..18 in noise at 8..22 (f) and 23..37 (g)
   // for (int i=ncons; i<nvel; ++i) {
-  //   // mf(i) += (1. - 0.5/tau_r) * noise(x,y,z,ncons+i);
-  //   // mg(i) += (1. - 0.5/tau_p) * noise(x,y,z,nvel+i);
-  //   mf(i) += sqrt(0.5)*(1. + gamma_r)*noise(x,y,z,ncons+i);
-  //   mg(i) += sqrt(0.5)*(1. + gamma_p)*noise(x,y,z,nvel+i);
+  //   mf(i) += discretization_factor_r*noise(x,y,z,ncons+i);
+  //   mg(i) += discretization_factor_p*noise(x,y,z,nvel+i);
   // }
 }
 
@@ -430,7 +425,7 @@ void hydrovars(int x, int y, int z,
     // Print() << "Index to h: " << i + 1 << " Index in mf: " << i << "\n";
     h(x,y,z,i+1) = mf(i)/mf(0);
     // Print() << "Index to h: " << i + 4 << " Index in mg: " << i << "\n";
-    h(x,y,z,i+4) = mg(i)/mg(0);
+    h(x,y,z,i+4) = mg(i);
   }
   for (int i=4; i<nvel; i++) {
     // Print() << "Index to h: " << i + 4 << " Index in mf: " << i << "\n";
