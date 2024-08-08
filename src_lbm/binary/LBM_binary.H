@@ -7,6 +7,7 @@
 AMREX_GPU_MANAGED Real tau_r = 0.7886751345948129; // tau=0.5*(1.+1./sqrt(3.)) minimizes spurious currents according to Swift et al.
 // AMREX_GPU_MANAGED Real tau_r = 1.0; 
 AMREX_GPU_MANAGED Real tau_p = 1.0;
+// AMREX_GPU_MANAGED Real tau_p = 0.7886751345948129;
 AMREX_GPU_MANAGED int nx = 16;
 AMREX_GPU_MANAGED int ic = 0;
 
@@ -312,14 +313,11 @@ void thermalize_moments(int x, int y, int z,
       Array1D<Real,0,nvel>& mf, Array1D<Real,0,nvel>& mg,
       const Array4<Real>& noise) {
   // diffusive moments 1,2,3 in noise at 5,6,7
-  // const Real gamma_r = 1. - 1./tau_r; const Real discretization_factor_r = sqrt(0.5)*(1. + gamma_r);
-  // const Real gamma_p = 1. - 1./tau_p; const Real discretization_factor_p = sqrt(0.5)*(1. + gamma_p);
 
-  const Real discretization_factor_r = (1. - 0.5/tau_r); //rho relaxation time
-  const Real discretization_factor_p = (1. - 0.5/tau_p); //phi relaxation time
-
-  // const Real discretization_factor_r = 1.; //rho relaxation time
-  // const Real discretization_factor_p = 1.; //phi relaxation time
+  const Real discretization_factor_r = sqrt((1. - 0.5/tau_r)); //rho relaxation time
+  const Real discretization_factor_p = sqrt((1. - 0.5/tau_p)); //phi relaxation time
+  // const Real discretization_factor_r = 1.;
+  // const Real discretization_factor_p = 1.;
 
   // nk implementation
   for (int i=0; i<3; i++){

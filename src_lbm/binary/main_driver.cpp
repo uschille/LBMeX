@@ -131,14 +131,6 @@ void main_driver(const char* argv) {
   MultiFab hydrovs(ba, dm, 2*nvel, nghost);
   MultiFab noise(ba, dm, 2*nvel, nghost);
 
-  int nStructVars = 5;
-  const Vector<std::string> var_names = VariableNames(nStructVars);
-  Vector<Real> var_scaling(nStructVars*(nStructVars+1)/2);
-  for (int i=0; i<var_scaling.size(); ++i) {
-    if (temperature>0) var_scaling[i] = temperature; else var_scaling[i] = 1.;
-  }
-  StructFact structFact(ba, dm, var_names, var_scaling);
-
   // INITIALIZE
   switch(ic){
     case 0:
@@ -155,16 +147,25 @@ void main_driver(const char* argv) {
   if (plot_int > 0) WriteOutput(0, hydrovs, geom, "hydro_plt");
   Print() << "LB initialized\n";
 
+  // structure factor stuff
+  int nStructVars = 5;
+  const Vector<std::string> var_names = VariableNames(nStructVars);
+  Vector<Real> var_scaling(nStructVars*(nStructVars+1)/2);
+  for (int i=0; i<var_scaling.size(); ++i) {
+    if (temperature>0) var_scaling[i] = temperature; else var_scaling[i] = 1.;
+  }
+  StructFact structFact(ba, dm, var_names, var_scaling);
+
   // TIMESTEP
   for (int step=1; step <= nsteps; ++step) {
     LBM_timestep(geom, fold, gold, fnew, gnew, hydrovs, noise);
-    structFact.FortStructure(hydrovs, geom);
+    if (temperature != 0){structFact.FortStructure(hydrovs, geom);}
     if (plot_int > 0 && step%plot_int ==0) {
       WriteOutput(step, hydrovs, geom, "hydro_plt");
-      WriteOutput(step, noise, geom, "xi_plt");
-      structFact.WritePlotFile(step, static_cast<Real>(step), geom, "SF_plt");
-      // structFact.WritePlotFile(step, static_cast<Real>(step), geom, "SF_plt", 0);
-      StructFact structFact(ba, dm, var_names, var_scaling);
+      if (temperature != 0){
+        WriteOutput(step, noise, geom, "xi_plt"); 
+        structFact.WritePlotFile(step, static_cast<Real>(step), geom, "SF_plt", 0);
+        StructFact structFact(ba, dm, var_names, var_scaling);}
     }
     Print() << "LB step " << step << "\n";
   }
