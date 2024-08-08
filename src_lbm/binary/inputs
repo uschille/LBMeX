@@ -9,9 +9,9 @@ plot_int = 400
 
 # model parameters
 lambda = 0.4
-T = 0.25
-kappa = 0.0
+T = 0.15
+kappa = 0.01
 gamma = 1.0
 
 # noise parameters
-temperature = 1e-7
+temperature = 0.0
