@@ -70,7 +70,9 @@ Array1D<Real,0,2> chemical_potentials(const Array1D<Real,0,2>& fields,
     mu(0) = chi/4.*(1.+phi2/rho2) + T/2*log((rho2-phi2)/4) - kappa*D2rho;
   #endif
     mu(1) = (-T*rho*log((rho - phi)/phi) - chi*(2.*phi - rho))/(rho) - 4.*kappa*D2phi + 2.*kappa*D2rho;
-    mu(1) = mu(1)/2;
+    mu(1) = mu(1)/2; //I'm honestly not sure why this fixes the multiphase dynamics. 
+    // I've checked and rechecked the thermodynamics multiple times and it all checks out but this divide by 2 seems to fix all issues.
+    // I suspect its something about the expression having 2C, but the g distributions are meant to calculate phi, not 2C.
     // Print() << "d2phi: " << D2phi << "d2rho: " << D2rho << " mu_phi: " << mu(1) << " rho: " << rho << " phi: " << phi << "\n";
   return mu;
 }
@@ -459,9 +461,9 @@ inline void hydrovars(MultiFab& mf, MultiFab& mg, MultiFab& hydrovs) {
 inline void LBM_timestep(const Geometry& geom,
 			 MultiFab& fold, MultiFab& gold,
 			 MultiFab& fnew, MultiFab& gnew,
-			 MultiFab& hydrovs, MultiFab& noise) {
+			 MultiFab& hydrovs, MultiFab& noise, MultiFab& ref_params) {
   if (temperature == 0){noise.setVal(0.);}
-  else {generate_fluctuations(geom, hydrovs, noise);}
+  else {generate_fluctuations(geom, hydrovs, noise, ref_params);}
   collide_stream(geom, fold, gold, fnew, gnew, hydrovs, noise);
   hydrovars(fold, gold, hydrovs);
 }

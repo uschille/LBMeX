@@ -370,7 +370,7 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz, const Box& dom
 }
 #endif
 
-GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz, const Box& domain) { // TODO: add function arguments: rho, phi, k, others?
+GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz, const Box& domain, const Array4<Real>& h) { // TODO: add function arguments: rho, phi, k, others?
   const uint Q = nvel;
   const Real kT = temperature;
   const Real k2 = fourier_laplace_operator(kx, ky, kz, domain);
@@ -382,6 +382,8 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz, const Box& dom
   // TODO: generalize to non-homogeneous reference state
   const Real rho0 = 1.0;
   const Real C0 = 0.5;
+  // const Real rho0 = h(kx,ky,kz,0);
+  // const Real C0 = h(kx,ky,kz,1);
 
   // Real cs2k = T + 2.*kappa*k2*(rho0-C0);
   // Real p_C = 2.*kappa*k2*(2.*C0-rho0);
@@ -389,8 +391,9 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz, const Box& dom
   // Real mu_C = T*rho0/C0/(rho0-C0) - 2.*chi/rho0 + 4.*kappa*k2;
 
   const Real cs2k = T + 2.*kappa*k2*(rho0 - C0); //checked after conversion
-  const Real mu_rho = -(T/(C0 - rho0) + 2*chi*pow(C0, 2)/pow(rho0, 3)) - 2.*kappa*k2; //checked after conversion
-  const Real mu_C = ((-C0*chi*(C0 - rho0) - T*pow(rho0, 2)/2)/(C0*rho0*(C0 - rho0)) + 4.*kappa*k2)/2.; //checked after conversion
+  const Real mu_rho = -(T/(C0 - rho0) + 2*chi*pow(C0, 2)/pow(rho0, 3)) - 2.*kappa*k2*rho0; //checked after conversion
+  const Real mu_C = ((-C0*chi*(C0 - rho0) - T*pow(rho0, 2)/2)/(C0*rho0*(C0 - rho0)) + 4.*kappa*k2*C0)/2.; //checked after conversion
+  // const Real p_C = 4.*kappa*k2*C0 - 2.*kappa*k2*rho0; //checked after conversion
   const Real p_C = 4.*kappa*k2*C0 - 2.*kappa*k2*rho0; //checked after conversion
 
   // Noise covariance of the modes in k-space
@@ -488,7 +491,7 @@ GpuArray<GpuComplex<Real>,ndof> correlated_noise(int kx, int ky, int kz,
   GpuArray<Real,ndof*ndof> C;
 
   // Cholesky decomposition of noise covariance matrix
-  C = noise_covariance(kx,ky,kz,domain);
+  C = noise_covariance(kx,ky,kz,domain,h);
   cholesky_decomp(C,ndof,ncons);
 
   // need to generate the correct symmetries here? [uschill 07/25/2022]
@@ -512,7 +515,8 @@ GpuArray<GpuComplex<Real>,ndof> correlated_noise(int kx, int ky, int kz,
 inline void generate_kspace_noise(const Geometry& geom,
 				  MultiFab& kspace_noise_real,
 				  MultiFab& kspace_noise_imag,
-          MultiFab& hydrovs) {
+          MultiFab& hydrovs,
+          MultiFab& ref_params) {
   const Box domain = geom.Domain();
 
   // include density? [uschill 07/26/2022]
@@ -524,6 +528,7 @@ inline void generate_kspace_noise(const Geometry& geom,
     const Array4<Real>& xi_real = kspace_noise_real.array(mfi);
     const Array4<Real>& xi_imag = kspace_noise_imag.array(mfi);
     const Array4<Real>& h = hydrovs.array(mfi);
+    const Array4<Real>& r = ref_params.array(mfi);
     // construct noise in k-space
     ParallelForRNG(box, [=] AMREX_GPU_DEVICE(int kx, int ky, int kz, RandomEngine const& engine) {
       if (kx <= domain.length(0)/2) { // need only half of k-space for c2r FFT
@@ -769,7 +774,8 @@ inline void compute_ifft(const Geometry& geom, MultiFab& realspace_noise,
 // LB thermalization procedure for spatially correlated, non-diagonal noise
 inline void generate_fluctuations(const Geometry& geom,
 				  MultiFab& hydrovs,
-				  MultiFab& noise) {
+				  MultiFab& noise,
+          MultiFab& ref_params) {
   BoxArray ba = noise.boxArray();
   DistributionMapping dm = noise.DistributionMap();
   MultiFab kspace_noise_real(ba, dm, ndof, 0);
@@ -781,7 +787,7 @@ inline void generate_fluctuations(const Geometry& geom,
   // TODO: check if this takes care of ndof entries!?
 
   // generate noise in k-space
-  generate_kspace_noise(geom, kspace_noise_real, kspace_noise_imag, hydrovs);
+  generate_kspace_noise(geom, kspace_noise_real, kspace_noise_imag, hydrovs, ref_params);
 
   // note that the k-space noise is generated without the required symmetries
   // (this is to allow for parallel generation of noise)

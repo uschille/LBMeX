@@ -130,6 +130,7 @@ void main_driver(const char* argv) {
   MultiFab gnew(ba, dm, nvel, nghost);
   MultiFab hydrovs(ba, dm, 2*nvel, nghost);
   MultiFab noise(ba, dm, 2*nvel, nghost);
+  MultiFab ref_params(ba, dm, 2, nghost); //reference rho and C for each point of the lattice
 
   // INITIALIZE
   switch(ic){
@@ -143,6 +144,8 @@ void main_driver(const char* argv) {
       LBM_init_droplet(0.3, geom, fold, gold, hydrovs);
   }
 
+  hydrovs.Copy(ref_params, hydrovs, 0, 0, 2, nghost);
+  // WriteSingleLevelPlotfile("ref_density_plt", ref_params, {"rho", "C"}, geom, Real(0), 0);
   // Write a plotfile of the initial data if plot_int > 0
   if (plot_int > 0) WriteOutput(0, hydrovs, geom, "hydro_plt");
   Print() << "LB initialized\n";
@@ -158,7 +161,7 @@ void main_driver(const char* argv) {
 
   // TIMESTEP
   for (int step=1; step <= nsteps; ++step) {
-    LBM_timestep(geom, fold, gold, fnew, gnew, hydrovs, noise);
+    LBM_timestep(geom, fold, gold, fnew, gnew, hydrovs, noise, ref_params);
     if (temperature != 0){structFact.FortStructure(hydrovs, geom);}
     if (plot_int > 0 && step%plot_int ==0) {
       WriteOutput(step, hydrovs, geom, "hydro_plt");
