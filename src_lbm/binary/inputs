@@ -4,13 +4,13 @@ max_grid_size = 16
 init_cond = 0
 
 # time parameters
-nsteps = 1000
-plot_int = 200
+nsteps = 1
+plot_int = 0
 
 # model parameters
-lambda = 0.4
-T = 0.25
-kappa = 0.01
+lambda = 0.5
+T = 0.4
+kappa = 0.0
 gamma = 1.0
 
 # noise parameters

@@ -8,65 +8,7 @@
 using namespace amrex;
 #include "LBM_binary.H"
 #include "tests.H"
-
-inline void WriteDist(int step, 
-      const MultiFab& fold,
-      const MultiFab& gold, 
-      const Vector<std::string>& var_names,
-      const Geometry& geom){
-      
-      const Real time = step;
-      std::string pltfile = amrex::Concatenate("f_plt_",step,5);
-      WriteSingleLevelPlotfile(pltfile, fold, var_names, geom, time, step);
-
-      pltfile = amrex::Concatenate("g_plt_",step,5);
-      WriteSingleLevelPlotfile(pltfile, gold, var_names, geom, time, step);
-}
-
-inline Vector<std::string> VariableNames(const int numVars) {
-  // set variable names for output
-  Vector<std::string> var_names(numVars);
-  std::string name;
-  int cnt = 0;
-  // rho, phi
-  if (cnt<numVars) var_names[cnt++] = "density";
-  if (cnt<numVars) var_names[cnt++] = "phi";
-  // velx, vely, velz
-  for (int d=0; d<AMREX_SPACEDIM; d++) {
-    name = "u";
-    name += (120+d);
-    var_names[cnt++] = name;
-  }
-  if (numVars == 5){return var_names;}
-  for (int d=0; d<AMREX_SPACEDIM; d++) {
-    name = "phi*u";
-    name += (120+d);
-    var_names[cnt++] = name;
-  }
-  // remaining moments
-  for (int d=4; d < nvel; d++){
-    name = "mf";
-    name += std::to_string(d);
-    var_names[cnt++] = name;
-  }
-  for (int d=4; d < nvel; d++){
-    name = "mg";
-    name += std::to_string(d);
-    var_names[cnt++] = name;
-  }
-
-  return var_names;
-}
-
-inline void WriteOutput(int step,
-			const MultiFab& hydrovs,
-			const Geometry& geom,
-      const std::string pltname) {
-  // set up variable names for output
-  const Vector<std::string> var_names = VariableNames(2*nvel);
-  const std::string& pltfile = amrex::Concatenate(pltname,step,7);
-  WriteSingleLevelPlotfile(pltfile, hydrovs, var_names, geom, Real(step), step);
-}
+#include "LBM_IO.H"
 
 void main_driver(const char* argv) {
 
@@ -83,6 +25,8 @@ void main_driver(const char* argv) {
   // default time stepping parameters
   int nsteps = 100;
   int plot_int = 10;
+  int n_checkpoint = nsteps;
+  int restart_step = 0;
 
   // input parameters
   ParmParse pp;
@@ -90,6 +34,7 @@ void main_driver(const char* argv) {
   pp.query("nx", nx);
   pp.query("max_grid_size", max_grid_size);
   pp.query("init_cond", ic);
+  pp.query("n_checkpoint", n_checkpoint);
 
   // plot parameters
   pp.query("nsteps", nsteps);
@@ -142,7 +87,13 @@ void main_driver(const char* argv) {
       break;
     case 2:
       LBM_init_droplet(0.3, geom, fold, gold, hydrovs);
+      break
+    case 10:
+      ReadCheckpointFile(restart_step, hydrovs);
+      // TODO ADD CONVERSION FROM HYDROVS TO FOLD AND GOLD
   }
+  WriteCheckpointFile(0, hydrovs, ba);
+  // checkpoint read of hydrovs to generate fold and gold to be used for further simulations
 
   hydrovs.Copy(ref_params, hydrovs, 0, 0, 2, nghost);
   // WriteSingleLevelPlotfile("ref_density_plt", ref_params, {"rho", "C"}, geom, Real(0), 0);
@@ -168,8 +119,11 @@ void main_driver(const char* argv) {
       if (temperature != 0){
         WriteOutput(step, noise, geom, "xi_plt"); 
         structFact.WritePlotFile(step, static_cast<Real>(step), geom, "SF_plt", 0);
+        // structFact.WritePlotFile(step, static_cast<Real>(step), geom, "SF_plt");
         StructFact structFact(ba, dm, var_names, var_scaling);}
     }
+
+    if (steps%n_checkpoint == 0){WriteCheckpointFile(step, hydrovs, ba);}
     Print() << "LB step " << step << "\n";
   }
 

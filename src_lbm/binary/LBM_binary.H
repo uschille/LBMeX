@@ -69,8 +69,9 @@ Array1D<Real,0,2> chemical_potentials(const Array1D<Real,0,2>& fields,
       The following expression has not been tested. */
     mu(0) = chi/4.*(1.+phi2/rho2) + T/2*log((rho2-phi2)/4) - kappa*D2rho;
   #endif
-    mu(1) = (-T*rho*log((rho - phi)/phi) - chi*(2.*phi - rho))/(rho) - 4.*kappa*D2phi + 2.*kappa*D2rho;
-    mu(1) = mu(1)/2; //I'm honestly not sure why this fixes the multiphase dynamics. 
+    mu(1) = -chi/2.*(phi/rho) + T/2.*log((1. + phi/rho)/(1. - phi/rho)) - kappa*D2phi;
+    // mu(1) = (-T*rho*log((rho - phi)/phi) - chi*(2.*phi - rho))/(rho) - 4.*kappa*D2phi + 2.*kappa*D2rho;
+    // mu(1) = mu(1)/2; //I'm honestly not sure why this fixes the multiphase dynamics. 
     // I've checked and rechecked the thermodynamics multiple times and it all checks out but this divide by 2 seems to fix all issues.
     // I suspect its something about the expression having 2C, but the g distributions are meant to calculate phi, not 2C.
     // Print() << "d2phi: " << D2phi << "d2rho: " << D2rho << " mu_phi: " << mu(1) << " rho: " << rho << " phi: " << phi << "\n";
@@ -481,7 +482,8 @@ inline void LBM_init_mixture(MultiFab& mf,
     ParallelForRNG(valid_box, [=] AMREX_GPU_DEVICE(int x, int y, int z, RandomEngine const& engine) {
       const Real rho = C1 + C2;
       Real phi = 0.0;
-      phi = C1+0.001*RandomNormal(0., 1., engine);
+      // phi = C1+0.001*RandomNormal(0., 1., engine);
+      phi = 0.001*RandomNormal(0., 1., engine);
       for (int i=0; i<nvel; i++) {
         f(x,y,z,i) = w[i]*rho;
         g(x,y,z,i) = w[i]*phi;
@@ -514,9 +516,11 @@ inline void LBM_init_flat_interface(const Geometry& geom,
       const Real rho=1.0;
       Real phi = 0.0;
       if (rx < 0.) {
-        phi = (1. + 0.49)/2.;
+        // phi = (1. + 0.49)/2.;
+        phi = 0.5;
       } else {
-        phi = (1. - 0.49)/2.;
+        // phi = (1. - 0.49)/2.;
+        phi = -0.5;
       }
 
       for (int i=0; i<nvel; i++) {
@@ -553,12 +557,12 @@ inline void LBM_init_droplet(const Real r,
 
       const Real rho = 1.0;
       const Real phi0 = 0.5;
-      // const Real phi = phi0*tanh((R-r)/sqrt(kappa));
+      const Real phi = phi0*tanh((R-r)/sqrt(kappa));
 
-      Real phi = 0.0;
-      const Real test = tanh((R-r)/sqrt(kappa));
-      if (test > 0){phi = (1.0 + 0.50)/2.;}
-      else{phi = (1.0 - 0.50)/2.;}
+      // Real phi = 0.0;
+      // const Real test = tanh((R-r)/sqrt(kappa));
+      // if (test > 0){phi = (1.0 + 0.50)/2.;}
+      // else{phi = (1.0 - 0.50)/2.;}
 
       for (int i=0; i<nvel; i++) {
         f[nbx](x,y,z,i) = w[i]*rho;
