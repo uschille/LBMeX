@@ -260,8 +260,8 @@ void ReadCheckPoint(int& step, MultiFab& umac, BoxArray& ba, DistributionMapping
         MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
         MPI_Comm_size(MPI_COMM_WORLD, &n_ranks);
     #endif
-
-      if (seed < 0) {
+    int seed = 0;
+    if (seed < 0) {
 
     #ifdef AMREX_USE_CUDA
             Abort("Restart with negative seed not supported on GPU");
