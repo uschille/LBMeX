@@ -26,7 +26,7 @@ void main_driver(const char* argv) {
   int nsteps = 100;
   int plot_int = 10;
   int n_checkpoint = nsteps;
-  int restart_step = 0;
+  int start_step = 0;
 
   // input parameters
   ParmParse pp;
@@ -34,11 +34,12 @@ void main_driver(const char* argv) {
   pp.query("nx", nx);
   pp.query("max_grid_size", max_grid_size);
   pp.query("init_cond", ic);
-  pp.query("n_checkpoint", n_checkpoint);
 
   // plot parameters
   pp.query("nsteps", nsteps);
   pp.query("plot_int", plot_int);
+  pp.query("n_checkpoint", n_checkpoint);
+  pp.query("start_step", start_step);
 
   // model parameters
   pp.query("kappa", kappa);
@@ -87,19 +88,22 @@ void main_driver(const char* argv) {
       break;
     case 2:
       LBM_init_droplet(0.3, geom, fold, gold, hydrovs);
-      break
+      break;
     case 10:
-      ReadCheckpointFile(restart_step, hydrovs);
-      // TODO ADD CONVERSION FROM HYDROVS TO FOLD AND GOLD
+      checkpointRestart(start_step, hydrovs, fold, gold, ba, dm);
+      --start_step;
+      break;
   }
-  WriteCheckpointFile(0, hydrovs, ba);
+
+  // WriteCheckpointFile(0, hydrovs, ba);
+  WriteCheckPoint(start_step, hydrovs);
   // checkpoint read of hydrovs to generate fold and gold to be used for further simulations
 
   hydrovs.Copy(ref_params, hydrovs, 0, 0, 2, nghost);
-  // WriteSingleLevelPlotfile("ref_density_plt", ref_params, {"rho", "C"}, geom, Real(0), 0);
   // Write a plotfile of the initial data if plot_int > 0
-  if (plot_int > 0) WriteOutput(0, hydrovs, geom, "hydro_plt");
+  if (plot_int > 0) WriteOutput(start_step, hydrovs, geom, "hydro_plt");
   Print() << "LB initialized\n";
+  start_step++;
 
   // structure factor stuff
   int nStructVars = 5;
@@ -111,22 +115,19 @@ void main_driver(const char* argv) {
   StructFact structFact(ba, dm, var_names, var_scaling);
 
   // TIMESTEP
-  for (int step=1; step <= nsteps; ++step) {
+  for (int step=start_step; step <= nsteps; ++step) {
     LBM_timestep(geom, fold, gold, fnew, gnew, hydrovs, noise, ref_params);
     if (temperature != 0){structFact.FortStructure(hydrovs, geom);}
     if (plot_int > 0 && step%plot_int ==0) {
       WriteOutput(step, hydrovs, geom, "hydro_plt");
       if (temperature != 0){
         WriteOutput(step, noise, geom, "xi_plt"); 
-        structFact.WritePlotFile(step, static_cast<Real>(step), geom, "SF_plt", 0);
-        // structFact.WritePlotFile(step, static_cast<Real>(step), geom, "SF_plt");
+        structFact.WritePlotFile(step, static_cast<Real>(step), geom, "SF_plt", 0); // remove 0 if k = 0 point is to be zeroed in output
         StructFact structFact(ba, dm, var_names, var_scaling);}
     }
-
-    if (steps%n_checkpoint == 0){WriteCheckpointFile(step, hydrovs, ba);}
     Print() << "LB step " << step << "\n";
+    if (step%n_checkpoint == 0){WriteCheckPoint(step, hydrovs);}
   }
-
   // Call the timer again and compute the maximum difference between the start time 
   // and stop time over all processors
   Real stop_time = ParallelDescriptor::second() - strt_time;
