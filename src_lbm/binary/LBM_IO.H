@@ -79,7 +79,7 @@ inline void WriteOutput(int step,
   WriteSingleLevelPlotfile(pltfile, hydrovs, var_names, geom, Real(step), step);
 }
 
-void WriteCheckPoint(int step, MultiFab& umac){
+void WriteCheckPoint(int step, MultiFab& hydrovs){
     // adapted from FHDeX/exec/src/hydro/Checkpoint.cpp
     // If wanting to run on GPU's need to comment out the RNG output. Maybe don't output it at all?
   
@@ -90,7 +90,7 @@ void WriteCheckPoint(int step, MultiFab& umac){
     const std::string& checkpointname = amrex::Concatenate("checkpoint_",step,10);
 
     amrex::Print() << "Writing checkpoint " << checkpointname << "\n";
-    BoxArray ba = convert(umac.boxArray(), IntVect::TheCellVector());
+    BoxArray ba = hydrovs.boxArray();
 
     // single level problem
     int nlevels = 1;
@@ -164,7 +164,7 @@ void WriteCheckPoint(int step, MultiFab& umac){
     }
     
     // write the MultiFab data to, e.g., chk00010/Level_0/
-    VisMF::Write(umac, amrex::MultiFabFileFullPrefix(0, checkpointname, "Level_", "hydrovars"));
+    VisMF::Write(hydrovs, amrex::MultiFabFileFullPrefix(0, checkpointname, "Level_", "hydrovars"));
 }
 
 void ReadFile (const std::string& filename, Vector<char>& charBuf, bool bExitOnError){
@@ -210,7 +210,7 @@ void ReadFile (const std::string& filename, Vector<char>& charBuf, bool bExitOnE
     charBuf[fileLength] = '\0';
 }
 
-void ReadCheckPoint(int& step, MultiFab& umac, BoxArray& ba, DistributionMapping& dmap){
+void ReadCheckPoint(int& step, MultiFab& hydrovs, BoxArray& ba, DistributionMapping& dmap){
     // adapted from FHDeX/exec/src/hydro/Checkpoint.cpp
     // If wanting to run on GPU's need to comment out the RNG output. Maybe don't output it at all?
     
@@ -249,7 +249,8 @@ void ReadCheckPoint(int& step, MultiFab& umac, BoxArray& ba, DistributionMapping
         dmap.define(ba, ParallelDescriptor::NProcs());
 
         // build MultiFab data
-        umac.define(convert(ba,nodal_flag_x), dmap, 1, 1);
+        int nghost = 2;
+        hydrovs.define(ba, dmap, 38, 2);  // 38 is hard coded for now just for testing
       }
 
     int comm_rank = 0;
@@ -307,7 +308,7 @@ void ReadCheckPoint(int& step, MultiFab& umac, BoxArray& ba, DistributionMapping
     }
 
     // read in the MultiFab data
-    VisMF::Read(umac, amrex::MultiFabFileFullPrefix(0, checkpointname, "Level_", "hydrovars"));
+    VisMF::Read(hydrovs, amrex::MultiFabFileFullPrefix(0, checkpointname, "Level_", "hydrovars"));
 }
 
 void checkpointRestart(int& step, MultiFab& hydrovs, MultiFab& fold, MultiFab& gold, BoxArray& ba, DistributionMapping& dmap){
