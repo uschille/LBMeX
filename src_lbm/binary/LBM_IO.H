@@ -250,7 +250,8 @@ void ReadCheckPoint(int& step, MultiFab& hydrovs, BoxArray& ba, DistributionMapp
 
         // build MultiFab data
         int nghost = 2;
-        hydrovs.define(ba, dmap, 38, 2);  // 38 is hard coded for now just for testing
+        int ncomp = 38; // 38 is hard coded for now just for testing, should be 2*nvel
+        hydrovs.define(ba, dmap, ncomp, nghost);
       }
 
     int comm_rank = 0;
