@@ -52,22 +52,16 @@ void main_driver(const char* argv) {
   IntVect dom_lo(0, 0, 0);
   IntVect dom_hi(nx-1, nx-1, nx-1);
   Array<int,3> periodicity({1,1,1});
-
   Box domain(dom_lo, dom_hi);
-
   RealBox real_box({0.,0.,0.},{1.,1.,1.});
-  
   Geometry geom(domain, real_box, CoordSys::cartesian, periodicity);
-
   BoxArray ba(domain);
-
   // split BoxArray into chunks no larger than "max_grid_size" along a direction
   ba.maxSize(max_grid_size);
-
   DistributionMapping dm(ba);
-
   // need two halo layers for gradients
   int nghost = 2;
+  Real time = start_step;
 
   // set up MultiFabs
   MultiFab fold(ba, dm, nvel, nghost);
@@ -78,6 +72,17 @@ void main_driver(const char* argv) {
   MultiFab noise(ba, dm, 2*nvel, nghost);
   MultiFab ref_params(ba, dm, 2, nghost); //reference rho and C for each point of the lattice
 
+  StructFact structFact;
+  int nStructVars = 5;
+  const Vector<std::string> var_names = VariableNames(nStructVars);
+  Vector<Real> var_scaling(nStructVars*(nStructVars+1)/2);
+  for (int i=0; i<var_scaling.size(); ++i) {
+    if (temperature>0) var_scaling[i] = temperature; else var_scaling[i] = 1.;
+  }
+
+  if (ic != 10){StructFact structFact(ba, dm, var_names, var_scaling);}
+
+  Print() << "Struct fact object initialized\n";
   // INITIALIZE
   switch(ic){
     case 0:
@@ -92,12 +97,14 @@ void main_driver(const char* argv) {
     case 10:
       checkpointRestart(start_step, hydrovs, fold, gold, ba, dm);
       --start_step;
+      // structFact.ReadCheckPoint(step_start,time,"chk_SF",ba,dmap);
+      if (temperature != 0){structFact.ReadCheckPoint(start_step, time, "chk_SF_", ba, dm);--start_step;}
       break;
   }
-
-  // WriteCheckpointFile(0, hydrovs, ba);
-  WriteCheckPoint(start_step, hydrovs);
-  // checkpoint read of hydrovs to generate fold and gold to be used for further simulations
+  if (ic != 10){
+    WriteCheckPoint(start_step, hydrovs);
+    if (temperature > 0){structFact.WriteCheckPoint(start_step,time,"chk_SF_");}
+    }
 
   hydrovs.Copy(ref_params, hydrovs, 0, 0, 2, nghost);
   // Write a plotfile of the initial data if plot_int > 0
@@ -105,29 +112,26 @@ void main_driver(const char* argv) {
   Print() << "LB initialized\n";
   start_step++;
 
-  // structure factor stuff
-  int nStructVars = 5;
-  const Vector<std::string> var_names = VariableNames(nStructVars);
-  Vector<Real> var_scaling(nStructVars*(nStructVars+1)/2);
-  for (int i=0; i<var_scaling.size(); ++i) {
-    if (temperature>0) var_scaling[i] = temperature; else var_scaling[i] = 1.;
-  }
-  StructFact structFact(ba, dm, var_names, var_scaling);
-
   // TIMESTEP
   for (int step=start_step; step <= nsteps; ++step) {
     LBM_timestep(geom, fold, gold, fnew, gnew, hydrovs, noise, ref_params);
-    if (temperature != 0){structFact.FortStructure(hydrovs, geom);}
+    Print() << "LBM time integration complete" << "\n";
     if (plot_int > 0 && step%plot_int ==0) {
       WriteOutput(step, hydrovs, geom, "hydro_plt");
-      if (temperature != 0){
-        WriteOutput(step, noise, geom, "xi_plt"); 
-        structFact.WritePlotFile(step, static_cast<Real>(step), geom, "SF_plt", 0); // remove 0 if k = 0 point is to be zeroed in output
-        StructFact structFact(ba, dm, var_names, var_scaling);}
+      Print() << "hydrovars plotted" << "\n";
+      if (step%n_checkpoint == 0){WriteCheckPoint(step, hydrovs);}
+      if (temperature > 0){
+        // WriteOutput(step, noise, geom, "xi_plt"); 
+        structFact.WritePlotFile(step, time, geom, "SF_plt", 0); Print() << "SF plotted" << "\n"; // remove 0 if k = 0 point is to be zeroed in output
+        StructFact structFact(ba, dm, var_names, var_scaling); Print() << "SF remade" << "\n";;
+        if (step%n_checkpoint == 0){structFact.WriteCheckPoint(step,time,"chk_SF_");}
+        }
     }
+    if (temperature > 0){structFact.FortStructure(hydrovs, geom, 0);Print() << "SF added" << "\n";}
     Print() << "LB step " << step << "\n";
-    if (step%n_checkpoint == 0){WriteCheckPoint(step, hydrovs);}
-  }
+    time++;
+    }
+  
   // Call the timer again and compute the maximum difference between the start time 
   // and stop time over all processors
   Real stop_time = ParallelDescriptor::second() - strt_time;
