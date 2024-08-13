@@ -4,10 +4,10 @@ max_grid_size = 16
 init_cond = 10
 
 # time parameters
-nsteps = 10
-plot_int = 1
-n_checkpoint = 1
-start_step = 5
+nsteps = 20
+plot_int = 10
+n_checkpoint = 10
+start_step = 10
 
 # model parameters
 lambda = 0.4

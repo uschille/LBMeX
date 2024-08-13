@@ -249,9 +249,9 @@ void ReadCheckPoint(int& step, MultiFab& hydrovs, BoxArray& ba, DistributionMapp
         dmap.define(ba, ParallelDescriptor::NProcs());
 
         // build MultiFab data
-        int nghost = 2;
-        int ncomp = 38; // 38 is hard coded for now just for testing, should be 2*nvel
-        hydrovs.define(ba, dmap, ncomp, nghost);
+        // int nghost = 2;
+        // int ncomp = 38; // 38 is hard coded for now just for testing, should be 2*nvel
+        // hydrovs.define(ba, dmap, ncomp, nghost);
       }
 
     int comm_rank = 0;
