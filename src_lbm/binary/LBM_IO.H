@@ -78,7 +78,7 @@ inline void WriteOutput(int step,
   WriteSingleLevelPlotfile(pltfile, hydrovs, var_names, geom, Real(step), step);
 }
 
-void WriteCheckPoint(int step, MultiFab& hydrovs){
+void WriteCheckPoint(int step, MultiFab& hydrovs, const std::string pltname){
     // adapted from FHDeX/exec/src/hydro/Checkpoint.cpp
     // If wanting to run on GPU's need to comment out the RNG output. Maybe don't output it at all?
   
@@ -86,7 +86,7 @@ void WriteCheckPoint(int step, MultiFab& hydrovs){
     // BL_PROFILE_VAR("WriteCheckPoint()",WriteCheckPoint);
 
     // checkpoint file name, e.g., chk0000010
-    const std::string& checkpointname = amrex::Concatenate("chk_hyd_",step,10);
+    const std::string& checkpointname = amrex::Concatenate(pltname,step,10);
 
     amrex::Print() << "Writing checkpoint " << checkpointname << "\n";
     BoxArray ba = hydrovs.boxArray();
@@ -209,7 +209,7 @@ void ReadFile (const std::string& filename, Vector<char>& charBuf, bool bExitOnE
     charBuf[fileLength] = '\0';
 }
 
-void ReadCheckPoint(int& step, MultiFab& hydrovs, BoxArray& ba, DistributionMapping& dmap){
+void ReadCheckPoint(int& step, MultiFab& hydrovs, const std::string pltname, BoxArray& ba, DistributionMapping& dmap){
     // adapted from FHDeX/exec/src/hydro/Checkpoint.cpp
     // If wanting to run on GPU's need to comment out the RNG output. Maybe don't output it at all?
     
@@ -218,7 +218,7 @@ void ReadCheckPoint(int& step, MultiFab& hydrovs, BoxArray& ba, DistributionMapp
 
     // checkpoint file name, e.g., chk0000010
     // const std::string& checkpointname = amrex::Concatenate(chk_base_name,restart,7);
-    const std::string& checkpointname = amrex::Concatenate("chk_hyd_",step,10);
+    const std::string& checkpointname = amrex::Concatenate(pltname,step,10);
 
     amrex::Print() << "Restart from checkpoint " << checkpointname << "\n";
     VisMF::IO_Buffer io_buffer(VisMF::GetIOBufferSize());
@@ -310,8 +310,8 @@ void ReadCheckPoint(int& step, MultiFab& hydrovs, BoxArray& ba, DistributionMapp
     VisMF::Read(hydrovs, amrex::MultiFabFileFullPrefix(0, checkpointname, "Level_", "hydrovars"));
 }
 
-void checkpointRestart(int& step, MultiFab& hydrovs, MultiFab& fold, MultiFab& gold, BoxArray& ba, DistributionMapping& dmap){
-  ReadCheckPoint(step, hydrovs, ba, dmap); //writes checkpoint file to hydrovars
+void checkpointRestart(int& step, MultiFab& hydrovs, const std::string pltname, MultiFab& fold, MultiFab& gold, BoxArray& ba, DistributionMapping& dmap){
+  ReadCheckPoint(step, hydrovs, pltname, ba, dmap); //writes checkpoint file to hydrovars
 
   // this loop converts from hydrovars to the f and g distributions requires to initiate the LBM timestepping
   for (MFIter mfi(fold); mfi.isValid(); ++mfi) {
