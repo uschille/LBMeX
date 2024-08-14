@@ -98,15 +98,16 @@ void main_driver(const char* argv) {
       break;
     case 10:
       checkpointRestart(start_step, hydrovs, hydro_chk, fold, gold, ba, dm);--start_step;
-      if (temperature > 0){
+      const std::string& checkpointname = amrex::Concatenate(SF_chk,0,9);
+      bool test_file_path = file_exists(checkpointname);
+      if (test_file_path and temperature > 0){
         StructFact structFact;
-        Real time;
-        Print() << "start step:" << start_step << " time:" << time << "\n";
-        structFact.ReadCheckPoint(start_step,time,SF_chk,ba,dm);--start_step;}
+        structFact.ReadCheckPoint(SF_chk,ba,dm);
+      }
       break;
   }
 
-  if (ic != 10){WriteCheckPoint(start_step, hydrovs, hydro_chk);}
+  if (ic != 10){WriteCheckPoint(start_step, hydrovs, hydro_chk);start_step = 0;}
   // checkpoint read of hydrovs to generate fold and gold to be used for further simulations
 
   hydrovs.Copy(ref_params, hydrovs, 0, 0, 2, nghost);
@@ -122,7 +123,7 @@ void main_driver(const char* argv) {
     
     if (step%n_checkpoint == 0){
       WriteCheckPoint(step, hydrovs, hydro_chk);
-      if (temperature > 0){structFact.WriteCheckPoint(step,static_cast<Real>(step),SF_chk);}
+      if (temperature > 0){structFact.WriteCheckPoint(0,SF_chk);}
     }
 
     if (plot_int > 0 && step%plot_int ==0) {

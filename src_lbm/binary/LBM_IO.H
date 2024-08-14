@@ -78,6 +78,15 @@ inline void WriteOutput(int step,
   WriteSingleLevelPlotfile(pltfile, hydrovs, var_names, geom, Real(step), step);
 }
 
+inline bool file_exists(const std::string& name) {
+    if (FILE *file = fopen(name.c_str(), "r")) {
+        fclose(file);
+        return true;
+    } else {
+        return false;
+    }   
+}
+
 void WriteCheckPoint(int step, MultiFab& hydrovs, const std::string pltname){
     // adapted from FHDeX/exec/src/hydro/Checkpoint.cpp
     // If wanting to run on GPU's need to comment out the RNG output. Maybe don't output it at all?

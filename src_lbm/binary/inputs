@@ -1,19 +1,19 @@
 # box parameters
-nx = 64
-max_grid_size = 64
+nx = 32
+max_grid_size = 32
 init_cond = 0
 
 # time parameters
-nsteps = 10000
+nsteps = 5000
 plot_int = 1000
-n_checkpoint = 5000
-start_step = 0
+n_checkpoint = 1000
+start_step = 5000
 
 # model parameters
-lambda = 0.4
-T = 0.25
-kappa = 0.01
+lambda = 0.5
+T = 0.163
+kappa = 0.0
 gamma = 1.0
 
 # noise parameters
-temperature = 1e-7
+temperature = 0

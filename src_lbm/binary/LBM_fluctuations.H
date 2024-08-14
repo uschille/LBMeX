@@ -467,7 +467,8 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz, const Box& dom
 }
 #endif
 
-GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz, const Box& domain, const Array4<Real>& h) { // TODO: add function arguments: rho, phi, k, others?
+GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz, 
+                                        const Box& domain, const Array4<Real>& r) { // TODO: add function arguments: rho, phi, k, others?
   const uint Q = nvel;
   const Real kT = temperature;
   const Real k2 = fourier_laplace_operator(kx, ky, kz, domain);
@@ -477,8 +478,10 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz, const Box& dom
   const Real lambda_p = 1./tau_p;
 
   // TODO: generalize to non-homogeneous reference state
-  const Real rho0 = 1.0;
-  const Real phi0 = 0.0;
+  // const Real rho0 = 1.0;
+  // const Real phi0 = 0.0;
+  const Real rho0 = r(kx, ky, kz, 0);
+  const Real phi0 = r(kx, ky, kz, 1);
   // assuming no k dependence so kappa = 0
   const Real cs2k = T + kappa*k2*rho0; //checked after conversion
   const Real mu_rho = (-2.*T*pow(rho0, 4) - chi*pow(phi0, 4) + chi*pow(phi0*rho0, 2))/(2.*pow(rho0, 3)*(pow(phi0, 2) - pow(rho0, 2))) + k2*kappa;
@@ -579,12 +582,12 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 GpuArray<GpuComplex<Real>,ndof> correlated_noise(int kx, int ky, int kz,
 						   const Box& domain,
 						   const RandomEngine& engine,
-               const Array4<Real>& h) {
+               const Array4<Real>& ref) {
   GpuArray<GpuComplex<Real>,ndof> r, xi;
   GpuArray<Real,ndof*ndof> C;
 
   // Cholesky decomposition of noise covariance matrix
-  C = noise_covariance(kx,ky,kz,domain,h);
+  C = noise_covariance(kx,ky,kz,domain,ref);
   cholesky_decomp(C,ndof,ncons);
 
   // need to generate the correct symmetries here? [uschill 07/25/2022]
@@ -628,7 +631,7 @@ inline void generate_kspace_noise(const Geometry& geom,
         GpuArray<GpuComplex<Real>,ndof> xi = {};
 
 	      // compute correlated noise in k-space
-	      xi = correlated_noise(kx,ky,kz,domain,engine,h);
+	      xi = correlated_noise(kx,ky,kz,domain,engine,r);
 
         for (int i=0; i<ndof; ++i) {
           xi_real(kx,ky,kz,i) = xi[i].real();
