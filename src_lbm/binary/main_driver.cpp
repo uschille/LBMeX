@@ -16,7 +16,11 @@ void main_driver(const char* argv) {
 
   // store the current time so we can later compute total run time.
   Real strt_time = ParallelDescriptor::second();
-    
+  
+  const std::string hydro_plt = "hydro_plt_";
+  const std::string SF_plt = "SF_plt";
+  const std::string hydro_chk = "chk_hydro_";
+  const std::string SF_chk = "chk_SF_";
   // default grid parameters
   int nx = 16;
   int max_grid_size = 8;
@@ -78,6 +82,17 @@ void main_driver(const char* argv) {
   MultiFab noise(ba, dm, 2*nvel, nghost);
   MultiFab ref_params(ba, dm, 2, nghost); //reference rho and C for each point of the lattice
 
+  // structure factor stuff
+  int nStructVars = 5;
+  const Vector<std::string> var_names = VariableNames(nStructVars);
+  Vector<Real> var_scaling(nStructVars*(nStructVars+1)/2);
+  for (int i=0; i<var_scaling.size(); ++i) {
+    if (temperature>0) var_scaling[i] = temperature; else var_scaling[i] = 1.;
+  }
+  StructFact structFact(ba, dm, var_names, var_scaling);
+  // StructFact structFact;
+  // if (ic != 10){StructFact structFact(ba, dm, var_names, var_scaling);}
+
   // INITIALIZE
   switch(ic){
     case 0:
@@ -90,43 +105,51 @@ void main_driver(const char* argv) {
       LBM_init_droplet(0.3, geom, fold, gold, hydrovs);
       break;
     case 10:
-      checkpointRestart(start_step, hydrovs, fold, gold, ba, dm);
-      --start_step;
+      checkpointRestart(start_step, hydrovs, hydro_chk, fold, gold, ba, dm);--start_step;
+      if (temperature > 0){
+        StructFact structFact;
+        Real time = start_step;
+        Print() << "start step:" << start_step << " time:" << time << "\n";
+        structFact.ReadCheckPoint(start_step,time,SF_chk,ba,dm);--start_step;}
       break;
   }
 
   // WriteCheckpointFile(0, hydrovs, ba);
-  WriteCheckPoint(start_step, hydrovs);
+  if (ic != 10){WriteCheckPoint(start_step, hydrovs, hydro_chk);}
   // checkpoint read of hydrovs to generate fold and gold to be used for further simulations
 
   hydrovs.Copy(ref_params, hydrovs, 0, 0, 2, nghost);
   // Write a plotfile of the initial data if plot_int > 0
-  if (plot_int > 0) WriteOutput(start_step, hydrovs, geom, "hydro_plt");
+  if (plot_int > 0 and ic != 10){WriteOutput(start_step, hydrovs, geom, hydro_plt);}
   Print() << "LB initialized\n";
   start_step++;
 
-  // structure factor stuff
-  int nStructVars = 5;
-  const Vector<std::string> var_names = VariableNames(nStructVars);
-  Vector<Real> var_scaling(nStructVars*(nStructVars+1)/2);
-  for (int i=0; i<var_scaling.size(); ++i) {
-    if (temperature>0) var_scaling[i] = temperature; else var_scaling[i] = 1.;
-  }
-  StructFact structFact(ba, dm, var_names, var_scaling);
+  // // structure factor stuff
+  // int nStructVars = 5;
+  // const Vector<std::string> var_names = VariableNames(nStructVars);
+  // Vector<Real> var_scaling(nStructVars*(nStructVars+1)/2);
+  // for (int i=0; i<var_scaling.size(); ++i) {
+  //   if (temperature>0) var_scaling[i] = temperature; else var_scaling[i] = 1.;
+  // }
+  // StructFact structFact(ba, dm, var_names, var_scaling);
 
   // TIMESTEP
   for (int step=start_step; step <= nsteps; ++step) {
     LBM_timestep(geom, fold, gold, fnew, gnew, hydrovs, noise, ref_params);
-    if (temperature != 0){structFact.FortStructure(hydrovs, geom);}
+    if (temperature > 0){structFact.FortStructure(hydrovs, geom);}
+
     if (plot_int > 0 && step%plot_int ==0) {
-      WriteOutput(step, hydrovs, geom, "hydro_plt");
-      if (temperature != 0){
-        WriteOutput(step, noise, geom, "xi_plt"); 
-        structFact.WritePlotFile(step, static_cast<Real>(step), geom, "SF_plt", 0); // remove 0 if k = 0 point is to be zeroed in output
+      WriteOutput(step, hydrovs, geom, hydro_plt);
+      if (temperature > 0){
+        // WriteOutput(step, noise, geom, "xi_plt"); 
+        structFact.WritePlotFile(step, static_cast<Real>(step), geom, SF_plt, 0); // remove 0 if k = 0 point is to be zeroed in output
         StructFact structFact(ba, dm, var_names, var_scaling);}
     }
     Print() << "LB step " << step << "\n";
-    if (step%n_checkpoint == 0){WriteCheckPoint(step, hydrovs);}
+    if (step%n_checkpoint == 0){
+      WriteCheckPoint(step, hydrovs, hydro_chk);
+      if (temperature > 0){structFact.WriteCheckPoint(step,static_cast<Real>(step),SF_chk);}
+      }
   }
   // Call the timer again and compute the maximum difference between the start time 
   // and stop time over all processors
