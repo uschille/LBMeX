@@ -7,8 +7,11 @@
 #include <fftw3.h>
 #include <fftw3-mpi.h>
 #endif
+
+#include <lapacke.h>
 #include <AMReX_GpuComplex.H>
 #include <math.h>
+#include <vector>
 #include "LBM_d3q19.H"
 #include "LBM_binary.H"
 
@@ -20,6 +23,8 @@ const int ndof = 2*nvel;
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 void cholesky_decomp(GpuArray<Real,ndof*ndof>& A, const int n, const int bstart) {
   // Cholesky-Banachiewicz algorithm
+  BL_PROFILE_VAR("cholesky_decomp()",cholesky_decomp);
+  
   Real sum;
   for (int i=bstart; i<n; ++i) {
     for (int j=bstart; j<=i; ++j) {
@@ -54,28 +59,6 @@ void cholesky_decomp(GpuArray<Real,ndof*ndof>& A, const int n, const int bstart)
       A[i*n+j] = 0.0;
     }
   }
-}
-
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-Real fourier_laplace_operator(int ikx, int iky, int ikz){
-  // https://www.uni-muenster.de/Physik.TP/archive/fileadmin/lehre/NumMethoden/SoSe10/Skript/Ordening.pdf
-  Real k2;
-  std::vector<int> n = {nx, nx, nx};
-  Real dpi = 2.*M_PI;
-  
-  Real kx = (ikx <= (n[0]-1)/2) ? dpi/n[0]*ikx : 2.*M_PI/n[0]*(ikx-n[0]);
-  Real ky = (iky <= (n[1]-1)/2) ? dpi/n[1]*iky : 2.*M_PI/n[1]*(iky-n[1]);
-  Real kz = (ikz <= (n[2]-1)/2) ? dpi/n[2]*ikz : 2.*M_PI/n[2]*(ikz-n[2]);
-
-  Real cosx = cos(kx);
-  Real cosy = cos(ky);
-  Real cosz = cos(kz);
-
-  Real expr1 = cosx + cosy + cosz;
-  Real expr2 = cosx*cosy + cosy*cosz + cosx*cosz;
-  k2 = -2./cs2*(1./9.*expr1 + 1./9.*expr2 - 2./3.);
-
-  return k2;
 }
 
 #if 0
@@ -245,6 +228,7 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz) {
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 Real fourier_laplace_operator(int ikx, int iky, int ikz, const Box& domain) {
+  BL_PROFILE_VAR("fourier_laplace_operator()",fourier_laplace_operator);
   Real k2;
 
   IntVect n = domain.length();
@@ -469,6 +453,7 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz, const Box& dom
 
 GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz, 
                                         const Box& domain, const Array4<Real>& r) { // TODO: add function arguments: rho, phi, k, others?
+  BL_PROFILE_VAR("noise_covariance()",noise_covariance);
   const uint Q = nvel;
   const Real kT = temperature;
   const Real k2 = fourier_laplace_operator(kx, ky, kz, domain);
@@ -561,6 +546,7 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz,
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 GpuArray<GpuComplex<Real>,ndof> kspace_white_noise(int kx, int ky, int kz, const Box& domain, RandomEngine const& engine) {
+  BL_PROFILE_VAR("kspace_white_noise()",kspace_white_noise);
   GpuArray<GpuComplex<Real>,ndof> r = {};
   for (int i=ncons; i<ndof; ++i) {
     // symmetry points are purely real
@@ -583,12 +569,37 @@ GpuArray<GpuComplex<Real>,ndof> correlated_noise(int kx, int ky, int kz,
 						   const Box& domain,
 						   const RandomEngine& engine,
                const Array4<Real>& ref) {
+  BL_PROFILE_VAR("correlated_noise()",correlated_noise);
   GpuArray<GpuComplex<Real>,ndof> r, xi;
   GpuArray<Real,ndof*ndof> C;
 
-  // Cholesky decomposition of noise covariance matrix
-  C = noise_covariance(kx,ky,kz,domain,ref);
-  cholesky_decomp(C,ndof,ncons);
+  // // Cholesky decomposition of noise covariance matrix
+  // C = noise_covariance(kx,ky,kz,domain,ref);
+  // cholesky_decomp(C,ndof,ncons);
+
+  // LAPACK CHOLESKY DECOMP. COMMENT OUT IF THIS DOESN'T WORK
+  const char uplo = 'L';
+  const int lda = ndof-ncons;
+  const int order = lda;
+  int rank = 0;
+  const Real tol = -1.;
+  int info;
+  GpuArray<int,order> PIV = {}; PIV.fill(0);
+  GpuArray<Real,2*order> WORK = {}; WORK.fill(0.);
+  GpuArray<Real,lda*lda> SLC_C; SLC_C.fill(0.);
+  for (int i = ncons; i < ndof; i++){
+    for (int j = ncons; j < ndof; j++){
+      SLC_C[(i-ncons)*lda+(j-ncons)] = C[i*ndof+j];
+    }
+  }
+  dpstrf_(&uplo, &order, SLC_C.data(), &lda, PIV.data(), &rank, &tol, WORK.data(), &info);
+  C.fill(0.);
+  for (int i = ncons; i < ndof; i++){
+    for (int j = ncons; j < ndof; j++){
+      C[i*ndof+j] = SLC_C[(i-ncons)*lda+(j-ncons)];
+    }
+  }
+  // LAPACK CHOLESKY DECOMP. COMMENT OUT IF THIS DOESN'T WORK
 
   // need to generate the correct symmetries here? [uschill 07/25/2022]
   // possibly the case if C(k) != C(-k) [uschill 07/27/2022]
@@ -613,6 +624,7 @@ inline void generate_kspace_noise(const Geometry& geom,
 				  MultiFab& kspace_noise_imag,
           MultiFab& hydrovs,
           MultiFab& ref_params) {
+  BL_PROFILE_VAR("generate_kspace_noise()",generate_kspace_noise);
   const Box domain = geom.Domain();
 
   // include density? [uschill 07/26/2022]
@@ -647,6 +659,7 @@ inline void generate_kspace_noise(const Geometry& geom,
 inline void check_kspace_symmetries(const Geometry& geom,
 				    const MultiFab& noise_onegrid,
 				    const Vector<std::unique_ptr<BaseFab<GpuComplex<Real>>>>& spectral_field) {
+  BL_PROFILE_VAR("check_kspace_symmetries()",check_kspace_symmetries);
   const Box domain = geom.Domain();
   IntVect fft_size = domain.length();
   fft_size[0] = fft_size[0]/2 + 1;
@@ -720,7 +733,7 @@ inline void check_kspace_symmetries(const Geometry& geom,
 inline void compute_ifft(const Geometry& geom, MultiFab& realspace_noise,
 			 const MultiFab& kspace_noise_real,
 			 const MultiFab& kspace_noise_imag) {
-
+  BL_PROFILE_VAR("compute_ifft",compute_ifft);
   #ifdef AMREX_USE_CUDA
       //Print() << "Using cuFFT\n";
       using FFTplan = cufftHandle;
@@ -872,6 +885,7 @@ inline void generate_fluctuations(const Geometry& geom,
 				  MultiFab& hydrovs,
 				  MultiFab& noise,
           MultiFab& ref_params) {
+  BL_PROFILE_VAR("generate_fluctuations()",generate_fluctuations);
   BoxArray ba = noise.boxArray();
   DistributionMapping dm = noise.DistributionMap();
   MultiFab kspace_noise_real(ba, dm, ndof, 0);
@@ -884,7 +898,6 @@ inline void generate_fluctuations(const Geometry& geom,
 
   // generate noise in k-space
   generate_kspace_noise(geom, kspace_noise_real, kspace_noise_imag, hydrovs, ref_params);
-
   // note that the k-space noise is generated without the required symmetries
   // (this is to allow for parallel generation of noise)
   // the k-space symmetries are handled when copying in compute_ifft

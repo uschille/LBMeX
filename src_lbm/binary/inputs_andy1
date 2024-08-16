@@ -16,4 +16,4 @@ kappa = 0.01
 gamma = 1.0
 
 # noise parameters
-temperature = 1e-7
+temperature = 0

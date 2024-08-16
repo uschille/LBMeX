@@ -4,6 +4,7 @@ FHDEX_HOME ?= ../../../FHDeX
 DEFINES += -DMAX_SPECIES=2
 
 DEBUG	= FALSE
+TINY_PROFILE = TRUE
 
 DIM	= 3
 
@@ -38,4 +39,7 @@ ifeq ($(USE_CUDA),TRUE)
   LIBRARIES += -lcufft
 else
   LIBRARIES += $(shell pkg-config --libs fftw3)
+  LIBRARIES += $(shell pkg-config --libs blas)
+  LIBRARIES += $(shell pkg-config --libs lapack)
+  LIBRARIES += $(shell pkg-config --libs lapacke)
 endif

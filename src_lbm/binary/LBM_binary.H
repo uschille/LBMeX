@@ -393,6 +393,7 @@ inline void collide_stream(const Geometry& geom,
 			   MultiFab& fold, MultiFab& gold,
 			   MultiFab& fnew, MultiFab& gnew,
 			   MultiFab& hydrovs, MultiFab& noise) {
+  BL_PROFILE_VAR("collide_stream()",collide_stream);
   const int halo = 1; // need to push from first halo layer into domain
   fold.FillBoundary(geom.periodicity());
   gold.FillBoundary(geom.periodicity());
@@ -463,9 +464,11 @@ inline void LBM_timestep(const Geometry& geom,
 			 MultiFab& fold, MultiFab& gold,
 			 MultiFab& fnew, MultiFab& gnew,
 			 MultiFab& hydrovs, MultiFab& noise, MultiFab& ref_params) {
+
   if (temperature == 0){noise.setVal(0.);}
   else {generate_fluctuations(geom, hydrovs, noise, ref_params);}
   collide_stream(geom, fold, gold, fnew, gnew, hydrovs, noise);
+
   hydrovars(fold, gold, hydrovs);
 }
 

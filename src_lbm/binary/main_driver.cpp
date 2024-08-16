@@ -107,7 +107,7 @@ void main_driver(const char* argv) {
       break;
   }
 
-  if (ic != 10){WriteCheckPoint(start_step, hydrovs, hydro_chk);start_step = 0;}
+  if (n_checkpoint > 0 && ic != 10){WriteCheckPoint(start_step, hydrovs, hydro_chk);start_step = 0;}
   // checkpoint read of hydrovs to generate fold and gold to be used for further simulations
 
   hydrovs.Copy(ref_params, hydrovs, 0, 0, 2, nghost);
@@ -120,12 +120,10 @@ void main_driver(const char* argv) {
   for (int step=start_step; step <= nsteps; ++step) {
     LBM_timestep(geom, fold, gold, fnew, gnew, hydrovs, noise, ref_params);
     if (temperature > 0){structFact.FortStructure(hydrovs, geom);}
-    
-    if (step%n_checkpoint == 0){
+    if (n_checkpoint > 0 && step%n_checkpoint == 0){
       WriteCheckPoint(step, hydrovs, hydro_chk);
       if (temperature > 0){structFact.WriteCheckPoint(0,SF_chk);}
     }
-
     if (plot_int > 0 && step%plot_int ==0) {
       WriteOutput(step, hydrovs, geom, hydro_plt);
       if (temperature > 0){
@@ -140,5 +138,4 @@ void main_driver(const char* argv) {
   Real stop_time = ParallelDescriptor::second() - strt_time;
   ParallelDescriptor::ReduceRealMax(stop_time);
   amrex::Print() << "Run time = " << stop_time << std::endl;
-  
 }
