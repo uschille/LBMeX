@@ -71,11 +71,13 @@ inline Vector<std::string> VariableNames(const int numVars) {
 inline void WriteOutput(int step,
 			const MultiFab& hydrovs,
 			const Geometry& geom,
-      const std::string pltname) {
+      const std::string pltname,
+      int output_hdf) {
   // set up variable names for output
   const Vector<std::string> var_names = VariableNames(2*nvel);
   const std::string& pltfile = amrex::Concatenate(pltname,step,7);
-  WriteSingleLevelPlotfile(pltfile, hydrovs, var_names, geom, Real(step), step);
+  if(output_hdf){WriteSingleLevelPlotfileHDF5(pltfile, hydrovs, var_names, geom, Real(step), step);}
+  else{WriteSingleLevelPlotfile(pltfile, hydrovs, var_names, geom, Real(step), step);}
 }
 
 inline bool file_exists(const std::string& name) {

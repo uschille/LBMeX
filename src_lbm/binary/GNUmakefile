@@ -1,5 +1,6 @@
 AMREX_HOME ?= ../../../amrex
 FHDEX_HOME ?= ../../../FHDeX
+HDF5_HOME = /usr/lib/x86_64-linux-gnu/hdf5/openmpi
 
 DEFINES += -DMAX_SPECIES=2
 
@@ -11,6 +12,7 @@ DIM	= 3
 COMP    = gnu
 
 USE_MPI   = TRUE
+USE_HDF5  = TRUE
 USE_OMP   = FALSE
 USE_CUDA  = FALSE
 USE_HIP   = FALSE

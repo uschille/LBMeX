@@ -21,29 +21,43 @@ void main_driver(const char* argv) {
   const std::string SF_plt = "SF_plt";
   const std::string hydro_chk = "chk_hydro_";
   const std::string SF_chk = "chk_SF_";
+
   // default grid parameters
-  int nx = 16;
+  int nx = 16; int ny = 16; int nz = 16;
   int max_grid_size = 8;
   int ic = 0;
+  Real R = 0.3;
 
   // default time stepping parameters
   int nsteps = 100;
-  int plot_int = 10;
+  int dump_hydro = 1;
+  int n_hydro = 10;
+  int dump_SF = 1;
+  int n_SF = 10;
   int n_checkpoint = nsteps;
   int start_step = 0;
+  int output_hdf = 0;
 
   // input parameters
   ParmParse pp;
   // box parameters
   pp.query("nx", nx);
+  pp.query("ny", ny);
+  pp.query("nz", nz);
   pp.query("max_grid_size", max_grid_size);
   pp.query("init_cond", ic);
+  pp.query("nz", nz);
+  pp.query("R", R);
 
   // plot parameters
   pp.query("nsteps", nsteps);
-  pp.query("plot_int", plot_int);
+  pp.query("dump_hydro", dump_hydro);
+  pp.query("n_hydro", n_hydro);
+  pp.query("dump_SF", dump_SF);
+  pp.query("n_SF", n_SF);
   pp.query("n_checkpoint", n_checkpoint);
   pp.query("start_step", start_step);
+  pp.query("output_hdf5", output_hdf);
 
   // model parameters
   pp.query("kappa", kappa);
@@ -54,7 +68,7 @@ void main_driver(const char* argv) {
 
   // set up Box and Geomtry
   IntVect dom_lo(0, 0, 0);
-  IntVect dom_hi(nx-1, nx-1, nx-1);
+  IntVect dom_hi(nx-1, ny-1, nz-1);
   Array<int,3> periodicity({1,1,1});
   Box domain(dom_lo, dom_hi);
   RealBox real_box({0.,0.,0.},{1.,1.,1.});
@@ -79,10 +93,10 @@ void main_driver(const char* argv) {
   // structure factor stuff
   int nStructVars = 5;
   const Vector<std::string> var_names = VariableNames(nStructVars);
-  Vector<Real> var_scaling(nStructVars*(nStructVars+1)/2);
-  for (int i=0; i<var_scaling.size(); ++i) {
-    if (temperature>0) var_scaling[i] = temperature; else var_scaling[i] = 1.;
-  }
+  Vector<Real> var_scaling(nStructVars*(nStructVars+1)/2); var_scaling.assign(var_scaling.size(), 1.);
+  // for (int i=0; i<var_scaling.size(); ++i) {
+  //   if (temperature>0) var_scaling[i] = temperature; else var_scaling[i] = 1.;
+  // }
   StructFact structFact(ba, dm, var_names, var_scaling);
 
   // INITIALIZE
@@ -94,7 +108,7 @@ void main_driver(const char* argv) {
       LBM_init_flat_interface(geom, fold, gold, hydrovs);
       break;
     case 2:
-      LBM_init_droplet(0.3, geom, fold, gold, hydrovs);
+      LBM_init_droplet(R, geom, fold, gold, hydrovs);
       break;
     case 10:
       checkpointRestart(start_step, hydrovs, hydro_chk, fold, gold, ba, dm);--start_step;
@@ -112,25 +126,35 @@ void main_driver(const char* argv) {
 
   hydrovs.Copy(ref_params, hydrovs, 0, 0, 2, nghost);
   // Write a plotfile of the initial data if plot_int > 0
-  if (plot_int > 0 and ic != 10){WriteOutput(start_step, hydrovs, geom, hydro_plt);}
+  if (dump_hydro == 1 and ic != 10){WriteOutput(start_step, hydrovs, geom, hydro_plt, output_hdf);}
   Print() << "LB initialized\n";
   start_step++;
 
   // TIMESTEP
   for (int step=start_step; step <= nsteps; ++step) {
     LBM_timestep(geom, fold, gold, fnew, gnew, hydrovs, noise, ref_params);
-    if (temperature > 0){structFact.FortStructure(hydrovs, geom);}
+
+    if (dump_SF == 1 && temperature > 0){structFact.FortStructure(hydrovs, geom);}
+
     if (n_checkpoint > 0 && step%n_checkpoint == 0){
       WriteCheckPoint(step, hydrovs, hydro_chk);
       if (temperature > 0){structFact.WriteCheckPoint(0,SF_chk);}
     }
-    if (plot_int > 0 && step%plot_int ==0) {
-      WriteOutput(step, hydrovs, geom, hydro_plt);
-      if (temperature > 0){
-        // WriteOutput(step, noise, geom, "xi_plt"); 
-        structFact.WritePlotFile(step, static_cast<Real>(step), geom, SF_plt, 0); // remove 0 if k = 0 point is to be zeroed in output
-        StructFact structFact(ba, dm, var_names, var_scaling);}
-    }
+    
+    if (dump_hydro == 1 && step%n_hydro == 0){WriteOutput(step, hydrovs, geom, hydro_plt, output_hdf);}
+
+    if(dump_SF == 1 && step%n_SF == 0 && temperature > 0){
+      structFact.WritePlotFile(step, static_cast<Real>(step), geom, SF_plt, 0);
+      StructFact structFact(ba, dm, var_names, var_scaling);
+      }
+
+    // if (plot_int > 0 && step%plot_int ==0) {
+    //   WriteOutput(step, hydrovs, geom, hydro_plt);
+    //   if (temperature > 0){
+    //     // WriteOutput(step, noise, geom, "xi_plt"); 
+    //     structFact.WritePlotFile(step, static_cast<Real>(step), geom, SF_plt, 0); // remove 0 if k = 0 point is to be zeroed in output
+    //     StructFact structFact(ba, dm, var_names, var_scaling);}
+    // }
     Print() << "LB step " << step << " completed\n";
   }
   // Call the timer again and compute the maximum difference between the start time 

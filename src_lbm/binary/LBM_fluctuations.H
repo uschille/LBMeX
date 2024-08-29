@@ -558,6 +558,7 @@ GpuArray<GpuComplex<Real>,ndof> kspace_white_noise(int kx, int ky, int kz, const
     } else {
       // complex Gaussian random variables with zero mean and variance 0.5
       r[i] = { RandomNormal(0., std::sqrt(0.5), engine), RandomNormal(0., std::sqrt(0.5), engine) };
+      // r[i] = { RandomNormal(0., 1., engine), RandomNormal(0., 0., engine) };
     }
   }
   return r;
@@ -574,29 +575,26 @@ GpuArray<GpuComplex<Real>,ndof> correlated_noise(int kx, int ky, int kz,
   GpuArray<Real,ndof*ndof> C;
 
   // // Cholesky decomposition of noise covariance matrix
-  // C = noise_covariance(kx,ky,kz,domain,ref);
+  C = noise_covariance(kx,ky,kz,domain,ref);
   // cholesky_decomp(C,ndof,ncons);
 
   // LAPACK CHOLESKY DECOMP. COMMENT OUT IF THIS DOESN'T WORK
   const char uplo = 'L';
   const int lda = ndof-ncons;
   const int order = lda;
-  int rank = 0;
-  const Real tol = -1.;
-  int info;
-  GpuArray<int,order> PIV = {}; PIV.fill(0);
-  GpuArray<Real,2*order> WORK = {}; WORK.fill(0.);
+  int info = 0;
   GpuArray<Real,lda*lda> SLC_C; SLC_C.fill(0.);
   for (int i = ncons; i < ndof; i++){
     for (int j = ncons; j < ndof; j++){
       SLC_C[(i-ncons)*lda+(j-ncons)] = C[i*ndof+j];
     }
   }
-  dpstrf_(&uplo, &order, SLC_C.data(), &lda, PIV.data(), &rank, &tol, WORK.data(), &info);
+  size_t arraySize = SLC_C.size();
+  dpotrf_(&uplo, &order, SLC_C.data(), &lda, &info, arraySize);
   C.fill(0.);
   for (int i = ncons; i < ndof; i++){
-    for (int j = ncons; j < ndof; j++){
-      C[i*ndof+j] = SLC_C[(i-ncons)*lda+(j-ncons)];
+    for (int j = ncons; j < i+1; j++){
+      C[i*ndof+j] = SLC_C[(j-ncons)*lda+(i-ncons)];
     }
   }
   // LAPACK CHOLESKY DECOMP. COMMENT OUT IF THIS DOESN'T WORK

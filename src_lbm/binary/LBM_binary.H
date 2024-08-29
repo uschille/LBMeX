@@ -9,6 +9,8 @@ AMREX_GPU_MANAGED Real tau_r = 0.7886751345948129; // tau=0.5*(1.+1./sqrt(3.)) m
 AMREX_GPU_MANAGED Real tau_p = 1.0;
 // AMREX_GPU_MANAGED Real tau_p = 0.7886751345948129;
 AMREX_GPU_MANAGED int nx = 16;
+AMREX_GPU_MANAGED int ny = 16;
+AMREX_GPU_MANAGED int nz = 16;
 AMREX_GPU_MANAGED int ic = 0;
 
 // thermodynamic model
@@ -472,6 +474,36 @@ inline void LBM_timestep(const Geometry& geom,
   hydrovars(fold, gold, hydrovs);
 }
 
+// Newton-Raphson method function
+Real newtonRaphson(Real initialGuess, 
+                     double tolerance, 
+                     int maxIterations) {
+    Real x = initialGuess;
+    for (int i = 0; i < maxIterations; ++i) {
+        Real fx = -(chi/2.)*(x/1.) + (T/2.)*log((1. + x/1.)/(1. - x/1.));
+        Real dfx = (-2.*T*pow(1, 2) - chi*pow(x, 2) + chi*pow(1, 2))/(2.*1*(pow(x, 2) - pow(1, 2)));
+        
+        // Prevent division by zero
+        if (dfx == 0.0) {
+          Print() << "Divide by 0 encountered in Newton Raphson\n" << std::endl;
+          exit(-1);
+        }
+
+        Real x_next = x - fx / dfx;
+
+        // Check if the difference between successive iterations is within tolerance
+        if (std::fabs(x_next - x) < tolerance) {
+            return x_next;
+        }
+
+        x = x_next;
+    }
+
+    Print() << "Maximum iteration reached without convergence in Newton Raphson\n" << std::endl;
+    exit(-1);
+    return x;
+}
+
 // homogeneous mixture of C1 and C2 with random concentration fluctuations
 inline void LBM_init_mixture(MultiFab& mf,
 			     MultiFab& mg,
@@ -517,13 +549,14 @@ inline void LBM_init_flat_interface(const Geometry& geom,
   #endif
 
       const Real rho=1.0;
-      Real phi = 0.0;
+      Real phi = newtonRaphson(0.505, pow(10, -7), 1000);
+      // Print() << "Initial phi: " << phi << "\n";
       if (rx < 0.) {
         // phi = (1. + 0.49)/2.;
-        phi = 0.5;
+        phi *= 1.;
       } else {
         // phi = (1. - 0.49)/2.;
-        phi = -0.5;
+        phi *= -1.;
       }
 
       for (int i=0; i<nvel; i++) {
@@ -559,7 +592,7 @@ inline void LBM_init_droplet(const Real r,
       const Real r = sqrt(r2);
 
       const Real rho = 1.0;
-      const Real phi0 = 0.5;
+      const Real phi0 = newtonRaphson(0.505, pow(10, -7), 1000);;
       const Real phi = phi0*tanh((R-r)/sqrt(kappa));
 
       // Real phi = 0.0;

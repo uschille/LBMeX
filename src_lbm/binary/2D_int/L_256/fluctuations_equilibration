@@ -1,19 +1,18 @@
 # box parameters
 nx = 32
-ny = 32
-nz = 32
-max_grid_size = 32
-init_cond = 1
+ny = 6
+nz = 256
+max_grid_size = 256
+init_cond = 10
 
 # time parameters
-nsteps = 1
+nsteps = 20000
 dump_hydro = 1
-n_hydro = 100
+n_hydro = 5000
 dump_SF = 0
-n_SF = 100
-n_checkpoint = 0
-start_step = 0
-output_hdf5 = 0
+n_SF = 0
+n_checkpoint = 10000
+start_step = 1000
 
 # model parameters
 lambda = 1.1
