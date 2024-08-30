@@ -6,7 +6,7 @@ max_grid_size = 64
 init_cond = 10
 
 # time parameters
-nsteps = 1200
+nsteps = 10000
 dump_hydro = 1
 n_hydro = 200
 dump_SF = 0
@@ -17,7 +17,7 @@ start_step = 1000
 # model parameters
 lambda = 1.1
 T = 0.5
-kappa = 0.0
+kappa = 0.01
 gamma = 1.0
 
 # noise parameters

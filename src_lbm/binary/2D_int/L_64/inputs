@@ -8,7 +8,7 @@ init_cond = 1
 # time parameters
 nsteps = 1000
 dump_hydro = 1
-n_hydro = 200
+n_hydro = 500
 dump_SF = 0
 n_SF = 0
 n_checkpoint = 500
@@ -17,7 +17,7 @@ start_step = 0
 # model parameters
 lambda = 1.1
 T = 0.5
-kappa = 0.0
+kappa = 0.01
 gamma = 1.0
 
 # noise parameters

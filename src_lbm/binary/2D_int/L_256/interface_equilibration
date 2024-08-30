@@ -8,7 +8,7 @@ init_cond = 1
 # time parameters
 nsteps = 1000
 dump_hydro = 1
-n_hydro = 200
+n_hydro = 500
 dump_SF = 0
 n_SF = 0
 n_checkpoint = 1000

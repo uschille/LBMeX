@@ -463,9 +463,9 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz,
   const Real lambda_p = 1./tau_p;
 
   // TODO: generalize to non-homogeneous reference state
-  // const Real rho0 = 1.0;
+  const Real rho0 = 1.0;
   // const Real phi0 = 0.0;
-  const Real rho0 = r(kx, ky, kz, 0);
+  // const Real rho0 = r(kx, ky, kz, 0);
   const Real phi0 = r(kx, ky, kz, 1);
   // assuming no k dependence so kappa = 0
   const Real cs2k = T + kappa*k2*rho0; //checked after conversion
@@ -641,7 +641,7 @@ inline void generate_kspace_noise(const Geometry& geom,
         GpuArray<GpuComplex<Real>,ndof> xi = {};
 
 	      // compute correlated noise in k-space
-	      xi = correlated_noise(kx,ky,kz,domain,engine,r);
+	      xi = correlated_noise(kx,ky,kz,domain,engine,h);
 
         for (int i=0; i<ndof; ++i) {
           xi_real(kx,ky,kz,i) = xi[i].real();
