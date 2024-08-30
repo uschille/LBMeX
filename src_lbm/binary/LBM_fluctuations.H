@@ -20,6 +20,7 @@ const int ndof = 2*nvel;
 
 // Cholesky decomposition of matrix A
 // result is stored in lower triangle of A
+
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 void cholesky_decomp(GpuArray<Real,ndof*ndof>& A, const int n, const int bstart) {
   // Cholesky-Banachiewicz algorithm
@@ -93,9 +94,7 @@ inline void create_kspace_sin(const Geometry& geom,
     });
   }
 }
-#endif
 
-#if 0
 // generate uncorrelated white noise in k-space
 // requires whole domain without domain decomposition
 inline void kspace_white_noise(const Geometry& geom,
@@ -133,9 +132,7 @@ inline void kspace_white_noise(const Geometry& geom,
     });
   }
 }
-#endif
 
-#if 0
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 Real structure_factor(int kx, int ky, int kz) {
   const Real rho0 = 1.0;
@@ -224,32 +221,7 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz) {
   const GpuArray<Real,ndof*ndof> C = noise_covariance(G);
   return C;
 }
-#endif
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-Real fourier_laplace_operator(int ikx, int iky, int ikz, const Box& domain) {
-  BL_PROFILE_VAR("fourier_laplace_operator()",fourier_laplace_operator);
-  Real k2;
-
-  IntVect n = domain.length();
-
-  // FFTW convention for ordering of wave vectors
-  Real kx = (ikx < (n[0]+1)/2) ? 2.*M_PI/n[0]*ikx : 2.*M_PI/n[0]*(ikx-n[0]);
-  Real ky = (iky < (n[1]+1)/2) ? 2.*M_PI/n[1]*iky : 2.*M_PI/n[1]*(iky-n[1]);
-  Real kz = (ikz < (n[2]+1)/2) ? 2.*M_PI/n[2]*ikz : 2.*M_PI/n[2]*(ikz-n[2]);
-
-  Real cosx = cos(kx);
-  Real cosy = cos(ky);
-  Real cosz = cos(kz);
-
-  Real expr1 = cosx + cosy + cosz;
-  Real expr2 = cosx*cosy + cosy*cosz + cosx*cosz;
-  k2 = -2./cs2*(1./9.*expr1 + 1./9.*expr2 - 2./3.);
-
-  return k2;
-}
-
-#if 0
 // construct noise covariance matrix of the modes in k-space
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz, const Box& domain, const Array4<Real>& h) { // TODO: add function arguments: rho, phi, k, others?
@@ -451,6 +423,29 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz, const Box& dom
 }
 #endif
 
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+Real fourier_laplace_operator(int ikx, int iky, int ikz, const Box& domain) {
+  BL_PROFILE_VAR("fourier_laplace_operator()",fourier_laplace_operator);
+  Real k2;
+
+  IntVect n = domain.length();
+
+  // FFTW convention for ordering of wave vectors
+  Real kx = (ikx < (n[0]+1)/2) ? 2.*M_PI/n[0]*ikx : 2.*M_PI/n[0]*(ikx-n[0]);
+  Real ky = (iky < (n[1]+1)/2) ? 2.*M_PI/n[1]*iky : 2.*M_PI/n[1]*(iky-n[1]);
+  Real kz = (ikz < (n[2]+1)/2) ? 2.*M_PI/n[2]*ikz : 2.*M_PI/n[2]*(ikz-n[2]);
+
+  Real cosx = cos(kx);
+  Real cosy = cos(ky);
+  Real cosz = cos(kz);
+
+  Real expr1 = cosx + cosy + cosz;
+  Real expr2 = cosx*cosy + cosy*cosz + cosx*cosz;
+  k2 = -2./cs2*(1./9.*expr1 + 1./9.*expr2 - 2./3.);
+
+  return k2;
+}
+
 GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz, 
                                         const Box& domain, const Array4<Real>& r) { // TODO: add function arguments: rho, phi, k, others?
   BL_PROFILE_VAR("noise_covariance()",noise_covariance);
@@ -463,9 +458,9 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz,
   const Real lambda_p = 1./tau_p;
 
   // TODO: generalize to non-homogeneous reference state
-  const Real rho0 = 1.0;
+  // const Real rho0 = 1.0;
   // const Real phi0 = 0.0;
-  // const Real rho0 = r(kx, ky, kz, 0);
+  const Real rho0 = r(kx, ky, kz, 0);
   const Real phi0 = r(kx, ky, kz, 1);
   // assuming no k dependence so kappa = 0
   const Real cs2k = T + kappa*k2*rho0; //checked after conversion
@@ -641,7 +636,7 @@ inline void generate_kspace_noise(const Geometry& geom,
         GpuArray<GpuComplex<Real>,ndof> xi = {};
 
 	      // compute correlated noise in k-space
-	      xi = correlated_noise(kx,ky,kz,domain,engine,h);
+	      xi = correlated_noise(kx,ky,kz,domain,engine,r);
 
         for (int i=0; i<ndof; ++i) {
           xi_real(kx,ky,kz,i) = xi[i].real();
