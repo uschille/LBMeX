@@ -11,7 +11,7 @@ using namespace amrex;
 #include "LBM_IO.H"
 
 void main_driver(const char* argv) {
-
+  fft_test();
   // if (!cholesky_test(100)) exit(-1);
 
   // store the current time so we can later compute total run time.

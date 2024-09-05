@@ -1,4 +1,5 @@
 #include "LBM_fluctuations.H"
+#include <math.h> 
 
 GpuArray<Real,ndof*ndof> square_matrix(GpuArray<Real,ndof*ndof> const& L) {
     GpuArray<Real,ndof*ndof> C = {};
@@ -70,4 +71,68 @@ bool cholesky_test(const int ntrial) {
         exit(-1);
 
     return status;
+}
+
+
+int fft_test(){
+    int nx = 32;
+    int ny = 32;
+    int nz = 32;
+    int nghost = 1;
+    int NVAR = 1;
+    bool unpack = false;
+    const Real A = 1.0;
+
+    // set up Box and Geomtry
+    IntVect dom_lo(0, 0, 0);
+    IntVect dom_hi(nx-1, ny-1, nz-1);
+    Array<int,3> periodicity({1,1,1});
+    Box domain(dom_lo, dom_hi);
+    RealBox real_box({0.,0.,0.},{1.,1.,1.});
+    Geometry geom(domain, real_box, CoordSys::cartesian, periodicity);
+    BoxArray ba(domain);
+    ba.maxSize(32);
+    DistributionMapping dm(ba);
+
+    MultiFab variables(ba, dm, 1, nghost);
+    MultiFab variables_dft_real(ba, dm, 1, nghost);
+    MultiFab variables_dft_imag(ba, dm, 1, nghost);
+    MultiFab output(ba, dm, 1, nghost);
+    
+    variables.setVal(0, 0, 1, nghost);
+    variables_dft_real.setVal(0, 0, 1, nghost);
+    variables_dft_imag.setVal(0, 0, 1, nghost);
+
+    // initialize a sin wave in the x direction
+    for (MFIter mfi(variables); mfi.isValid(); ++mfi) {
+
+    const Box& valid_box = mfi.validbox();
+    const Array4<Real>& v = variables.array(mfi);
+    ParallelForRNG(valid_box, [=] AMREX_GPU_DEVICE(int x, int y, int z, RandomEngine const& engine) {
+        Real check = (Real(x))/Real(nx)*2.*M_PI;
+        // add in sin wave here. Previous implementation was wrong
+        });
+    }
+    
+    int step = 0;
+    Real time = step;
+    std::string pltfile = amrex::Concatenate("FFT_test",step,5);
+    Vector<std::string> var_names = {"FFT and ifft conversion"};
+    WriteSingleLevelPlotfile(pltfile, variables, var_names, geom, time, step);
+
+    compute_fft(variables,
+			    variables_dft_real, 
+			    variables_dft_imag,
+			    geom,
+			    NVAR,
+                unpack);
+
+    compute_ifft(geom, output,
+			 variables_dft_real,
+			 variables_dft_imag);
+    
+    step++;
+    time = step;
+    WriteSingleLevelPlotfile(pltfile, output, var_names, geom, time, step);
+    return 1;
 }
