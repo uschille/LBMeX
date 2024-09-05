@@ -507,18 +507,22 @@ Real newtonRaphson(Real initialGuess,
 // homogeneous mixture of C1 and C2 with random concentration fluctuations
 inline void LBM_init_mixture(MultiFab& mf,
 			     MultiFab& mg,
-			     MultiFab& hydrovs) {
+			     MultiFab& hydrovs,
+           MultiFab& ref_params) {
   const Real C1 = 0.5;
   const Real C2 = 0.5;
   for (MFIter mfi(mf); mfi.isValid(); ++mfi) {
     const Box& valid_box = mfi.validbox();
     const Array4<Real>& f = mf.array(mfi);
     const Array4<Real>& g = mg.array(mfi);
+    const Array4<Real>& r = ref_params.array(mfi);
     ParallelForRNG(valid_box, [=] AMREX_GPU_DEVICE(int x, int y, int z, RandomEngine const& engine) {
       const Real rho = C1 + C2;
       Real phi = 0.0;
       // phi = C1+0.001*RandomNormal(0., 1., engine);
       phi = 0.001*RandomNormal(0., 1., engine);
+      r(x, y, z, 0) = rho;
+      r(x, y, z, 1) = 0;
       for (int i=0; i<nvel; i++) {
         f(x,y,z,i) = w[i]*rho;
         g(x,y,z,i) = w[i]*phi;
@@ -532,11 +536,15 @@ inline void LBM_init_mixture(MultiFab& mf,
 inline void LBM_init_flat_interface(const Geometry& geom,
 				    MultiFab& mf,
 				    MultiFab& mg,
-				    MultiFab& hydrovs) {
+				    MultiFab& hydrovs,
+            MultiFab& ref_params) {
   const IntVect box = geom.Domain().length();
 
+  const Real b = -(pow(chi, 2.350)/(pow(kappa, 0.640)*pow(T, 5.559)*489.435));
+  const Real intLoc = (Real(box[0]) - 1.)/2.;
   auto const & f = mf.arrays();
   auto const & g = mg.arrays();
+  auto const & r = ref_params.arrays();
   GpuArray<Real,3> dx = geom.CellSizeArray();
   ParallelFor(mf, IntVect(0), [=] AMREX_GPU_DEVICE(int nbx, int x, int y, int z) {
     const Real rx = x-box[0]/2;
@@ -549,19 +557,22 @@ inline void LBM_init_flat_interface(const Geometry& geom,
   #endif
 
       const Real rho=1.0;
-      Real phi = newtonRaphson(0.505, pow(10, -7), 1000);
-      // Print() << "Initial phi: " << phi << "\n";
+      Real phi0 = newtonRaphson(0.6, pow(10, -7), 1000);
+      r[nbx](x, y, z, 0) = 1.;
+      r[nbx](x, y, z, 1) = phi0*tanh(b*(Real(x) - intLoc));
+      // Print() << "intLoc:"<< intLoc << " " << Real(x) <<": " << phi0*tanh(b*(Real(x) - intLoc)) << "\n";
+      // // Print() << "Initial phi: " << phi << "\n";
       if (rx < 0.) {
         // phi = (1. + 0.49)/2.;
-        phi *= 1.;
+        phi0 *= 1.;
       } else {
         // phi = (1. - 0.49)/2.;
-        phi *= -1.;
+        phi0 *= -1.;
       }
-
+      
       for (int i=0; i<nvel; i++) {
         f[nbx](x,y,z,i) = w[i]*rho;
-        g[nbx](x,y,z,i) = w[i]*phi;
+        g[nbx](x,y,z,i) = w[i]*phi0;
       }
 
     });
@@ -573,12 +584,14 @@ inline void LBM_init_droplet(const Real r,
 			     const Geometry& geom,
 			     MultiFab& mf,
 			     MultiFab& mg,
-			     MultiFab& hydrovs) {
+			     MultiFab& hydrovs,
+           MultiFab& ref_params) {
   const IntVect box = geom.Domain().length();
   const Real R = r*box[0];
 
     auto const & f = mf.arrays();
     auto const & g = mg.arrays();
+    auto const & ref = ref_params.arrays();
     GpuArray<Real,3> dx = geom.CellSizeArray();
     ParallelFor(mf, IntVect(0), [=] AMREX_GPU_DEVICE(int nbx, int x, int y, int z) {
       const Real rx = x-box[0]/2;
@@ -594,7 +607,8 @@ inline void LBM_init_droplet(const Real r,
       const Real rho = 1.0;
       const Real phi0 = newtonRaphson(0.505, pow(10, -7), 1000);;
       const Real phi = phi0*tanh((R-r)/sqrt(kappa));
-
+      ref[nbx](x, y, z, 0) = rho;
+      ref[nbx](x, y, z, 1) = phi;
       // Real phi = 0.0;
       // const Real test = tanh((R-r)/sqrt(kappa));
       // if (test > 0){phi = (1.0 + 0.50)/2.;}

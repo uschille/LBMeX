@@ -13,6 +13,7 @@ dump_SF = 0
 n_SF = 200
 n_checkpoint = 5000
 start_step = 1000
+output_hdf5 = 1
 
 # model parameters
 lambda = 1.1

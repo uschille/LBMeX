@@ -102,13 +102,13 @@ void main_driver(const char* argv) {
   // INITIALIZE
   switch(ic){
     case 0:
-      LBM_init_mixture(fold, gold, hydrovs);
+      LBM_init_mixture(fold, gold, hydrovs, ref_params);
       break;
     case 1:
-      LBM_init_flat_interface(geom, fold, gold, hydrovs);
+      LBM_init_flat_interface(geom, fold, gold, hydrovs, ref_params);
       break;
     case 2:
-      LBM_init_droplet(R, geom, fold, gold, hydrovs);
+      LBM_init_droplet(R, geom, fold, gold, hydrovs, ref_params);
       break;
     case 10:
       checkpointRestart(start_step, hydrovs, hydro_chk, fold, gold, ba, dm);--start_step;
@@ -124,7 +124,7 @@ void main_driver(const char* argv) {
   if (n_checkpoint > 0 && ic != 10){WriteCheckPoint(start_step, hydrovs, hydro_chk);start_step = 0;}
   // checkpoint read of hydrovs to generate fold and gold to be used for further simulations
 
-  hydrovs.Copy(ref_params, hydrovs, 0, 0, 2, nghost);
+  // hydrovs.Copy(ref_params, hydrovs, 0, 0, 2, nghost);
   // Write a plotfile of the initial data if plot_int > 0
   if (dump_hydro == 1 and ic != 10){WriteOutput(start_step, hydrovs, geom, hydro_plt, output_hdf);}
   Print() << "LB initialized\n";

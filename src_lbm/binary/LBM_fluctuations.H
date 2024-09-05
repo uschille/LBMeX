@@ -63,6 +63,173 @@ void cholesky_decomp(GpuArray<Real,ndof*ndof>& A, const int n, const int bstart)
 }
 
 #if 0
+void compute_fft(const MultiFab& variables,
+			    MultiFab& variables_dft_real, 
+			    MultiFab& variables_dft_imag,
+			    const Geometry& geom,
+			    int NVARU,
+          bool unpack){
+    BL_PROFILE_VAR("compute_fft()", compute_fft);
+    bool is_flattened = false;
+    long npts;
+
+    // Initialize the boxarray "ba_onegrid" from the single box "domain"
+    BoxArray ba_onegrid;
+    {
+      Box domain = geom.Domain();
+      ba_onegrid.define(domain);
+      npts = (domain.length(0)*domain.length(1)*domain.length(2));
+    }
+
+    Real sqrtnpts = std::sqrt(npts);
+    DistributionMapping dmap_onegrid(ba_onegrid);
+
+    // we will take one FFT at a time and copy the answer into the
+    // corresponding component
+    MultiFab variables_onegrid;
+    MultiFab variables_dft_real_onegrid;
+    MultiFab variables_dft_imag_onegrid;
+    variables_onegrid.define(ba_onegrid, dmap_onegrid, 1, 0);
+    variables_dft_real_onegrid.define(ba_onegrid, dmap_onegrid, 1, 0);
+    variables_dft_imag_onegrid.define(ba_onegrid, dmap_onegrid, 1, 0);
+
+    //    fftw_mpi_init();
+
+    using FFTplan = fftw_plan;
+    using FFTcomplex = fftw_complex;
+
+    // contain to store FFT - note it is shrunk by "half" in x
+    Vector<std::unique_ptr<BaseFab<GpuComplex<Real> > > > spectral_field;
+    Vector<FFTplan> forward_plan;
+    for (int comp=0; comp<NVAR; comp++) {
+        bool comp_fft = false;
+
+	    if (comp_fft == false) continue;
+        variables_onegrid.ParallelCopy(variables,comp,0,1);
+        if (!built_plan) {
+            for (MFIter mfi(variables_onegrid); mfi.isValid(); ++mfi) {
+                // grab a single box including ghost cell range
+                Box realspace_bx = mfi.fabbox();
+                // size of box including ghost cell range
+                IntVect fft_size = realspace_bx.length(); // This will be different for hybrid FFT
+                // this is the size of the box, except the 0th component is 'halved plus 1'
+                IntVect spectral_bx_size = fft_size;
+                spectral_bx_size[0] = fft_size[0]/2 + 1;
+                // spectral box
+                Box spectral_bx = Box(IntVect(0), spectral_bx_size - IntVect(1));
+                spectral_field.emplace_back(new BaseFab<GpuComplex<Real> >(spectral_bx,1,
+                                                                       The_Device_Arena()));
+                spectral_field.back()->setVal<RunOn::Device>(0.0); // touch the memory
+                FFTplan fplan;
+                if (is_flattened) {
+                        fplan = fftw_plan_dft_r2c_2d(fft_size[1], 
+                                                    fft_size[0],
+                                                    variables_onegrid[mfi].dataPtr(),
+                                                    reinterpret_cast<FFTcomplex*>
+                                                    (spectral_field.back()->dataPtr()),
+                                                    FFTW_ESTIMATE);} 
+                else {
+                        fplan = fftw_plan_dft_r2c_3d(fft_size[2], 
+                                                    fft_size[1], 
+                                                    fft_size[0],
+                                                    variables_onegrid[mfi].dataPtr(),
+                                                    reinterpret_cast<FFTcomplex*>
+                                                    (spectral_field.back()->dataPtr()),
+                                                    FFTW_ESTIMATE);}
+                forward_plan.push_back(fplan);
+            }
+	    built_plan = true;
+        }
+
+        ParallelDescriptor::Barrier();
+
+        // ForwardTransform
+        for (MFIter mfi(variables_onegrid); mfi.isValid(); ++mfi) {
+            int i = mfi.LocalIndex();
+            fftw_execute(forward_plan[i]);
+        }
+
+        // copy data to a full-sized MultiFab
+        // this involves copying the complex conjugate from the half-sized field
+        // into the appropriate place in the full MultiFab
+        for (MFIter mfi(variables_dft_real_onegrid); mfi.isValid(); ++mfi) {
+
+            Array4< GpuComplex<Real> > spectral = (*spectral_field[0]).array();
+
+            Array4<Real> const& realpart = variables_dft_real_onegrid.array(mfi);
+            Array4<Real> const& imagpart = variables_dft_imag_onegrid.array(mfi);
+
+            Box bx = mfi.fabbox();
+
+            amrex::ParallelFor(bx,
+            [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                /*
+                  Unpacking rules:
+
+                  For domains from (0,0,0) to (Nx-1,Ny-1,Nz-1)
+
+                  For any cells with i index > Nx/2, these values are complex conjugates of the corresponding
+                  entry where (Nx-i,Ny-j,Nz-k) UNLESS that index is zero, in which case you use 0.
+
+                  e.g. for an 8^3 domain, any cell with i index
+
+                  Cell (6,2,3) is complex conjugate of (2,6,5)
+
+                  Cell (4,1,0) is complex conjugate of (4,7,0)  (note that the FFT is computed for 0 <= i <= Nx/2)
+                */
+                if (i <= bx.length(0)/2) {
+                    // copy value
+                    realpart(i,j,k) = spectral(i,j,k).real();
+                    imagpart(i,j,k) = spectral(i,j,k).imag();
+                } else {
+                    // copy complex conjugate
+                    int iloc = bx.length(0)-i;
+                    int jloc, kloc;
+                    if (is_flattened) {
+                        jloc = (j == 0) ? 0 : bx.length(1)-j;
+                        kloc = 0;
+                    } else {
+                        jloc = (j == 0) ? 0 : bx.length(1)-j;
+                        kloc = (k == 0) ? 0 : bx.length(2)-k;
+                    }
+
+                    if (unpack) {
+                        realpart(i,j,k) =  spectral(iloc,jloc,kloc).real();
+                        imagpart(i,j,k) = -spectral(iloc,jloc,kloc).imag();
+                    }
+                    else {
+                        realpart(i,j,k) =  0.0;
+                        imagpart(i,j,k) =  0.0;
+                    }
+                }
+
+                realpart(i,j,k) /= sqrtnpts;
+                imagpart(i,j,k) /= sqrtnpts;
+            });
+
+            /*
+            amrex::ParallelFor(bx,
+            [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                std::cout << "HACKFFT " << i << " " << j << " " << k << " "
+                          << realpart(i,j,k) << " + " << imagpart(i,j,k) << "i"
+                          << std::endl;
+            });
+            */
+        }
+
+        variables_dft_real.ParallelCopy(variables_dft_real_onegrid,0,comp,1);
+        variables_dft_imag.ParallelCopy(variables_dft_imag_onegrid,0,comp,1);
+
+    }
+
+    // destroy fft plan
+    for (int i = 0; i < forward_plan.size(); ++i) {
+        fftw_destroy_plan(forward_plan[i]);
+    }
+}
+
 // generate a pure sine wave in k-space
 inline void create_kspace_sin(const Geometry& geom,
 			      const MultiFab& noise_onegrid,
