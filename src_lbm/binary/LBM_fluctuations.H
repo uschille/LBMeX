@@ -62,13 +62,25 @@ void cholesky_decomp(GpuArray<Real,ndof*ndof>& A, const int n, const int bstart)
   }
 }
 
-void compute_fft(const MultiFab& variables,
+void compute_fft(const Geometry& geom, 
+          const MultiFab& variables,
 			    MultiFab& variables_dft_real, 
 			    MultiFab& variables_dft_imag,
-			    const Geometry& geom,
 			    int NVAR,
           bool unpack){
-    BL_PROFILE_VAR("compute_fft()", compute_fft);
+
+    BL_PROFILE_VAR("StructFact::ComputeFFT()", ComputeFFT);
+
+    #ifdef AMREX_USE_CUDA
+        // Print() << "Using cuFFT\n";
+    #elif AMREX_USE_HIP
+        // Print() << "Using rocFFT\n";
+    #else
+        // Print() << "Using FFTW\n";
+    #endif
+
+    bool is_flattened = false;
+
     long npts;
 
     // Initialize the boxarray "ba_onegrid" from the single box "domain"
@@ -80,6 +92,7 @@ void compute_fft(const MultiFab& variables,
     }
 
     Real sqrtnpts = std::sqrt(npts);
+
     DistributionMapping dmap_onegrid(ba_onegrid);
 
     // we will take one FFT at a time and copy the answer into the
@@ -93,114 +106,236 @@ void compute_fft(const MultiFab& variables,
 
     //    fftw_mpi_init();
 
-    using FFTplan = fftw_plan;
-    using FFTcomplex = fftw_complex;
+    #ifdef AMREX_USE_CUDA
+        using FFTplan = cufftHandle;
+        using FFTcomplex = cuDoubleComplex;
+    #elif AMREX_USE_HIP
+        using FFTplan = rocfft_plan;
+        using FFTcomplex = double2;
+    #else
+        using FFTplan = fftw_plan;
+        using FFTcomplex = fftw_complex;
+    #endif
 
     // contain to store FFT - note it is shrunk by "half" in x
     Vector<std::unique_ptr<BaseFab<GpuComplex<Real> > > > spectral_field;
+
     Vector<FFTplan> forward_plan;
+
+    // for CUDA builds we only need to build the plan once; track whether we did
+    bool built_plan = false;
+    
     for (int comp=0; comp<NVAR; comp++) {
-      variables_onegrid.ParallelCopy(variables,comp,0,1);
-      for (MFIter mfi(variables_onegrid); mfi.isValid(); ++mfi) {
-          // grab a single box including ghost cell range
-          Box realspace_bx = mfi.fabbox();
-          // size of box including ghost cell range
-          IntVect fft_size = realspace_bx.length(); // This will be different for hybrid FFT
-          // this is the size of the box, except the 0th component is 'halved plus 1'
-          IntVect spectral_bx_size = fft_size;
-          spectral_bx_size[0] = fft_size[0]/2 + 1; // spectral box
-          Box spectral_bx = Box(IntVect(0), spectral_bx_size - IntVect(1));
-          spectral_field.emplace_back(new BaseFab<GpuComplex<Real> >(spectral_bx,1,
-                                                                  The_Device_Arena()));
-          spectral_field.back()->setVal<RunOn::Device>(0.0); // touch the memory
-          FFTplan fplan;
-          fplan = fftw_plan_dft_r2c_3d(fft_size[2], 
-                                      fft_size[1], 
-                                      fft_size[0],
-                                      variables_onegrid[mfi].dataPtr(),
-                                      reinterpret_cast<FFTcomplex*>
-                                      (spectral_field.back()->dataPtr()),
-                                      FFTW_ESTIMATE);
-          forward_plan.push_back(fplan);
-      }
+        variables_onegrid.ParallelCopy(variables,comp,0,1);
 
-      ParallelDescriptor::Barrier();
+        if (!built_plan) {
 
-      // ForwardTransform
-      for (MFIter mfi(variables_onegrid); mfi.isValid(); ++mfi) {
-          int i = mfi.LocalIndex();
-          fftw_execute(forward_plan[i]);
-      }
+            for (MFIter mfi(variables_onegrid); mfi.isValid(); ++mfi) {
 
-      // copy data to a full-sized MultiFab
-      // this involves copying the complex conjugate from the half-sized field
-      // into the appropriate place in the full MultiFab
-      for (MFIter mfi(variables_dft_real_onegrid); mfi.isValid(); ++mfi) {
+                // grab a single box including ghost cell range
+                Box realspace_bx = mfi.fabbox();
 
-          Array4< GpuComplex<Real> > spectral = (*spectral_field[0]).array();
+                // size of box including ghost cell range
+                IntVect fft_size = realspace_bx.length(); // This will be different for hybrid FFT
 
-          Array4<Real> const& realpart = variables_dft_real_onegrid.array(mfi);
-          Array4<Real> const& imagpart = variables_dft_imag_onegrid.array(mfi);
+                // this is the size of the box, except the 0th component is 'halved plus 1'
+                IntVect spectral_bx_size = fft_size;
+                spectral_bx_size[0] = fft_size[0]/2 + 1;
 
-          Box bx = mfi.fabbox();
+                // spectral box
+                Box spectral_bx = Box(IntVect(0), spectral_bx_size - IntVect(1));
 
-          amrex::ParallelFor(bx,
-          [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
-          {
-              /*
-                Unpacking rules:
-                For domains from (0,0,0) to (Nx-1,Ny-1,Nz-1)
-                For any cells with i index > Nx/2, these values are complex conjugates of the corresponding
-                entry where (Nx-i,Ny-j,Nz-k) UNLESS that index is zero, in which case you use 0.
-                e.g. for an 8^3 domain, any cell with i index
-                Cell (6,2,3) is complex conjugate of (2,6,5)
-                Cell (4,1,0) is complex conjugate of (4,7,0)  (note that the FFT is computed for 0 <= i <= Nx/2)
-              */
-              if (i <= bx.length(0)/2) {
-                  // copy value
-                  realpart(i,j,k) = spectral(i,j,k).real();
-                  imagpart(i,j,k) = spectral(i,j,k).imag();
-              } else {
-                  // copy complex conjugate
-                  int iloc = bx.length(0)-i;
-                  int jloc, kloc;
-                  jloc = (j == 0) ? 0 : bx.length(1)-j;
-                  kloc = (k == 0) ? 0 : bx.length(2)-k;
+                spectral_field.emplace_back(new BaseFab<GpuComplex<Real> >(spectral_bx,1,
+                                                                       The_Device_Arena()));
+                spectral_field.back()->setVal<RunOn::Device>(0.0); // touch the memory
 
-                  if (unpack) {
-                      realpart(i,j,k) =  spectral(iloc,jloc,kloc).real();
-                      imagpart(i,j,k) = -spectral(iloc,jloc,kloc).imag();
-                  }
-                  else {
-                      realpart(i,j,k) =  0.0;
-                      imagpart(i,j,k) =  0.0;
-                  }
-              }
+                FFTplan fplan;
 
-              realpart(i,j,k) /= sqrtnpts;
-              imagpart(i,j,k) /= sqrtnpts;
-          });
+            #ifdef AMREX_USE_CUDA // CUDA
+                if (is_flattened) {
+                    cufftResult result = cufftPlan2d(&fplan, fft_size[1], fft_size[0], CUFFT_D2Z);
+                    if (result != CUFFT_SUCCESS) {
+                        amrex::AllPrint() << " cufftplan2d forward failed! Error: "
+                                          << cufftErrorToString(result) << "\n";
+                    }
+                } 
+                else {
+                    cufftResult result = cufftPlan3d(&fplan, fft_size[2], fft_size[1], fft_size[0], CUFFT_D2Z);
+                    if (result != CUFFT_SUCCESS) {
+                        amrex::AllPrint() << " cufftplan3d forward failed! Error: "
+                                          << cufftErrorToString(result) << "\n";
+                    }
+                }
+            #elif AMREX_USE_HIP // HIP
+                if (is_flattened) {
+                    const std::size_t lengths[] = {std::size_t(fft_size[0]),std::size_t(fft_size[1])};
+                    rocfft_status result = rocfft_plan_create(&fplan, rocfft_placement_notinplace, 
+                                                              rocfft_transform_type_real_forward, rocfft_precision_double,
+                                                              2, lengths, 1, nullptr);
+                    assert_rocfft_status("rocfft_plan_create", result);
+                } 
+                else {
+                    const std::size_t lengths[] = {std::size_t(fft_size[0]),std::size_t(fft_size[1]),std::size_t(fft_size[2])};
+                    rocfft_status result = rocfft_plan_create(&fplan, rocfft_placement_notinplace, 
+                                                              rocfft_transform_type_real_forward, rocfft_precision_double,
+                                                              3, lengths, 1, nullptr);
+                    assert_rocfft_status("rocfft_plan_create", result);
+                }
+            #else // host
+                if (is_flattened) {
+                    fplan = fftw_plan_dft_r2c_2d(fft_size[1], fft_size[0],
+                                                 variables_onegrid[mfi].dataPtr(),
+                                                 reinterpret_cast<FFTcomplex*>
+                                                 (spectral_field.back()->dataPtr()),
+                                                 FFTW_ESTIMATE);
+                } 
+                else {
+                    fplan = fftw_plan_dft_r2c_3d(fft_size[2], fft_size[1], fft_size[0],
+                                                 variables_onegrid[mfi].dataPtr(),
+                                                 reinterpret_cast<FFTcomplex*>
+                                                 (spectral_field.back()->dataPtr()),
+                                                 FFTW_ESTIMATE);
+                }
+            #endif
 
-          /*
-          amrex::ParallelFor(bx,
-          [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
-          {
-              std::cout << "HACKFFT " << i << " " << j << " " << k << " "
-                        << realpart(i,j,k) << " + " << imagpart(i,j,k) << "i"
-                        << std::endl;
-          });
-          */
-      }
+                forward_plan.push_back(fplan);
+            }
 
-      variables_dft_real.ParallelCopy(variables_dft_real_onegrid,0,comp,1);
-      variables_dft_imag.ParallelCopy(variables_dft_imag_onegrid,0,comp,1);
+	    built_plan = true;
+        
+        }
 
-  }
+        ParallelDescriptor::Barrier();
+
+        // ForwardTransform
+        for (MFIter mfi(variables_onegrid); mfi.isValid(); ++mfi) {
+            int i = mfi.LocalIndex();
+        
+        #ifdef AMREX_USE_CUDA
+            cufftSetStream(forward_plan[i], amrex::Gpu::gpuStream());
+            cufftResult result = cufftExecD2Z(forward_plan[i],
+                                              variables_onegrid[mfi].dataPtr(),
+                                              reinterpret_cast<FFTcomplex*>
+                                                  (spectral_field[i]->dataPtr()));
+            if (result != CUFFT_SUCCESS) {
+                amrex::AllPrint() << " forward transform using cufftExec failed! Error: "
+                                  << cufftErrorToString(result) << "\n";
+	    }
+	    
+        #elif AMREX_USE_HIP
+            rocfft_execution_info execinfo = nullptr;
+            rocfft_status result = rocfft_execution_info_create(&execinfo);
+            assert_rocfft_status("rocfft_execution_info_create", result);
+
+            std::size_t buffersize = 0;
+            result = rocfft_plan_get_work_buffer_size(forward_plan[i], &buffersize);
+            assert_rocfft_status("rocfft_plan_get_work_buffer_size", result);
+
+            void* buffer = amrex::The_Arena()->alloc(buffersize);
+            result = rocfft_execution_info_set_work_buffer(execinfo, buffer, buffersize);
+            assert_rocfft_status("rocfft_execution_info_set_work_buffer", result);
+
+            result = rocfft_execution_info_set_stream(execinfo, amrex::Gpu::gpuStream());
+            assert_rocfft_status("rocfft_execution_info_set_stream", result);
+
+	        amrex::Real* variables_onegrid_ptr = variables_onegrid[mfi].dataPtr();
+	        FFTcomplex* spectral_field_ptr = reinterpret_cast<FFTcomplex*>(spectral_field[i]->dataPtr());
+            result = rocfft_execute(forward_plan[i],
+                                    (void**) &variables_onegrid_ptr, // in
+                                    (void**) &spectral_field_ptr, // out
+                                    execinfo);
+            assert_rocfft_status("rocfft_execute", result);
+            amrex::Gpu::streamSynchronize();
+            amrex::The_Arena()->free(buffer);
+            result = rocfft_execution_info_destroy(execinfo);
+            assert_rocfft_status("rocfft_execution_info_destroy", result);
+        #else
+            fftw_execute(forward_plan[i]);
+        #endif
+        }
+
+        // copy data to a full-sized MultiFab
+        // this involves copying the complex conjugate from the half-sized field
+        // into the appropriate place in the full MultiFab
+        for (MFIter mfi(variables_dft_real_onegrid); mfi.isValid(); ++mfi) {
+
+            Array4< GpuComplex<Real> > spectral = (*spectral_field[0]).array();
+
+            Array4<Real> const& realpart = variables_dft_real_onegrid.array(mfi);
+            Array4<Real> const& imagpart = variables_dft_imag_onegrid.array(mfi);
+
+            Box bx = mfi.fabbox();
+
+            amrex::ParallelFor(bx,
+            [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                /*
+                  Unpacking rules:
+                  For domains from (0,0,0) to (Nx-1,Ny-1,Nz-1)
+                  For any cells with i index > Nx/2, these values are complex conjugates of the corresponding
+                  entry where (Nx-i,Ny-j,Nz-k) UNLESS that index is zero, in which case you use 0.
+                  e.g. for an 8^3 domain, any cell with i index
+                  Cell (6,2,3) is complex conjugate of (2,6,5)
+                  Cell (4,1,0) is complex conjugate of (4,7,0)  (note that the FFT is computed for 0 <= i <= Nx/2)
+                */
+                if (i <= bx.length(0)/2) {
+                    // copy value
+                    realpart(i,j,k) = spectral(i,j,k).real();
+                    imagpart(i,j,k) = spectral(i,j,k).imag();
+                } else {
+                    // copy complex conjugate
+                    int iloc = bx.length(0)-i;
+                    int jloc, kloc;
+                    if (is_flattened) {
+                        jloc = (j == 0) ? 0 : bx.length(1)-j;
+                        kloc = 0;
+                    } 
+                    else {
+                        jloc = (j == 0) ? 0 : bx.length(1)-j;
+                        kloc = (k == 0) ? 0 : bx.length(2)-k;
+                    }
+
+                    if (unpack) {
+                        realpart(i,j,k) =  spectral(iloc,jloc,kloc).real();
+                        imagpart(i,j,k) = -spectral(iloc,jloc,kloc).imag();
+                    }
+                    else {
+                        realpart(i,j,k) =  0.0;
+                        imagpart(i,j,k) =  0.0;
+                    }
+                }
+
+                realpart(i,j,k) /= sqrtnpts;
+                imagpart(i,j,k) /= sqrtnpts;
+            });
+
+            /*
+            amrex::ParallelFor(bx,
+            [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                std::cout << "HACKFFT " << i << " " << j << " " << k << " "
+                          << realpart(i,j,k) << " + " << imagpart(i,j,k) << "i"
+                          << std::endl;
+            });
+            */
+        }
+
+        variables_dft_real.ParallelCopy(variables_dft_real_onegrid,0,comp,1);
+        variables_dft_imag.ParallelCopy(variables_dft_imag_onegrid,0,comp,1);
+
+    }
 
     // destroy fft plan
     for (int i = 0; i < forward_plan.size(); ++i) {
+    #ifdef AMREX_USE_CUDA
+        cufftDestroy(forward_plan[i]);
+    #elif AMREX_USE_HIP
+        rocfft_plan_destroy(forward_plan[i]);
+    #else
         fftw_destroy_plan(forward_plan[i]);
+    #endif
     }
+//    fftw_mpi_cleanup();
 }
 
 #if 0

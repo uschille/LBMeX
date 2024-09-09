@@ -13,11 +13,11 @@ dump_SF = 0
 n_SF = 200
 n_checkpoint = 0
 start_step = 0
-output_hdf5 = 1
+output_hdf5 = 0
 
 # model parameters
 lambda = 1.1
-T = 0.50
+T = 0.5
 kappa = 0.03
 gamma = 1.0
 

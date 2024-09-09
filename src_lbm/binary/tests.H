@@ -1,4 +1,5 @@
 #include "LBM_fluctuations.H"
+#include "LBM_IO.H"
 #include <math.h> 
 
 GpuArray<Real,ndof*ndof> square_matrix(GpuArray<Real,ndof*ndof> const& L) {
@@ -74,65 +75,93 @@ bool cholesky_test(const int ntrial) {
 }
 
 
-int fft_test(){
-    int nx = 32;
-    int ny = 32;
-    int nz = 32;
+void generate_ifft_test_noise(const Geometry& geom, MultiFab& kspace_noise_real, MultiFab& kspace_noise_imag, int nx, int k){
+    const Box domain = geom.Domain();
+    Real set_val = 1.;
+
+    for (MFIter mfi(kspace_noise_real); mfi.isValid(); ++mfi) {
+        const Box& box = mfi.validbox();
+        const Array4<Real>& xi_real = kspace_noise_real.array(mfi);
+        const Array4<Real>& xi_imag = kspace_noise_imag.array(mfi);
+        int idx = 0;
+
+        // sin in <1 0 0> direction
+        xi_real(1*k, 0, 0, idx) = set_val;
+        // Print() << xi_real(1*k, 0, 0, idx) << "\n";
+        idx++;
+        // sin in <0 1 0> direction
+        xi_real(0, 1*k, 0, idx) = set_val;
+        idx++;
+        // sin in <0 0 1> direction
+        xi_real(0, 0, 1*k, idx) = set_val;
+        idx++;
+        // sin in <1 1 0> direction
+        xi_real(1*k, 1*k, 0, idx) = set_val;
+        idx++;
+        // sin in <1 0 1> direction
+        xi_real(1*k, 0, 1*k, idx) = set_val;
+        idx++;
+        // sin in <0 1 1> direction
+        xi_real(0, 1*k, 1*k, idx) = set_val;
+        idx++;
+        // sin in <1 1 1> direction
+        xi_real(1*k, 1*k, 1*k, idx) = set_val;
+        idx++;
+        // sin in <-1 1 1> direction
+        xi_real(nx - 1*k, 1*k, 1*k, idx) = set_val;
+        idx++;
+        // sin in <1 -1 1> direction
+        xi_real(1*k, nx - 1*k, 1*k, idx) = set_val;
+        idx++;
+        // sin in <1 1 -1> direction
+        xi_real(1*k, 1*k, nx - 1*k, idx) = set_val;
+        idx++;
+  }
+}
+
+void test_case_ifft(){
+    int L = 32; int reps = 1;
     int nghost = 1;
-    int NVAR = 1;
+    int NVAR = 38;
     bool unpack = false;
-    const Real A = 1.0;
+    int step = 0;
+    Real time = step;
+
+    Vector<std::string> var_names(NVAR);
+    for(int i = 0; i < NVAR; i++){var_names[i] = "Test case " + std::to_string(i + 1);}
 
     // set up Box and Geomtry
     IntVect dom_lo(0, 0, 0);
-    IntVect dom_hi(nx-1, ny-1, nz-1);
+    IntVect dom_hi(L - 1, L - 1, L - 1);
     Array<int,3> periodicity({1,1,1});
     Box domain(dom_lo, dom_hi);
     RealBox real_box({0.,0.,0.},{1.,1.,1.});
     Geometry geom(domain, real_box, CoordSys::cartesian, periodicity);
     BoxArray ba(domain);
-    ba.maxSize(32);
+    ba.maxSize(L);
     DistributionMapping dm(ba);
 
-    MultiFab variables(ba, dm, 1, nghost);
-    MultiFab variables_dft_real(ba, dm, 1, nghost);
-    MultiFab variables_dft_imag(ba, dm, 1, nghost);
-    MultiFab output(ba, dm, 1, nghost);
+    Print() << "Box created \n";
+
+    MultiFab noise(ba, dm, NVAR, nghost);
+    MultiFab variables_dft_real(ba, dm, NVAR, 0);
+    MultiFab variables_dft_imag(ba, dm, NVAR, 0);
+    MultiFab output(ba, dm, NVAR, nghost);
+    noise.setVal(0.);variables_dft_real.setVal(0.);variables_dft_imag.setVal(0.);output.setVal(0.);
+    // int kx = 0; int ky = 0; int kz = 0;
     
-    variables.setVal(0, 0, 1, nghost);
-    variables_dft_real.setVal(0, 0, 1, nghost);
-    variables_dft_imag.setVal(0, 0, 1, nghost);
+    generate_ifft_test_noise(geom, variables_dft_real, variables_dft_imag, L, reps);
+    WriteSingleLevelPlotfile("ifft_test_plt_input", variables_dft_real, var_names, geom, 0, 0);
+    Print() << "data generated \n";
+    compute_ifft(geom, noise, variables_dft_real, variables_dft_imag);
+    WriteSingleLevelPlotfile("ifft_test_plt", noise, var_names, geom, 0, 0);
+    Print() << "IFFT completed \n";
 
-    // initialize a sin wave in the x direction
-    for (MFIter mfi(variables); mfi.isValid(); ++mfi) {
-
-    const Box& valid_box = mfi.validbox();
-    const Array4<Real>& v = variables.array(mfi);
-    ParallelForRNG(valid_box, [=] AMREX_GPU_DEVICE(int x, int y, int z, RandomEngine const& engine) {
-        Real check = (Real(x))/Real(nx)*2.*M_PI;
-        // add in sin wave here. Previous implementation was wrong
-        });
-    }
+    variables_dft_real.setVal(0.);variables_dft_imag.setVal(0.);output.setVal(0.);
+    compute_fft(geom, noise, variables_dft_real, variables_dft_imag, NVAR, unpack);
     
-    int step = 0;
-    Real time = step;
-    std::string pltfile = amrex::Concatenate("FFT_test",step,5);
-    Vector<std::string> var_names = {"FFT and ifft conversion"};
-    WriteSingleLevelPlotfile(pltfile, variables, var_names, geom, time, step);
-
-    compute_fft(variables,
-			    variables_dft_real, 
-			    variables_dft_imag,
-			    geom,
-			    NVAR,
-                unpack);
-
-    compute_ifft(geom, output,
-			 variables_dft_real,
-			 variables_dft_imag);
-    
-    step++;
-    time = step;
-    WriteSingleLevelPlotfile(pltfile, output, var_names, geom, time, step);
-    return 1;
+    noise.setVal(0.);
+    compute_ifft(geom, noise, variables_dft_real, variables_dft_imag);
+    WriteSingleLevelPlotfile("ifft_to_fft_to_ifft_test_plt", noise, var_names, geom, 0, 0);
+    Print() << "FFT_to_iFFT completed \n";
 }
