@@ -722,6 +722,26 @@ Real fourier_laplace_operator(int ikx, int iky, int ikz, const Box& domain) {
   return k2;
 }
 
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+GpuArray<GpuComplex<Real>,ndof> kspace_white_noise(int kx, int ky, int kz, const Box& domain, RandomEngine const& engine) {
+  BL_PROFILE_VAR("kspace_white_noise()",kspace_white_noise);
+  GpuArray<GpuComplex<Real>,ndof> r = {};
+  for (int i=ncons; i<ndof; ++i) {
+    // symmetry points are purely real
+    if (     ((kx == 0) || (kx == domain.length(0) - kx))
+          && ((ky == 0) || (ky == domain.length(1) - ky))
+          && ((kz == 0) || (kz == domain.length(2) - kz)) ) {
+      // real Gaussian random variables with zero mean and variance 1
+      r[i] = { RandomNormal(0., 1., engine), RandomNormal(0., 0., engine) };
+    } else {
+      // complex Gaussian random variables with zero mean and variance 0.5
+      r[i] = { RandomNormal(0., std::sqrt(0.5), engine), RandomNormal(0., std::sqrt(0.5), engine) };
+      // r[i] = { RandomNormal(0., 1., engine), RandomNormal(0., 0., engine) };
+    }
+  }
+  return r;
+}
+
 GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz, 
                                         const Box& domain, const Array4<Real>& r) { // TODO: add function arguments: rho, phi, k, others?
   BL_PROFILE_VAR("noise_covariance()",noise_covariance);
@@ -815,26 +835,6 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz,
   return Xi;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-GpuArray<GpuComplex<Real>,ndof> kspace_white_noise(int kx, int ky, int kz, const Box& domain, RandomEngine const& engine) {
-  BL_PROFILE_VAR("kspace_white_noise()",kspace_white_noise);
-  GpuArray<GpuComplex<Real>,ndof> r = {};
-  for (int i=ncons; i<ndof; ++i) {
-    // symmetry points are purely real
-    if (     ((kx == 0) || (kx == domain.length(0) - kx))
-          && ((ky == 0) || (ky == domain.length(1) - ky))
-          && ((kz == 0) || (kz == domain.length(2) - kz)) ) {
-      // real Gaussian random variables with zero mean and variance 1
-      r[i] = { RandomNormal(0., 1., engine), RandomNormal(0., 0., engine) };
-    } else {
-      // complex Gaussian random variables with zero mean and variance 0.5
-      r[i] = { RandomNormal(0., std::sqrt(0.5), engine), RandomNormal(0., std::sqrt(0.5), engine) };
-      // r[i] = { RandomNormal(0., 1., engine), RandomNormal(0., 0., engine) };
-    }
-  }
-  return r;
-}
-
 // compute correlated noise vector from Gaussian random variables
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 GpuArray<GpuComplex<Real>,ndof> correlated_noise(int kx, int ky, int kz,
@@ -862,6 +862,7 @@ GpuArray<GpuComplex<Real>,ndof> correlated_noise(int kx, int ky, int kz,
   }
   size_t arraySize = SLC_C.size();
   dpotrf_(&uplo, &order, SLC_C.data(), &lda, &info, arraySize);
+  // zpotrf_(&uplo, &order, SLC_C.data(), &lda, &info, arraySize);
   C.fill(0.);
   for (int i = ncons; i < ndof; i++){
     for (int j = ncons; j < i+1; j++){
@@ -894,10 +895,16 @@ inline void generate_kspace_noise(const Geometry& geom,
           MultiFab& hydrovs,
           MultiFab& ref_params) {
   BL_PROFILE_VAR("generate_kspace_noise()",generate_kspace_noise);
-  const Box domain = geom.Domain();
+  
+  const Box domain = geom.Domain(); BoxArray ba_onegrid(domain); DistributionMapping dm_onegrid(ba_onegrid); BoxArray ba(domain);
+  
+  int nvar = 2; bool unpack = false;
+  MultiFab variables_dft_real(ba, dm_onegrid, nvar, 0);
+  MultiFab variables_dft_imag(ba, dm_onegrid, nvar, 0);
+  compute_fft(geom, ref_params, variables_dft_real, variables_dft_imag, nvar, unpack);
 
   // include density? [uschill 07/26/2022]
-
+  
   // generate noise in whole box because of grid decomposition
   // (generating noise without grid decomposition may be faster)
   for (MFIter mfi(kspace_noise_real); mfi.isValid(); ++mfi) {
@@ -906,6 +913,9 @@ inline void generate_kspace_noise(const Geometry& geom,
     const Array4<Real>& xi_imag = kspace_noise_imag.array(mfi);
     const Array4<Real>& h = hydrovs.array(mfi);
     const Array4<Real>& r = ref_params.array(mfi);
+    const Array4<Real>& fft_real = variables_dft_real.array(mfi);
+    const Array4<Real>& fft_imag = variables_dft_imag.array(mfi);
+
     // construct noise in k-space
     ParallelForRNG(box, [=] AMREX_GPU_DEVICE(int kx, int ky, int kz, RandomEngine const& engine) {
       if (kx <= domain.length(0)/2) { // need only half of k-space for c2r FFT
