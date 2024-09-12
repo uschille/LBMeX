@@ -6,12 +6,12 @@ max_grid_size = 32
 init_cond = 1
 
 # time parameters
-nsteps = 200
+nsteps = 10000
 dump_hydro = 1
-n_hydro = 100
+n_hydro = 1000
 dump_SF = 0
-n_SF = 200
-n_checkpoint = 0
+n_SF = 5000
+n_checkpoint = 20000
 start_step = 0
 output_hdf5 = 0
 
