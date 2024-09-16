@@ -81,10 +81,23 @@ Array1D<Real,0,2> chemical_potentials(const Array1D<Real,0,2>& fields,
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-Real pressure(Real rho, Real C) {
+Real pressure(Real rho, Real C, 
+              const Array1D<RealVect,0,2>& gradients, 
+              const Array1D<Real,0,2>& laplacians) {
+  
+  const RealVect Drho = gradients(0); Real magDrho = 0.0;
+  const RealVect Dphi = gradients(1); Real magDphi = 0.0;
+  const Real D2rho = laplacians(0);
+  const Real D2phi = laplacians(1);
+
   Real p0 = 0.0;
   // p0 += C*lambda*(2.*C/pow(rho, 2) - 1) + C*T*log((rho - C)/C);
   p0 += rho*T; // Eq. (40) in Swift et al.
+  
+  for(int i = 0; i < 3; i++){magDrho += Drho[i]*Drho[i];}
+  for(int i = 0; i < 3; i++){magDphi += Dphi[i]*Dphi[i];}
+  // p0 += -kappa*(rho*D2rho + C*D2phi);
+  // p0 += -kappa/2*(magDrho + magDphi);
   // note that gradient terms are included in fequilibrium
   return p0;
 }
@@ -158,7 +171,8 @@ Array1D<Real,0,nvel> fequilibrium_moments(const Array1D<Real,0,2>& fields,
   const RealVect Dphi = gradients(1);
   const Real D2rho = laplacians(0);
   const Real D2phi = laplacians(1);
-  const Real pbulk = pressure(rho, phi);
+
+  const Real pbulk = pressure(rho, phi, gradients, laplacians);
 
   Real G[3][3], traceG=0.; // Eq. (39) in Swift et al.
   G[0][0] = kappa*Drho[0]*Drho[0] + kappa*Dphi[0]*Dphi[0]; traceG  = G[0][0];
