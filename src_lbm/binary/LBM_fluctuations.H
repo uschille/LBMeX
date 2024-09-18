@@ -899,9 +899,10 @@ inline void generate_kspace_noise(const Geometry& geom,
   const Box domain = geom.Domain(); BoxArray ba_onegrid(domain); DistributionMapping dm_onegrid(ba_onegrid); BoxArray ba(domain);
   
   int nvar = 2; bool unpack = false;
-  MultiFab variables_dft_real(ba, dm_onegrid, nvar, 0);
-  MultiFab variables_dft_imag(ba, dm_onegrid, nvar, 0);
-  compute_fft(geom, ref_params, variables_dft_real, variables_dft_imag, nvar, unpack);
+  // MultiFab variables_dft_real(ba, dm_onegrid, nvar, 0);
+  // MultiFab variables_dft_imag(ba, dm_onegrid, nvar, 0);
+  // compute_fft(geom, ref_params, variables_dft_real, variables_dft_imag, nvar, unpack);
+  // Print() << "FFT calculated\n";
 
   // include density? [uschill 07/26/2022]
   
@@ -913,8 +914,8 @@ inline void generate_kspace_noise(const Geometry& geom,
     const Array4<Real>& xi_imag = kspace_noise_imag.array(mfi);
     const Array4<Real>& h = hydrovs.array(mfi);
     const Array4<Real>& r = ref_params.array(mfi);
-    const Array4<Real>& fft_real = variables_dft_real.array(mfi);
-    const Array4<Real>& fft_imag = variables_dft_imag.array(mfi);
+    // const Array4<Real>& fft_real = variables_dft_real.array(mfi);
+    // const Array4<Real>& fft_imag = variables_dft_imag.array(mfi);
 
     // construct noise in k-space
     ParallelForRNG(box, [=] AMREX_GPU_DEVICE(int kx, int ky, int kz, RandomEngine const& engine) {
@@ -931,7 +932,6 @@ inline void generate_kspace_noise(const Geometry& geom,
       }
     });
   }
-
 }
 
 #if 1
