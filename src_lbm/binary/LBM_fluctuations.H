@@ -127,28 +127,20 @@ void compute_fft(const Geometry& geom,
     
     for (int comp=0; comp<NVAR; comp++) {
         variables_onegrid.ParallelCopy(variables,comp,0,1);
-
         if (!built_plan) {
 
             for (MFIter mfi(variables_onegrid); mfi.isValid(); ++mfi) {
-
                 // grab a single box including ghost cell range
                 Box realspace_bx = mfi.fabbox();
-
                 // size of box including ghost cell range
                 IntVect fft_size = realspace_bx.length(); // This will be different for hybrid FFT
-
                 // this is the size of the box, except the 0th component is 'halved plus 1'
                 IntVect spectral_bx_size = fft_size;
                 spectral_bx_size[0] = fft_size[0]/2 + 1;
-
                 // spectral box
                 Box spectral_bx = Box(IntVect(0), spectral_bx_size - IntVect(1));
-
-                spectral_field.emplace_back(new BaseFab<GpuComplex<Real> >(spectral_bx,1,
-                                                                       The_Device_Arena()));
+                spectral_field.emplace_back(new BaseFab<GpuComplex<Real> >(spectral_bx,1, The_Device_Arena()));
                 spectral_field.back()->setVal<RunOn::Device>(0.0); // touch the memory
-
                 FFTplan fplan;
 
             #ifdef AMREX_USE_CUDA // CUDA
@@ -258,12 +250,9 @@ void compute_fft(const Geometry& geom,
         // this involves copying the complex conjugate from the half-sized field
         // into the appropriate place in the full MultiFab
         for (MFIter mfi(variables_dft_real_onegrid); mfi.isValid(); ++mfi) {
-
             Array4< GpuComplex<Real> > spectral = (*spectral_field[0]).array();
-
             Array4<Real> const& realpart = variables_dft_real_onegrid.array(mfi);
             Array4<Real> const& imagpart = variables_dft_imag_onegrid.array(mfi);
-
             Box bx = mfi.fabbox();
 
             amrex::ParallelFor(bx,
@@ -899,9 +888,9 @@ inline void generate_kspace_noise(const Geometry& geom,
   const Box domain = geom.Domain(); BoxArray ba_onegrid(domain); DistributionMapping dm_onegrid(ba_onegrid); BoxArray ba(domain);
   
   int nvar = 2; bool unpack = false;
-  // MultiFab variables_dft_real(ba, dm_onegrid, nvar, 0);
-  // MultiFab variables_dft_imag(ba, dm_onegrid, nvar, 0);
-  // compute_fft(geom, ref_params, variables_dft_real, variables_dft_imag, nvar, unpack);
+  MultiFab variables_dft_real(ba, dm_onegrid, nvar, 0);
+  MultiFab variables_dft_imag(ba, dm_onegrid, nvar, 0);
+  compute_fft(geom, ref_params, variables_dft_real, variables_dft_imag, nvar, unpack);
   // Print() << "FFT calculated\n";
 
   // include density? [uschill 07/26/2022]
@@ -914,14 +903,14 @@ inline void generate_kspace_noise(const Geometry& geom,
     const Array4<Real>& xi_imag = kspace_noise_imag.array(mfi);
     const Array4<Real>& h = hydrovs.array(mfi);
     const Array4<Real>& r = ref_params.array(mfi);
-    // const Array4<Real>& fft_real = variables_dft_real.array(mfi);
-    // const Array4<Real>& fft_imag = variables_dft_imag.array(mfi);
+    const Array4<Real>& fft_real = variables_dft_real.array(mfi);
+    const Array4<Real>& fft_imag = variables_dft_imag.array(mfi);
 
     // construct noise in k-space
     ParallelForRNG(box, [=] AMREX_GPU_DEVICE(int kx, int ky, int kz, RandomEngine const& engine) {
       if (kx <= domain.length(0)/2) { // need only half of k-space for c2r FFT
         GpuArray<GpuComplex<Real>,ndof> xi = {};
-
+        Print() << "phik_real:" << fft_real(kx, ky, kz, 1) << " phik_imag:" << fft_imag(kx, ky, kz, 1) << " kx:" << kx << " ky:" << ky << " kz:" << kz << " phi:" << r(kx, ky, kz, 1) << "\n";
 	      // compute correlated noise in k-space
 	      xi = correlated_noise(kx,ky,kz,domain,engine,r);
 
