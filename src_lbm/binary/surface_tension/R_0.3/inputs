@@ -1,0 +1,26 @@
+# box parameters
+nx = 32
+ny = 32
+nz = 32
+max_grid_size = 32
+init_cond = 2
+R = 0.3
+
+# time parameters
+nsteps = 20000
+dump_hydro = 1
+n_hydro = 5000
+dump_SF = 0
+n_SF = 0
+n_checkpoint = 10000
+start_step = 0
+output_hdf5 = 0
+
+# model parameters
+lambda = 1.1
+T = 0.5
+kappa = 0.03
+gamma = 1.0
+
+# noise parameters
+temperature = 0
