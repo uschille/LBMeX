@@ -425,7 +425,11 @@ inline void LBM_timestep(const Geometry& geom,
 			 MultiFab& fold, MultiFab& gold,
 			 MultiFab& fnew, MultiFab& gnew,
 			 MultiFab& hydrovs, MultiFab& noise) {
-  generate_fluctuations(geom, hydrovs, noise);
+#if UNCORRELATED_NOISE
+    generate_fluctuations(geom, hydrovs, noise);
+#else
+    generate_correlated_fluctuations(geom, hydrovs, noise);
+#endif
   collide_stream(geom, fold, gold, fnew, gnew, hydrovs, noise);
   hydrovars(fold, gold, hydrovs);
 }

@@ -682,4 +682,47 @@ inline void generate_correlated_fluctuations(const Geometry& geom,
   compute_ifft(geom, noise, kspace_noise_real, kspace_noise_imag);
 
 }
+
+// compute spatially uncorrelated noise vector from Gaussian random variables
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+GpuArray<Real,ndof> uncorrelated_noise(const Real rho0, const Real C0, const RandomEngine& engine) {
+  GpuArray<Real,ndof> r, xi;
+  GpuArray<Real,ndof*ndof> C;
+
+  // Cholesky decomposition of noise covariance matrix
+  C = noise_covariance_matrix(rho0,C0,0);
+  cholesky_decomp(C,ndof,ncons+1);
+
+  // random white noise
+  for (int i=ncons+1; i<ndof; ++i) {
+    r[i] = RandomNormal(0., 1., engine);
+  }
+
+  // compute noise vector from Gaussian random variables
+  for (int i=0; i<ndof; ++i) {
+    xi[i] = 0;
+    for (int j=0; j<=i; ++j) {
+      xi[i] += C[i*ndof+j]*r[j];
+    }
+  }
+
+  return xi;
+}
+
+// generate real-space noise for all non-conserved moments
+inline void generate_fluctuations(const Geometry& geom, MultiFab& hydrovs, MultiFab& noise) {
+  for (MFIter mfi(noise); mfi.isValid(); ++mfi) {
+    const Box& box = mfi.validbox();
+    const Array4<Real>& xi = noise.array(mfi);
+    const Array4<Real>& h = hydrovs.array(mfi);
+    ParallelForRNG(box, [=] AMREX_GPU_DEVICE(int x, int y, int z, RandomEngine const& engine) {
+      const Real rho0 = h(x,y,z,0);
+      const Real C0 = h(x,y,z,1);
+      GpuArray<Real,ndof> r = uncorrelated_noise(rho0,C0,engine);
+      for (int i=0; i<ndof; ++i) {
+        xi(x,y,z,i) = r[i];
+      }
+    });
+  }
+}
 #endif

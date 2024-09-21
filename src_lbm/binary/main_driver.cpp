@@ -137,7 +137,7 @@ void main_driver(const char* argv) {
     structFact.FortStructure(hydrovs, geom);
     if (plot_int > 0 && step%plot_int ==0) {
       WriteOutput(step, hydrovs, geom);
-      structFact.WritePlotFile(step, static_cast<Real>(step), geom, "plt_SF");
+      structFact.WritePlotFile(step, static_cast<Real>(step), geom, "plt_SF", 0);
     }
     Print() << "LB step " << step << "\n";
   }
