@@ -239,26 +239,35 @@ Real fourier_laplace_operator(int ikx, int iky, int ikz, const Box& domain) {
   return k2;
 }
 
-// construct noise covariance matrix of the modes in k-space
+// TODO: move to LBM_binary.H?
+// thermodynamics of the binary fluid
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz, const Box& domain) { // TODO: add function arguments: rho, phi, k, others?
+GpuArray<Real,4> thermodynamics(const Real rho0, const Real C0, const Real k2) {
+  GpuArray<Real,4> thermovars;
+
+  thermovars[0] = T + 2.*kappa*k2*(rho0-C0); // cs2
+  thermovars[1] = 2.*kappa*k2*(2.*C0-rho0); // p_C
+  thermovars[2] = - T/(rho0-C0) + 2.*chi*C0/(rho0*rho0) - 2.*kappa*k2; // mu_rho
+  thermovars[3] = T*rho0/C0/(rho0-C0) - 2.*chi/rho0 + 4.*kappa*k2; // mu_C
+
+  return thermovars;
+}
+
+// noise covariance matrix of the LB modes
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+GpuArray<Real,ndof*ndof> noise_covariance_matrix(const Real rho0, const Real C0, const Real k2) {
   const uint Q = nvel;
 
+  const GpuArray<Real,4> thermovars = thermodynamics(rho0,C0,k2);
   const Real kT = temperature;
-  const Real k2 = fourier_laplace_operator(kx, ky, kz, domain);
+  const Real cs2 = thermovars[0];
+  const Real p_C = thermovars[1];
+  const Real mu_rho = thermovars[2];
+  const Real mu_C = thermovars[3];
 
   // TODO: generalize to MRT
   const Real lambda_r = -1./tau_r;
   const Real lambda_p = -1./tau_p;
-
-  // TODO: generalize to non-homogeneous reference state
-  const Real rho0 = 1.0;
-  const Real C0 = 0.5;
-
-  Real cs2 = T + 2.*kappa*k2*(rho0-C0);
-  Real p_C = 2.*kappa*k2*(2.*C0-rho0);
-  Real mu_rho = - T/(rho0-C0) + 2.*chi*C0/(rho0*rho0) - 2.*kappa*k2;
-  Real mu_C = T*rho0/C0/(rho0-C0) - 2.*chi/rho0 + 4.*kappa*k2;
 
   // Noise covariance of the modes in k-space
   GpuArray<Real,ndof*ndof> Xi = {};
@@ -364,8 +373,14 @@ GpuArray<GpuComplex<Real>,ndof> correlated_noise(int kx, int ky, int kz,
   GpuArray<GpuComplex<Real>,ndof> r, xi;
   GpuArray<Real,ndof*ndof> C;
 
+  const Real k2 = fourier_laplace_operator(kx, ky, kz, domain);
+
+  // TODO: Generalize to non-homogeneous case?
+  const Real rho0 = 1.0;
+  const Real C0 = 0.5;
+
   // Cholesky decomposition of noise covariance matrix
-  C = noise_covariance(kx,ky,kz,domain);
+  C = noise_covariance_matrix(rho0,C0,k2);
   cholesky_decomp(C,ndof,ncons+1);
 
   // need to generate the correct symmetries here? [uschill 07/25/2022]
@@ -379,6 +394,7 @@ GpuArray<GpuComplex<Real>,ndof> correlated_noise(int kx, int ky, int kz,
       xi[i] += C[i*ndof+j]*r[j];
     }
   }
+
   return xi;
 }
 
@@ -642,7 +658,7 @@ inline void compute_ifft(const Geometry& geom, MultiFab& realspace_noise,
 }
 
 // LB thermalization procedure for spatially correlated, non-diagonal noise
-inline void generate_fluctuations(const Geometry& geom,
+inline void generate_correlated_fluctuations(const Geometry& geom,
 				  MultiFab& hydrovs,
 				  MultiFab& noise) {
   BoxArray ba = noise.boxArray();
