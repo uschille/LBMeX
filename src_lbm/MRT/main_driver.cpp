@@ -185,7 +185,7 @@ void main_driver(const char* argv) {
     WriteSingleLevelPlotfile(pltfile, hydro, var_names, geom, time, step);
     const std::string& tcfile = Concatenate("plt_TC",step,5);
     WriteSingleLevelPlotfile(tcfile, mfCorr, tnames, geom, time, step);
-    structFact.WritePlotFile(0, 0., geom, "plt_SF");
+    structFact.WritePlotFile(0, 0., geom, "plt_SF", 0);
   }
 
   Print() << "LB initialized\n";
@@ -211,7 +211,7 @@ void main_driver(const char* argv) {
       WriteSingleLevelPlotfile(pltfile, hydro, var_names, geom, time, step);
       const std::string& tcfile = Concatenate("plt_TC",step,5);
       WriteSingleLevelPlotfile(tcfile, mfCorr, tnames, geom, time, step);
-      structFact.WritePlotFile(step, time, geom, "plt_SF");
+      structFact.WritePlotFile(step, time, geom, "plt_SF", 0);
     }
 
   }
