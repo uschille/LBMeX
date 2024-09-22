@@ -336,6 +336,11 @@ void thermalize_moments(int x, int y, int z,
 
   const Real discretization_factor_r = sqrt((1. - 0.5/tau_r)); //rho relaxation time
   const Real discretization_factor_p = sqrt((1. - 0.5/tau_p)); //phi relaxation time
+  // this is inconsistent with the relaxation times used in the noise covariance
+  // and the square root is wrong
+  // the mistakes compensate, i.e., you get the right result but for the wrong reason
+  // but does not work for the rho-phi sector
+
   // const Real discretization_factor_r = 1.;
   // const Real discretization_factor_p = 1.;
 
