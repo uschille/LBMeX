@@ -750,6 +750,7 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz,
   // assuming no k dependence so kappa = 0
   const Real cs2k = T + kappa*k2*rho0; //checked after conversion
   const Real mu_rho = (-2.*T*pow(rho0, 4) - chi*pow(phi0, 4) + chi*pow(phi0*rho0, 2))/(2.*pow(rho0, 3)*(pow(phi0, 2) - pow(rho0, 2))) + k2*kappa;
+  // the above is incorrect
   const Real mu_phi = (-2.*T*pow(rho0, 2) - chi*pow(phi0, 2) + chi*pow(rho0, 2))/(2.*rho0*(pow(phi0, 2) - pow(rho0, 2))) + k2*kappa;
   const Real p_C = k2*kappa*phi0; //checked after conversion
   
