@@ -252,8 +252,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 struct ThermoVars thermodynamics(const Real rho0, const Real phi0, const Real k2) {
   struct ThermoVars thermovars;
 
-  // f = T/2*log((rho+phi)/2) + T/2*log((rho-phi)/2) - T*rho + chi/4*(rho**2-phi**2)/rho
-  thermovars.cs2 = T + kappa*k2*rho0; // modified speed of sound
+  // f = T/2*(rho+phi)*log((rho+phi)/2) + T/2*(rho-phi)*log((rho-phi)/2) - T*rho + chi/4*(rho**2-phi**2)/rho + kappa*(Drho**2+Dphi**2)
+  // p = rho*T - kappa*(rho*D2rho+phi*D2phi)
+  // mu =  T/2*log(rho+phi) - T/2*log(rho-phi) - chi/2*phi/rho - kappa*D2phi
+  thermovars.cs2 = T + kappa*k2*rho0; // p_rho => modified speed of sound
   thermovars.p_phi = kappa*k2*phi0;
   thermovars.mu_rho = -T*phi0/(rho0*rho0-phi0*phi0) + chi/2*phi0/(rho0*rho0);
   thermovars.mu_phi = T*rho0/(rho0*rho0-phi0*phi0) - chi/2/rho0 + kappa*k2;
