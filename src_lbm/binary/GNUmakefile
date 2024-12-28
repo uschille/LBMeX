@@ -9,6 +9,7 @@ DIM	= 3
 
 COMP    = gnu
 
+USE_FFT   = TRUE
 USE_MPI   = TRUE
 USE_OMP   = FALSE
 USE_CUDA  = FALSE
