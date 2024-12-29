@@ -71,55 +71,33 @@ Real fourier_laplace_operator(int ikx, int iky, int ikz, const Box& domain) {
   return k2;
 }
 
-struct ThermoVars {
-  Real cs2;
-  Real p_phi;
-  Real mu_rho;
-  Real mu_phi;
-};
-
-// TODO: move to LBM_binary.H?
-// thermodynamics of the binary fluid
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-struct ThermoVars thermodynamics(const Real rho0, const Real phi0, const Real k2) {
-  struct ThermoVars thermovars;
-
-  // f = T/2*(rho+phi)*log((rho+phi)/2) + T/2*(rho-phi)*log((rho-phi)/2) - T*rho + chi/4*(rho**2-phi**2)/rho + kappa*(Drho**2+Dphi**2)
-  // p = rho*T - kappa*(rho*D2rho+phi*D2phi)
-  // mu =  T/2*log(rho+phi) - T/2*log(rho-phi) - chi/2*phi/rho - kappa*D2phi
-  thermovars.cs2 = T + kappa*k2*rho0; // p_rho => modified speed of sound
-  thermovars.p_phi = kappa*k2*phi0;
-  thermovars.mu_rho = -T*phi0/(rho0*rho0-phi0*phi0) + chi/2*phi0/(rho0*rho0);
-  thermovars.mu_phi = T*rho0/(rho0*rho0-phi0*phi0) - chi/2/rho0 + kappa*k2;
-
-  return thermovars;
-}
-
 // noise covariance matrix of the LB modes
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 GpuArray<Real,ndof*ndof> noise_covariance_matrix(const Real rho0, const Real phi0, const Real k2) {
   const uint Q = nvel;
 
-  const struct ThermoVars thermovars = thermodynamics(rho0,phi0,k2);
-  const Real kT = temperature;
-  const Real cs2 = thermovars.cs2;
-  const Real p_phi = thermovars.p_phi;
-  const Real mu_rho = thermovars.mu_rho;
-  const Real mu_phi = thermovars.mu_phi;
-
   // TODO: generalize to MRT
   const Real lambdaLB_r = -1./tau_r;
   const Real lambdaLB_p = -1./tau_p;
 
+  // TODO: needs check!
+  const Real lambda_r = -lambdaLB_r*(2+lambdaLB_r)/2;
+  const Real lambda_p = -lambdaLB_p*(2+lambdaLB_p)/2;
+  const Real lambda_rp = -lambdaLB_r*(2+lambdaLB_p)/2;
+  const Real lambda_pr = -lambdaLB_p*(2+lambdaLB_r)/2;
+
+  // f = T/2*(rho+phi)*log((rho+phi)/2) + T/2*(rho-phi)*log((rho-phi)/2) - T*rho + chi/4*(rho**2-phi**2)/rho + kappa*(Drho**2+Dphi**2)
+  // p = rho*T - kappa*(rho*D2rho+phi*D2phi)
+  // mu =  T/2*log(rho+phi) - T/2*log(rho-phi) - chi/2*phi/rho - kappa*D2phi
+  const Real kT = temperature;
+  const Real c2 = T + kappa*k2*rho0; // p_rho => modified speed of sound
+  const Real p_phi = kappa*k2*phi0;
+  const Real mu_rho = -T*phi0/(rho0*rho0-phi0*phi0) + chi/2*phi0/(rho0*rho0);
+  const Real mu_phi = T*rho0/(rho0*rho0-phi0*phi0) - chi/2/rho0 + kappa*k2;
+
   // Noise covariance of the modes in k-space
   GpuArray<Real,ndof*ndof> Xi = {};
   Xi.fill(0);
-
-  // TODO: discretized needs check!
-  Real lambda_r = -lambdaLB_r*(2+lambdaLB_r)/2;
-  Real lambda_p = -lambdaLB_p*(2+lambdaLB_p)/2;
-  Real lambda_rp = -lambdaLB_r*(2+lambdaLB_p)/2;
-  Real lambda_pr = -lambdaLB_p*(2+lambdaLB_r)/2;
 
   // diagonal part
   Xi[(   5)*ndof+(   5)] = 2.*Gamma*kT/rho0*lambda_p;
