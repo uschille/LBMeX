@@ -4,7 +4,7 @@
 #include <AMReX_Print.H>
 #include <AMReX_ParmParse.H>
 #include <AMReX_PlotFileUtil.H>
-#include "StructFact.H"
+#include <StructFact.H>
 
 using namespace amrex;
 
@@ -63,8 +63,6 @@ inline void WriteOutput(int step,
 }
 
 void main_driver(const char* argv) {
-
-  if (!cholesky_test(100)) exit(-1);
 
   // store the current time so we can later compute total run time.
   Real strt_time = ParallelDescriptor::second();
@@ -130,6 +128,8 @@ void main_driver(const char* argv) {
   // Write a plotfile of the initial data if plot_int > 0
   if (plot_int > 0) WriteOutput(0, hydrovs, geom);
   Print() << "LB initialized\n";
+
+  unit_tests(geom, hydrovs);
 
   // TIMESTEP
   for (int step=1; step <= nsteps; ++step) {
