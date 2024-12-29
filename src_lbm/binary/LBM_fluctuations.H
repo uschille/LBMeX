@@ -9,8 +9,8 @@
 #endif
 #include <AMReX_GpuComplex.H>
 
-#include "LBM_d3q19.H"
 #include "LBM_binary.H"
+#include "LBM_tests.H"
 
 // Cholesky decomposition of matrix A
 // result is stored in lower triangle of A
@@ -48,171 +48,6 @@ void cholesky_decomp(GpuArray<Real,ndof*ndof>& A, const int n, const int bstart)
     }
   }
 }
-
-#if 0
-// generate a pure sine wave in k-space
-inline void create_kspace_sin(const Geometry& geom,
-			      const MultiFab& noise_onegrid,
-			      const Vector<std::unique_ptr<BaseFab<GpuComplex<Real>>>>& spectral_field) {
-  const Box domain = geom.Domain();
-  for (MFIter mfiter(noise_onegrid); mfiter.isValid(); ++mfiter) {
-    IntVect fft_size = domain.length();
-    fft_size[0] = fft_size[0]/2 + 1;
-    Box fft_box = Box(IntVect(0), fft_size - IntVect(1));
-    Array4<GpuComplex<Real>> const& xi = (*spectral_field[0]).array();
-    ParallelFor(fft_box, [=] AMREX_GPU_DEVICE(int kx, int ky, int kz) {
-      int kxloc = (kx == 0) ? 0 : domain.length(0) - kx;
-      int kyloc = (ky == 0) ? 0 : domain.length(1) - ky;
-      int kzloc = (kz == 0) ? 0 : domain.length(2) - kz;
-      if (   (kx == 0)
-	  && (ky == 1)
-	  && (kz == 1) ) {
-	xi(kx,ky,kz).m_real = 1.0;
-	xi(kx,ky,kz).m_imag = 0.0;
-      } else {
-	xi(kx,ky,kz).m_real = 0.0;
-	xi(kx,ky,kz).m_imag = 0.0;
-      }
-      if (kx > domain.length(0)/2) {
-	Print() << "This should never execute sin" << std::endl;
-	xi(kx,ky,kz).m_real = xi(kxloc,kyloc,kzloc).real();
-	xi(kx,ky,kz).m_imag = xi(kxloc,kyloc,kzloc).imag();
-      }
-    });
-  }
-}
-#endif
-
-#if 0
-// generate uncorrelated white noise in k-space
-// requires whole domain without domain decomposition
-inline void kspace_white_noise(const Geometry& geom,
-			       MultiFab& kspace_noise_real_onegrid,
-			       MultiFab& kspace_noise_imag_onegrid) {
-  const Box domain = geom.Domain();
-  for (MFIter mfi(kspace_noise_real_onegrid); mfi.isValid(); ++mfi) {
-    const Box& box = mfi.fabbox();
-    const Array4<Real>& xi_real = kspace_noise_real_onegrid.array(mfi);
-    const Array4<Real>& xi_imag = kspace_noise_imag_onegrid.array(mfi);
-    // construct noise in k-space
-    ParallelForRNG(box, [=] AMREX_GPU_DEVICE(int kx, int ky, int kz, RandomEngine const& engine) {
-      int kxloc = (kx == 0) ? 0 : domain.length(0) - kx;
-      int kyloc = (ky == 0) ? 0 : domain.length(1) - ky;
-      int kzloc = (kz == 0) ? 0 : domain.length(2) - kz;
-      // symmetry points are purely real
-      if (((kx == 0) || (kx == domain.length(0) - kx))
-	  && ((ky == 0) || (ky == domain.length(1) - ky))
-	  && ((kz == 0) || (kz == domain.length(2) - kz))) {
-	xi_real(kx,ky,kz) = RandomNormal(0., 1., engine);
-	xi_imag(kx,ky,kz) = RandomNormal(0., 0., engine);
-      } else {
-	// complex conjugate symmetries
-	if ((kx > domain.length(0)/2)
-	    || ((ky > domain.length(1)/2) && (kx == kxloc))
-	    || ((kz > domain.length(2)/2) && (ky == kyloc) && (kx == kxloc))) {
-	  xi_real(kx,ky,kz) =  xi_real(kxloc,kyloc,kzloc);
-	  xi_imag(kx,ky,kz) = -xi_imag(kxloc,kyloc,kzloc);
-	} else {
-	  // complex Gaussian random variables with zero mean and variance 0.5
-	  xi_real(kx,ky,kz) = RandomNormal(0., std::sqrt(0.5), engine);
-	  xi_imag(kx,ky,kz) = RandomNormal(0., std::sqrt(0.5), engine);
-	}
-      }
-    });
-  }
-}
-#endif
-
-#if 0
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-Real structure_factor(int kx, int ky, int kz) {
-  const Real rho0 = 1.0;
-  const Real S = rho0*temperature/cs2;
-  return S;
-}
-
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-GpuArray<Real,ndof*ndof> population_correlations(int kx, int ky, int kz) {
-  GpuArray<Real,ndof*ndof> F = {};
-  GpuArray<Real,nvel> fbar, gbar;
-  const Real rho0 = 1.0;
-  const Real mu0 = 0.0; // \todo
-  const Real S_r = structure_factor(kx,ky,kz);
-  const Real S_p = 0.0; // \todo
-  const Real mu = S_r/rho0;
-  for (int i=0; i<nvel; ++i) {
-    fbar[i] = w[i]*rho0;
-    gbar[i] = w[i]*Gamma*mu0;
-  }
-  /* density sector */
-  for (int i=0; i<nvel; ++i) {
-    for (int j=0; j<nvel; ++j) {
-      F[i*ndof+j] = (S_r/rho0 - mu)/rho0*fbar[i]*fbar[j];
-    }
-    F[i*ndof+i] += mu*fbar[i];
-  }
-  /* order parameter sector */
-  for (int i=nvel; i<ndof; ++i) {
-    for (int j=nvel; j<ndof; ++j) {
-    }
-    F[i*ndof+i] += S_p*gbar[i-nvel];
-  }
-  return F;
-}
-
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-GpuArray<Real,ndof*ndof> moment_correlations(GpuArray<Real,ndof*ndof> F) {
-  GpuArray<Real,ndof*ndof> G = {};
-  // density sector
-  for (int i=0; i<nvel; ++i) {
-    for (int j=0; j<nvel; ++j) {
-      G[i*ndof+j] = 0.0;
-      for (int k=0; k<nvel; ++k) {
-	for (int l=0; l<nvel; ++l) {
-	  G[i*ndof+j] += e[i][k]*F[k*ndof+l]*e[j][l];
-	}
-      }
-    }
-  }
-  // order parameter sector
-  for (int i=nvel; i<ndof; ++i) {
-    for (int j=nvel; j<ndof; ++j) {
-      G[i*ndof+j] = 0.0;
-      for (int k=0; k<nvel; ++k) {
-	for (int l=0; l<nvel; ++l) {
-	  G[i*ndof+j] += e[i][k]*F[(k+nvel)*ndof+(l+nvel)]*e[j][l];
-	}
-      }
-    }
-  }
-  return G;
-}
-
-// construct noise covariance matrix
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-GpuArray<Real,ndof*ndof> noise_covariance(GpuArray<Real,ndof*ndof> const& G) {
-  GpuArray<Real,ndof*ndof> Xi;
-  for (int i=0; i<ndof; ++i) {
-    for (int j=0; j<ndof; ++j) {
-      Xi[i*ndof+j] = G[i*ndof+j];
-      for (int k=0; k<ndof; ++k) {
-	for (int l=0; l<ndof; ++l) {
-	  Xi[i*ndof+j] -= Lambda[i][k]*G[k*ndof+l]*Lambda[j][l];
-	}
-      }
-    }
-  }
-  return Xi;
-}
-
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz) {
-  const GpuArray<Real,ndof*ndof> F = population_correlations(kx,ky,kz);
-  const GpuArray<Real,ndof*ndof> G = moment_correlations(F);
-  const GpuArray<Real,ndof*ndof> C = noise_covariance(G);
-  return C;
-}
-#endif
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 Real fourier_laplace_operator(int ikx, int iky, int ikz, const Box& domain) {
@@ -444,80 +279,6 @@ inline void generate_kspace_noise(const Geometry& geom,
 
 }
 
-#if 1
-inline void check_kspace_symmetries(const Geometry& geom,
-				    const MultiFab& noise_onegrid,
-				    const Vector<std::unique_ptr<BaseFab<GpuComplex<Real>>>>& spectral_field) {
-  const Box domain = geom.Domain();
-  IntVect fft_size = domain.length();
-  fft_size[0] = fft_size[0]/2 + 1;
-  Box fft_box = Box(IntVect(0), fft_size - IntVect(1));
-  Array4<GpuComplex<Real>> const& xi = (*spectral_field[0]).array();
-  for (MFIter mfi(noise_onegrid); mfi.isValid(); ++mfi) {
-    ParallelFor(fft_box, [=] AMREX_GPU_DEVICE(int kx, int ky, int kz) {
-      bool symmetric = true;
-      int kxloc = (kx == 0) ? 0 : domain.length(0) - kx;
-      int kyloc = (ky == 0) ? 0 : domain.length(1) - ky;
-      int kzloc = (kz == 0) ? 0 : domain.length(2) - kz;
-      // symmetry points are purely real
-      if (((kx == 0) || (kx == domain.length(0) - kx))
-	  && ((ky == 0) || (ky == domain.length(1) - ky))
-	  && ((kz == 0) || (kz == domain.length(2) - kz))) {
-	symmetric &= (xi(kx,ky,kz).imag() == 0);
-	if (!symmetric) {
-	  Print() << "symmetry violation 1! ("
-		  << kx << "," << ky << "," << kz << ") "
-		  << xi(kx,ky,kz).imag() << " "
-	          << symmetric << " " << (xi(kx,ky,kz).imag() == 0.)
-		  << std::endl;
-	  exit(0);
-	}
-      }
-      if (kx > domain.length(0)/2) {
-	Print() << "This should never execute" << std::endl;
-	symmetric &= ((xi(kx,ky,kz).real() ==  xi(kxloc,kyloc,kzloc).real())
-		   && (xi(kx,ky,kz).imag() == -xi(kxloc,kyloc,kzloc).imag()));
-	if (!symmetric) {
-	  Print() << "symmetry violation 2! ("
-		  << kx << "," << ky << "," << kz << ")"
-		  << std::endl;
-	  exit(0);
-	}
-      } else {
-	if ((ky > domain.length(1)/2) && (kx == kxloc)) {
-	  symmetric &= ((xi(kx,ky,kz).real() ==  xi(kxloc,kyloc,kzloc).real())
-		     && (xi(kx,ky,kz).imag() == -xi(kxloc,kyloc,kzloc).imag()));
-	  if (!symmetric) {
-	    Print() << "symmetry violation 3a! ("
-		    << kx << "," << ky << "," << kz << ") ("
-	            << kxloc << "," << kyloc << "," << kzloc << ")"
-	            << " " << xi(kx,ky,kz).real() << " " << xi(kxloc,kyloc,kzloc).real()
-		    << " " << xi(kx,ky,kz).imag() << " " << xi(kxloc,kyloc,kzloc).imag()
-		    << std::endl;
-	    exit(0);
-	  }
-	} else {
-	  if ((kz > domain.length(2)/2) && (ky == kyloc) && (kx == kxloc)) {
-	    symmetric &= ((xi(kx,ky,kz).real() ==  xi(kxloc,kyloc,kzloc).real())
-		       && (xi(kx,ky,kz).imag() == -xi(kxloc,kyloc,kzloc).imag()));
-	    if (!symmetric) {
-	      Print() << "symmetry violation 3b! ("
-		      << kx << "," << ky << "," << kz << ") ("
-		      << kxloc << "," << kyloc << "," << kzloc << ")"
-		      << " " << xi(kx,ky,kz).real() << " " << xi(kxloc,kyloc,kzloc).real()
-		      << " " << xi(kx,ky,kz).imag() << " " << xi(kxloc,kyloc,kzloc).imag()
-		      << std::endl;
-	      exit(0);
-	    }
-	  } // if ((kz > domain.length(2)/2) ...
-	} // if ((ky > domain.length(1)/2) ...
-      } // if ((kx > domain.length(0)/2) ...
-    });
-  }
-  return;
-}
-#endif
-
 inline void compute_ifft(const Geometry& geom, MultiFab& realspace_noise,
 			 const MultiFab& kspace_noise_real,
 			 const MultiFab& kspace_noise_imag) {
@@ -737,6 +498,7 @@ inline void generate_fluctuations(const Geometry& geom, MultiFab& hydrovs, Multi
   }
 }
 
+#if 0
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 void thermalize_moments(Array1D<Real,0,nvel>& mf,
 			Array1D<Real,0,nvel>& mg,
@@ -753,6 +515,7 @@ void thermalize_moments(Array1D<Real,0,nvel>& mf,
     mg(i) += sqrt(b[i])*phi_p*RandomNormal(0., 1., engine);
   }
 }
+#endif
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 void thermalize_moments(int x, int y, int z,
@@ -840,6 +603,5 @@ inline void LBM_timestep(const Geometry& geom,
   collide_stream(geom, fold, gold, fnew, gnew, hydrovs, noise);
   hydrovars(fold, gold, hydrovs);
 }
-
 
 #endif

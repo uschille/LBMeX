@@ -9,7 +9,8 @@
 using namespace amrex;
 
 #include "LBM_binary.H"
-#include "tests.H"
+#include "LBM_fluctuations.H"
+#include "LBM_tests.H"
 
 inline Vector<std::string> VariableNames(const int numVars) {
   // set variable names for output
