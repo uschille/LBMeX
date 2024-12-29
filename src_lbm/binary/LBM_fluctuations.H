@@ -1,13 +1,7 @@
 #ifndef LBM_FLUCTUATIONS_H_
 #define LBM_FLUCTUATIONS_H_
 
-#ifdef AMREX_USE_CUDA
-#include <cufft.h>
-#else
-#include <fftw3.h>
-#include <fftw3-mpi.h>
-#endif
-#include <AMReX_GpuComplex.H>
+#include <AMReX_FFT.H>
 
 #include "LBM_binary.H"
 #include "LBM_tests.H"
@@ -257,153 +251,83 @@ inline void generate_kspace_noise(const Geometry& geom,
 
 }
 
-inline void compute_ifft(const Geometry& geom, MultiFab& realspace_noise,
-			 const MultiFab& kspace_noise_real,
-			 const MultiFab& kspace_noise_imag) {
+inline void compute_ifft(const Geometry& geom,
+    const MultiFab& kspace_noise_real, /* in */
+    const MultiFab& kspace_noise_imag, /* in */
+    MultiFab& realspace_noise /* out */) {
 
-#ifdef AMREX_USE_CUDA
-    //Print() << "Using cuFFT\n";
-    using FFTplan = cufftHandle;
-    using FFTcomplex = cuDoubleComplex;
-#else
-    //Print() << "Using FFTW\n";
-    using FFTplan = fftw_plan;
-    using FFTcomplex = fftw_complex;
-#endif
+  Box domain = geom.Domain();
+  BoxArray ba(domain);
+  DistributionMapping dm(ba);
 
-    // BoxArray and DistributionMapping for whole domain without decomposition
-    Box domain = geom.Domain();
-    BoxArray ba_onegrid(domain);
-    DistributionMapping dm_onegrid(ba_onegrid);
+  // MultiFabs for one of the ndof components
+  MultiFab realspace_noise_one(ba, dm, 1, 0);
+  MultiFab kspace_noise_real_one(ba, dm, 1, 0);
+  MultiFab kspace_noise_imag_one(ba, dm, 1, 0);
 
-    // FFT needs the whole grid without grid decomposition
-    MultiFab noise_onegrid(ba_onegrid, dm_onegrid, 1, 0);
-    MultiFab kspace_noise_real_onegrid(ba_onegrid, dm_onegrid, 1, 0);
-    MultiFab kspace_noise_imag_onegrid(ba_onegrid, dm_onegrid, 1, 0);
+  FFT::R2C fft(domain);
+  auto const& [cba, cdm] = fft.getSpectralDataLayout();
+  FabArray<BaseFab<GpuComplex<Real>>> kspace_noise_one(cba, cdm, 1, 0);
+
+  for (int k=0; k<ndof; ++k) {
+
+    // first copy the k-th conponent of the noise
+    // may be faster to generate the noise here? [uschill 07/27/2022]
+    kspace_noise_real_one.ParallelCopy(kspace_noise_real,k,0,1);
+    kspace_noise_imag_one.ParallelCopy(kspace_noise_imag,k,0,1);
+
+    // copy real and imaginary part into the spectral MultiFab
+    for (MFIter mfi(kspace_noise_one); mfi.isValid(); ++mfi) {
+
+      const Array4<Real>& xi_real = kspace_noise_real_one.array(mfi);
+      const Array4<Real>& xi_imag = kspace_noise_imag_one.array(mfi);
+      Array4<GpuComplex<Real>> xi = kspace_noise_one.array(mfi);
+
+      const Box& box = mfi.fabbox();
+      ParallelFor(box, [=] AMREX_GPU_DEVICE (int kx, int ky, int kz) noexcept {
+        //xi(kx,ky,kz) = { xi_real(kx,ky,kz), xi_imag(kx,ky,kz) };
+        {
+          // regular points
+          xi(kx,ky,kz).m_real = xi_real(kx,ky,kz);
+          xi(kx,ky,kz).m_imag = xi_imag(kx,ky,kz);
+          // symmetry points (corners of first quadrant) are purely real
+          //if (((kx == 0) || (kx == domain.length(0) - kx))
+          //	&& ((ky == 0) || (ky == domain.length(1) - ky))
+          //	&& ((kz == 0) || (kz == domain.length(2) - kz))) {
+          //  xi(kx,ky,kz).m_imag = 0;
+          //}
+          // complex conjugate symmetries
+          int kxloc = (kx == 0) ? 0 : domain.length(0) - kx;
+          int kyloc = (ky == 0) ? 0 : domain.length(1) - ky;
+          int kzloc = (kz == 0) ? 0 : domain.length(2) - kz;
+          if (kx > domain.length(0)/2) {
+            Print() << "This should never execute" << std::endl;
+            xi(kx,ky,kz).m_real =  xi_real(kxloc,kyloc,kzloc);
+            xi(kx,ky,kz).m_imag = -xi_imag(kxloc,kyloc,kzloc);
+          }
+          if  ( ( (ky > domain.length(1)/2) && (kx == kxloc) )
+          || ( (kz > domain.length(2)/2) && (ky == kyloc) && (kx == kxloc) ) ) {
+            xi(kx,ky,kz).m_real =  xi_real(kxloc,kyloc,kzloc);
+            xi(kx,ky,kz).m_imag = -xi_imag(kxloc,kyloc,kzloc);
+          }
+        }
+      });
+
+    }
+
+    check_kspace_symmetries(geom, kspace_noise_one);
+
+    fft.backward(kspace_noise_one, realspace_noise_one);
 
     // number of sites for normalization of FFT
-    long npts = domain.length(0)*domain.length(1)*domain.length(2);
-    Real sqrtnpts = std::sqrt(npts);
+    long n_sites = domain.length(0)*domain.length(1)*domain.length(2);
+    realspace_noise_one.mult(1./n_sites);
 
-    // Box for the complex conjugate spectral field (x-size is halved plus one)
-    IntVect fft_size = domain.length();
-    IntVect fft_adjust = { fft_size[0]/2 - 1, 0, 0 };
-    Box fft_box = Box(IntVect(0), fft_size-fft_adjust-IntVect(1));
+    // TODO Check whether square root needed [uschill 2024/12/29]
+    // copy the real-space noise into the k-th component of the MultiFab
+    realspace_noise.ParallelCopy(realspace_noise_one,0,k,1);
 
-    // container to store the complex k-space noise for inverse FFT
-    Vector<std::unique_ptr<BaseFab<GpuComplex<Real>>>> spectral_field;
-
-    // is this a memory leak? [uschill 07/24/2022]
-    spectral_field.emplace_back(new BaseFab<GpuComplex<Real>>(fft_box,1,The_Device_Arena()));
-
-    // for CUDA builds we only need to build the plan once; track whether we did
-    bool built_plan = false;
-    Vector<FFTplan> fftw_plans;
-    FFTplan plan;
-
-    for (int k=0; k<ndof; ++k) {
-
-      // first copy the k-th conponent of the noise to one grid
-      // may be faster to generate the noise here? [uschill 07/27/2022]
-      kspace_noise_real_onegrid.ParallelCopy(kspace_noise_real,k,0,1);
-      kspace_noise_imag_onegrid.ParallelCopy(kspace_noise_imag,k,0,1);
-
-      // create the FFT plans
-      if (!built_plan) {
-	      for (MFIter mfi(noise_onegrid); mfi.isValid(); ++mfi) {
-
-#ifdef AMREX_USE_CUDA
-	        cufftResult result = cufftPlan3d(&plan, fft_size[2], fft_size[1], fft_size[0], CUFFT_C2R);
-	        if (result != CUFFT_SUCCESS) {
-	          amrex::AllPrint() << " cufftplan3d forward failed! Error: "
-			        << cufftErrorToString(result) << "\n";
-	        }
-#else
-	        plan = fftw_plan_dft_c2r_3d(fft_size[2], fft_size[1], fft_size[0],
-				      reinterpret_cast<FFTcomplex*>
-				      (spectral_field.back()->dataPtr()),
-				      noise_onegrid[mfi].dataPtr(),
-				      FFTW_ESTIMATE);
-#endif
-	        fftw_plans.push_back(plan);
-	      }
-	      built_plan = true;
-      }
-
-      ParallelDescriptor::Barrier(); // is this needed? [uschill 07/25/2022]
-
-      // copy the complex noise to the spectral field for complex-to-real FFT
-      // this takes care of the required k-space symmetries
-      for (MFIter mfi(noise_onegrid); mfi.isValid(); ++mfi) {
-	      Array4<Real> const& xi_real = kspace_noise_real_onegrid.array(mfi);
-	      Array4<Real> const& xi_imag = kspace_noise_imag_onegrid.array(mfi);
-	      Array4<GpuComplex<Real>> const& xi = (*spectral_field[0]).array();
-	      ParallelFor(fft_box, [=] AMREX_GPU_DEVICE(int kx, int ky, int kz) {
-	        //if (kx <= domain.length(0)/2)
-	        {
-	          // regular points
-            xi(kx,ky,kz).m_real = xi_real(kx,ky,kz);
-            xi(kx,ky,kz).m_imag = xi_imag(kx,ky,kz);
-            // symmetry points (corners of first quadrant) are purely real
-            //if (((kx == 0) || (kx == domain.length(0) - kx))
-            //	&& ((ky == 0) || (ky == domain.length(1) - ky))
-            //	&& ((kz == 0) || (kz == domain.length(2) - kz))) {
-            //  xi(kx,ky,kz).m_imag = 0;
-            //}
-            // complex conjugate symmetries
-            int kxloc = (kx == 0) ? 0 : domain.length(0) - kx;
-            int kyloc = (ky == 0) ? 0 : domain.length(1) - ky;
-            int kzloc = (kz == 0) ? 0 : domain.length(2) - kz;
-            if (kx > domain.length(0)/2) {
-              Print() << "This should never execute" << std::endl;
-              xi(kx,ky,kz).m_real =  xi_real(kxloc,kyloc,kzloc);
-              xi(kx,ky,kz).m_imag = -xi_imag(kxloc,kyloc,kzloc);
-            }
-            if  ( ( (ky > domain.length(1)/2) && (kx == kxloc) )
-            || ( (kz > domain.length(2)/2) && (ky == kyloc) && (kx == kxloc) ) ) {
-              xi(kx,ky,kz).m_real =  xi_real(kxloc,kyloc,kzloc);
-              xi(kx,ky,kz).m_imag = -xi_imag(kxloc,kyloc,kzloc);
-            }
-          }
-	      });
-      }
-
-      ParallelDescriptor::Barrier();
-      check_kspace_symmetries(geom,noise_onegrid,spectral_field);
-
-      // inverse FFT (complex to real)
-      for (MFIter mfi(noise_onegrid); mfi.isValid(); ++mfi) {
-	      int i = mfi.LocalIndex();
-#ifdef AMREX_USE_CUDA
-	      cufftSetStream(forward_plan[i], amrex::Gpu::gpuStream());
-	      cufftResult result = cufftExecC2R(forward_plan[i],
-					  reinterpret_case<FFTcomplex*>
-					  (field[i]->dataPtr()),
-					  noise_onegrid[mfi].dataPtr());
-	      if (result != CUFFT_SUCCESS) {
-	        amrex::AllPrint() << " forward transform using cufftExec failed! Error: "
-			      << cufftErrorToString(result) << "\n";
-	      }
-#else
-	      fftw_execute(fftw_plans[i]);
-#endif
-      }
-
-      // copy the real-space noise back to the k-th component of the MultiFab
-      realspace_noise.ParallelCopy(noise_onegrid,0,k,1);
-      // normalization from FFT
-      realspace_noise.mult(1./sqrtnpts,k,1);
-
-    }
-
-    // destroy fft plans
-    for (int i=0; i<fftw_plans.size(); ++i) {
-#ifdef AMREX_USE_CUDA
-      cufftDestroy(fftw_plans[i]);
-#else
-      fftw_destroy_plan(fftw_plans[i]);
-#endif
-    }
+  }
 
 }
 
@@ -429,7 +353,7 @@ inline void generate_correlated_fluctuations(const Geometry& geom,
   // the k-space symmetries are handled when copying in compute_ifft
 
   // inverse Fourier transform noise vector to real space
-  compute_ifft(geom, noise, kspace_noise_real, kspace_noise_imag);
+  compute_ifft(geom, kspace_noise_real, kspace_noise_imag, noise);
 
 }
 
