@@ -3,7 +3,7 @@
 
 #include "LBM_d3q19.H"
 
-const int ncons = 2 + AMREX_SPACEDIM; // number of conserved variables (2 scalare fields + velocity)
+const int ncons = 2 + AMREX_SPACEDIM; // number of conserved variables (2 scalar fields + velocity)
 const int ndof = 2*nvel; // number of degrees of freedom
 
 AMREX_GPU_MANAGED Real tau_r = 0.7886751345948129; // tau=0.5*(1.+1./sqrt(3.)) minimizes spurious currents according to Swift et al.
@@ -389,7 +389,7 @@ void hydrovars(int x, int y, int z,
     h(x,y,z,i+1) = mf(i)/mf(0);               // f to be stored in 2..4
     h(x,y,z,i+1+AMREX_SPACEDIM) = mg(i);      // g to be stored in 5..7
   }
-  for (int i=AMREX_SPACEDIM+1; i<nvel; ++i) { // remaining moments i=4..18
+  for (int i=1+AMREX_SPACEDIM; i<nvel; ++i) { // remaining moments i=4..18
     h(x,y,z,i+1+AMREX_SPACEDIM) = mf(i);      // f to be stored in 8..22
     h(x,y,z,i+nvel) = mg(i);                  // g to be stored in 23..37
   }

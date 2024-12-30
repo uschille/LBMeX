@@ -168,7 +168,7 @@ GpuArray<Real,ndof*ndof> noise_covariance_matrix(const Real rho0, const Real phi
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 GpuArray<GpuComplex<Real>,ndof> kspace_white_noise(int kx, int ky, int kz, const Box& domain, RandomEngine const& engine) {
   GpuArray<GpuComplex<Real>,ndof> r = {};
-  for (int i=ncons+1; i<ndof; ++i) {
+  for (int i=ncons; i<ndof; ++i) {
     // symmetry points are purely real
     if (     ((kx == 0) || (kx == domain.length(0) - kx))
           && ((ky == 0) || (ky == domain.length(1) - ky))
@@ -199,7 +199,7 @@ GpuArray<GpuComplex<Real>,ndof> correlated_noise(int kx, int ky, int kz,
 
   // Cholesky decomposition of noise covariance matrix
   C = noise_covariance_matrix(rho0,phi0,k2);
-  cholesky_decomp(C,ndof,ncons+1);
+  cholesky_decomp(C,ndof,ncons);
 
   // need to generate the correct symmetries here? [uschill 07/25/2022]
   // possibly the case if C(k) != C(-k) [uschill 07/27/2022]
@@ -365,10 +365,10 @@ GpuArray<Real,ndof> uncorrelated_noise(const Real rho0, const Real phi0, const R
 
   // Cholesky decomposition of noise covariance matrix
   C = noise_covariance_matrix(rho0,phi0,0);
-  cholesky_decomp(C,ndof,ncons+1);
+  cholesky_decomp(C,ndof,ncons);
 
   // random white noise
-  for (int i=ncons+1; i<ndof; ++i) {
+  for (int i=ncons; i<ndof; ++i) {
     r[i] = RandomNormal(0., 1., engine);
   }
 
@@ -424,13 +424,13 @@ void thermalize_moments(int x, int y, int z,
       Array1D<Real,0,nvel>& mf, Array1D<Real,0,nvel>& mg,
       const Array4<Real>& noise) {
   // diffusive moments 1,2,3 in noise at 5,6,7
-  for (int i=1; i<ncons; ++i) {
-    mg(i) += (1. - 0.5/tau_p) * noise(x,y,z,ncons+i);
+  for (int i=1; i<=AMREX_SPACEDIM; ++i) {
+    mg(i) += (1. - 0.5/tau_p) * noise(x,y,z,i+1+AMREX_SPACEDIM);
   }
   // nonconserved moments 4..18 in noise at 8..22 (f) and 23..37 (g)
-  for (int i=ncons; i<nvel; ++i) {
-    mf(i) += (1. - 0.5/tau_r) * noise(x,y,z,ncons+i);
-    mg(i) += (1. - 0.5/tau_p) * noise(x,y,z,nvel+i);
+  for (int i=1+AMREX_SPACEDIM; i<nvel; ++i) {
+    mf(i) += (1. - 0.5/tau_r) * noise(x,y,z,i+1+AMREX_SPACEDIM);
+    mg(i) += (1. - 0.5/tau_p) * noise(x,y,z,i+nvel);
   }
 }
 
