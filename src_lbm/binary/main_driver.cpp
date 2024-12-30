@@ -31,11 +31,11 @@ void main_driver(const char* argv) {
   Real strt_time = ParallelDescriptor::second();
     
   // default grid parameters
-  int nx = 16;
+  int nx = 16; // 64;
 
   // default time stepping parameters
-  int nsteps = 100;
-  int plot_int = 10;
+  int nsteps = 100; // 50000;
+  int plot_int = 10; // 5000;
 
   // set up Box and Geomtry
   RealBox real_box({0.,0.,0.},{1.,1.,1.});
