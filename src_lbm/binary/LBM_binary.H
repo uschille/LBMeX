@@ -16,8 +16,6 @@ AMREX_GPU_MANAGED Real T = 0.6;
 
 AMREX_GPU_MANAGED Real Gamma = 1.0;
 
-AMREX_GPU_MANAGED Real temperature = 0.0;
-
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 RealVect gradient(int x, int y, int z, const Array4<Real>& field, int icomp) {
   RealVect gradient = { 0.0, 0.0, 0.0 };

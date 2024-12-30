@@ -6,6 +6,8 @@
 #include "LBM_binary.H"
 #include "LBM_tests.H"
 
+AMREX_GPU_MANAGED Real temperature = 1e-7;
+
 // Cholesky decomposition of matrix A
 // result is stored in lower triangle of A
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
