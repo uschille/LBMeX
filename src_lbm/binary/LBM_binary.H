@@ -345,6 +345,37 @@ inline void collide_stream(const Geometry& geom,
   MultiFab::Swap(gold, gnew, 0, 0, nvel, 0);
 }
 
+inline Vector<std::string> hydrovars_names(const int numVars) {
+  Vector<std::string> var_names(numVars);
+  std::string name;
+  int cnt = 0;
+  // rho, phi
+  if (cnt<numVars) var_names[cnt++] = "rho";
+  if (cnt<numVars) var_names[cnt++] = "phi";
+  // u
+  for (int d=0; d<AMREX_SPACEDIM && cnt<numVars; d++) {
+    name = "u";
+    name += (120+d);
+    var_names[cnt++] = name;
+  }
+  // j
+  for (int d=0; d<AMREX_SPACEDIM && cnt<numVars; d++) {
+    name = "j";
+    name += (120+d);
+    var_names[cnt++] = name;
+  }
+  // remaining moments
+  for (; cnt<nvel+AMREX_SPACEDIM+1 && cnt<numVars;) {
+    name = "mf" + std::to_string(cnt-(AMREX_SPACEDIM+1));
+    var_names[cnt++] = name;
+  }
+  for (; cnt<2*nvel && cnt<numVars;) {
+    name = "mg"+std::to_string(cnt-nvel);
+    var_names[cnt++] = name;
+  }
+  return var_names;
+}
+
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 void hydrovars(int x, int y, int z,
 	       const Array4<Real>& f,
@@ -354,13 +385,13 @@ void hydrovars(int x, int y, int z,
   const Array1D<Real,0,nvel> mg = moments(x,y,z,g);
   h(x,y,z,0) = mf(0);
   h(x,y,z,1) = mg(0);
-  for (int i=1; i<ncons; ++i) {
-    h(x,y,z,i+1) = mf(i)/mf(0);
-    h(x,y,z,i+ncons) = mg(i);
+  for (int i=1; i<=AMREX_SPACEDIM; ++i) {     // momentum/diffusive flux i=1..3
+    h(x,y,z,i+1) = mf(i)/mf(0);               // f to be stored in 2..4
+    h(x,y,z,i+1+AMREX_SPACEDIM) = mg(i);      // g to be stored in 5..7
   }
-  for (int i=ncons; i<nvel; ++i) {
-    h(x,y,z,i+ncons) = mf(i);
-    h(x,y,z,i+nvel) = mg(i);
+  for (int i=AMREX_SPACEDIM+1; i<nvel; ++i) { // remaining moments i=4..18
+    h(x,y,z,i+1+AMREX_SPACEDIM) = mf(i);      // f to be stored in 8..22
+    h(x,y,z,i+nvel) = mg(i);                  // g to be stored in 23..37
   }
 }
 
