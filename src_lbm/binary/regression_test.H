@@ -109,9 +109,49 @@ bool regression_test_ifft(const Geometry& geom) {
     return success;
 }
 
+bool regression_test_correlated_fluctuations(const Geometry& geom, MultiFab& hydrovs) {
+    bool success = true;
+
+    Box domain = geom.Domain();
+    BoxArray ba(domain);
+    DistributionMapping dm(ba);
+
+    MultiFab noise_uschill(ba, dm, 2*nvel, 2);
+    MultiFab noise_nkarthi(ba, dm, 2*nvel, 2);
+    MultiFab differences(ba, dm, 2*nvel, 2);
+
+    generate_correlated_fluctuations(geom, hydrovs, noise_uschill);
+    nkarthi::generate_fluctuations(geom, hydrovs, noise_nkarthi);
+
+    const auto & xi_uschill = noise_uschill.arrays();
+    const auto & xi_nkarthi = noise_nkarthi.arrays();
+    const auto & diff = differences.arrays();
+    ParallelFor(noise_uschill, IntVect(0), [=] AMREX_GPU_DEVICE(int nbx, int x, int y, int z) {
+      for (int k=0; k<ndof; k++) {
+        Real xi_us = xi_uschill[nbx](x,y,z,k);
+        Real xi_nk = xi_nkarthi[nbx](x,y,z,k);
+        if (fabs(xi_us-xi_nk) > FLT_EPSILON) {
+          Print() << "noise ("<<x<<","<<y<<","<<z<<","<<k<<"): "<<xi_us<<" vs "<<xi_nk<<std::endl;
+          diff[nbx](x,y,z) += fabs(xi_us-xi_nk);
+        }
+
+      }
+    });
+
+    if (differences.sum() > 0.0) {
+      success = false;
+    } else {
+      Print() << "OK: Correlated noise matches" << std::endl;
+    }
+
+
+    return success;
+}
+
 void regression_tests(const Geometry& geom, MultiFab& hydrovs) {
     bool status = true;
     status &= regression_test_noise_covariance_matrix();
     status &= regression_test_cholesky();
     status &= regression_test_ifft(geom);
+    status &= regression_test_correlated_fluctuations(geom, hydrovs);
 }
