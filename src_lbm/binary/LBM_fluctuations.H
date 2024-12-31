@@ -176,7 +176,7 @@ GpuArray<GpuComplex<Real>,ndof> kspace_white_noise(int kx, int ky, int kz, const
           && ((ky == 0) || (ky == domain.length(1) - ky))
           && ((kz == 0) || (kz == domain.length(2) - kz)) ) {
       // real Gaussian random variables with zero mean and variance 1
-      r[i] = { RandomNormal(0., 1., engine), RandomNormal(0., 0., engine) };
+      r[i] = { RandomNormal(0., 1., engine), 0.0 };
     } else {
       // complex Gaussian random variables with zero mean and variance 0.5
       r[i] = { RandomNormal(0., std::sqrt(0.5), engine), RandomNormal(0., std::sqrt(0.5), engine) };
