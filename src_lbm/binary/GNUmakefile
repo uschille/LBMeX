@@ -1,6 +1,8 @@
 AMREX_HOME ?= ../../../amrex
 FHDEX_HOME ?= ../../../FHDeX
 
+LIBRARIES += $(shell pkg-config --libs lapack)
+
 DEFINES += -DMAX_SPECIES=2
 
 DEBUG	= FALSE

@@ -11,6 +11,7 @@ using namespace amrex;
 #include "LBM_binary.H"
 #include "LBM_fluctuations.H"
 #include "LBM_tests.H"
+#include "regression_test.H"
 
 inline void WriteOutput(int step,
       const Geometry& geom,
@@ -71,6 +72,8 @@ void main_driver(const char* argv) {
   Print() << "LB initialized\n";
 
   unit_tests(geom, hydrovs);
+
+  regression_tests();
 
   // TIMESTEP
   for (int step=1; step <= nsteps; ++step) {
