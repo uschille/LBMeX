@@ -1,27 +1,36 @@
 #include "nkarthi/LBM_fluctuations.H"
 
-void regression_test_noise_covariance_matrix() {
+bool regression_test_noise_covariance_matrix() {
+  bool test = true;
 
-  Real rho0 = 1.0;
-  Real phi0 = 0.0;
-  Real k2 = 0.0;
+  Real rho0 = 0.9876;
+  Real phi0 = 0.2345;
+  Real k2 = 1.5432;
 
   GpuArray<Real,ndof*ndof> C_uschill, C_nkarthi;
   C_uschill = noise_covariance_matrix(rho0, phi0, k2);
   C_nkarthi = nkarthi::noise_covariance(rho0, phi0, k2);
 
-  Print() << "C_uschill - C_nkarthi:" << std::endl;
+  //Print() << "C_uschill - C_nkarthi: " << std::endl;
   for (int i=0; i<ndof; ++i) {
-    Print() << "row " << i << ": ";
+    //Print() << "row " << i << ": ";
     for (int j=0; j<ndof; ++j) {
       int k = i*ndof + j;
-      Print() << C_uschill[k]-C_nkarthi[k] << " ";
+      //Print() << C_uschill[k]-C_nkarthi[k] << " ";
+      if (fabs(C_uschill[k]-C_nkarthi[k])>FLT_EPSILON) {
+        Print() << "covariance matrix element (" << i << ", " << j << ") differs" << std::endl;
+        test = false;
+      }
     }
-    Print() << std::endl;
+    //Print() << std::endl;
   }
+
+  if (test) Print() << "OK: coavriance matrix matches" << std::endl;
+  return test;
 
 }
 
 void regression_tests() {
-    regression_test_noise_covariance_matrix();
+    bool status = true;
+    status &= regression_test_noise_covariance_matrix();
 }
