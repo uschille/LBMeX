@@ -273,25 +273,19 @@ bool regression_test_LBM_timestep(const Geometry& geom,
   MultiFab g_uschill(ba, dm, nvel, 2);
   MultiFab f_nkarthi(ba, dm, nvel, 2);
   MultiFab g_nkarthi(ba, dm, nvel, 2);
-  MultiFab h_uschill(ba, dm, nvel, 2);
-  MultiFab h_nkarthi(ba, dm, nvel, 2);
+  MultiFab h_uschill(ba, dm, 2*nvel, 2);
+  MultiFab h_nkarthi(ba, dm, 2*nvel, 2);
   MultiFab differences(ba, dm, 2*nvel, 2);
 
   Copy(f_uschill, fold, 0, 0, nvel, 2);
   Copy(g_uschill, gold, 0, 0, nvel, 2);
-  Copy(h_uschill, hydrovs, 0, 0, nvel, 2);
+  Copy(h_uschill, hydrovs, 0, 0, 2*nvel, 2);
 
   Copy(f_nkarthi, fold, 0, 0, nvel, 2);
   Copy(g_nkarthi, gold, 0, 0, nvel, 2);
-  Copy(h_nkarthi, hydrovs, 0, 0, nvel, 2);
+  Copy(h_nkarthi, hydrovs, 0, 0, 2*nvel, 2);
 
   LBM_timestep(geom, f_uschill, g_uschill, fnew, gnew, h_uschill, noise);
-
-// f (15,15,15,17): 0.01893149618 vs 0.01977131306
-// g (15,15,15,17): -4.609928067e-05 vs -0.00036701694
-// h (15,15,15,17): 5.985718649e-05 vs 0.0001709103855
-// f (15,15,15,18): 0.0189725811 vs -0.007482225622
-// h (15,15,15,18): 4.961091345e-05 vs 0.0001280993211
 
   nkarthi::LBM_timestep(geom, f_nkarthi, g_nkarthi, fnew, gnew, h_nkarthi, noise);
 
