@@ -256,6 +256,79 @@ bool regression_test_equilibria(const Geometry& geom, MultiFab& hydrovs) {
   return success;
 }
 
+bool regression_test_collisions(const Geometry& geom,
+    MultiFab& fold,
+    MultiFab& gold,
+    MultiFab& hydrovs,
+    MultiFab& noise) {
+  bool success = true;
+
+  Box domain = geom.Domain();
+  BoxArray ba(domain);
+  DistributionMapping dm(ba);
+
+  MultiFab f_uschill(ba, dm, nvel, 2);
+  MultiFab g_uschill(ba, dm, nvel, 2);
+  MultiFab f_nkarthi(ba, dm, nvel, 2);
+  MultiFab g_nkarthi(ba, dm, nvel, 2);
+  MultiFab differences(ba, dm, 2*nvel, 2);
+
+  Copy(f_uschill, fold, 0, 0, nvel, 2);
+  Copy(f_nkarthi, fold, 0, 0, nvel, 2);
+  Copy(g_uschill, gold, 0, 0, nvel, 2);
+  Copy(g_nkarthi, gold, 0, 0, nvel, 2);
+
+  const auto & f_us = f_uschill.arrays();
+  const auto & g_us = g_uschill.arrays();
+  const auto & f_nk = f_nkarthi.arrays();
+  const auto & g_nk = g_nkarthi.arrays();
+  const auto & h = hydrovs.arrays();
+  const auto & xi = noise.arrays();
+  const auto & diff = differences.arrays();
+
+  generate_correlated_fluctuations(geom, hydrovs, noise);
+
+  ParallelFor(f_uschill, IntVect(0), [=] AMREX_GPU_DEVICE(int nbx, int x, int y, int z) {
+    Array1D<Real, 0, nvel> mf_us, mg_us, mf_nk, mg_nk;
+
+    mf_us = moments(x,y,z,f_us[nbx]);
+    mg_us = moments(x,y,z,g_us[nbx]);
+    relax_moments(x,y,z,mf_us,mg_us,h[nbx]);
+    thermalize_moments(x,y,z,mf_us,mg_us,xi[nbx]);
+
+    mf_nk = moments(x,y,z,f_nk[nbx]);
+    mg_nk = moments(x,y,z,g_nk[nbx]);
+    nkarthi::relax_moments(x,y,z,mf_nk,mg_nk,h[nbx]);
+    nkarthi::thermalize_moments(x,y,z,mf_nk,mg_nk,xi[nbx]);
+
+    for (int i=0; i<nvel; ++i) {
+      Real us, nk;
+      us = mf_us(i);
+      nk = mf_nk(i);
+      if (fabs(us-nk) > FLT_EPSILON) {
+        Print() << "mf ("<<x<<","<<y<<","<<z<<"): "<<us<<" vs "<<nk<<std::endl;
+        diff[nbx](x,y,z) += fabs(us-nk);
+      }
+      us = mg_us(i);
+      nk = mg_nk(i);
+      if (fabs(us-nk) > FLT_EPSILON) {
+        Print() << "mg ("<<x<<","<<y<<","<<z<<"): "<<us<<" vs "<<nk<<std::endl;
+        diff[nbx](x,y,z) += fabs(us-nk);
+      }
+    }
+
+  });
+
+  if (differences.sum() > 0.0) {
+    Print() << "FAIL: Collisions do not match" << std::endl;
+    success = false;
+  } else {
+    Print() << "OK: Collisions match" << std::endl;
+  }
+
+  return success;
+}
+
 bool regression_test_LBM_timestep(const Geometry& geom,
     MultiFab& fold,
     MultiFab& gold,
@@ -344,5 +417,6 @@ void regression_tests(const Geometry& geom,
     status &= regression_test_correlated_fluctuations(geom, hydrovs);
     status &= regression_test_uncorrelated_fluctuations(geom, hydrovs);
     status &= regression_test_equilibria(geom, hydrovs);
+    status &= regression_test_collisions(geom, fold, fnew, hydrovs, noise);
     status &= regression_test_LBM_timestep(geom, fold, gold, fnew, gnew, hydrovs, noise);
 }
