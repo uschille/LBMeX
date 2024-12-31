@@ -64,8 +64,54 @@ bool regression_test_cholesky() {
 
 }
 
-void regression_tests() {
+bool regression_test_ifft(const Geometry& geom) {
+    bool success = true;
+
+    Box domain = geom.Domain();
+    BoxArray ba(domain);
+    DistributionMapping dm(ba);
+
+    MultiFab kspace_noise_real(ba, dm, ndof, 0);
+    MultiFab kspace_noise_imag(ba, dm, ndof, 0);
+    MultiFab noise_uschill(ba, dm, ndof, 0);
+    MultiFab noise_nkarthi(ba, dm, ndof, 0);
+    MultiFab differences(ba, dm, 1, 0);
+
+    differences.setVal(0.0);
+    kspace_noise_real.setVal(0.);
+    kspace_noise_imag.setVal(0.);
+
+    generate_kspace_noise(geom, kspace_noise_real, kspace_noise_imag);
+
+    compute_ifft(geom, kspace_noise_real, kspace_noise_imag, noise_uschill);
+    nkarthi::compute_ifft(geom, noise_nkarthi, kspace_noise_real, kspace_noise_imag, ndof);
+
+    auto const & xi_uschill = noise_uschill.arrays();
+    auto const & xi_nkarthi = noise_nkarthi.arrays();
+    auto const & diff = differences.arrays();
+    ParallelFor(noise_uschill, IntVect(0), [=] AMREX_GPU_DEVICE(int nbx, int x, int y, int z) {
+      for (int k=0; k<ndof; k++) {
+        Real xi_us = xi_uschill[nbx](x,y,z,k);
+        Real xi_nk = xi_nkarthi[nbx](x,y,z,k);
+        if (fabs(xi_us-xi_nk) > FLT_EPSILON) {
+          Print() << "ifft ("<<x<<","<<y<<","<<z<<","<<k<<"): "<<xi_us<<" vs "<<xi_nk<<std::endl;
+          diff[nbx](x,y,z) += fabs(xi_us-xi_nk);
+        }
+      }
+    });
+
+    if (differences.sum() > 0.0) {
+      success = false;
+    } else {
+      Print() << "OK: Inverse FFT matches" << std::endl;
+    }
+
+    return success;
+}
+
+void regression_tests(const Geometry& geom, MultiFab& hydrovs) {
     bool status = true;
     status &= regression_test_noise_covariance_matrix();
     status &= regression_test_cholesky();
+    status &= regression_test_ifft(geom);
 }
