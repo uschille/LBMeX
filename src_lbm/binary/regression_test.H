@@ -1,3 +1,4 @@
+#include "nkarthi/LBM_binary.H"
 #include "nkarthi/LBM_fluctuations.H"
 
 bool regression_test_noise_covariance_matrix() {
@@ -185,11 +186,98 @@ bool regression_test_uncorrelated_fluctuations(const Geometry& geom, MultiFab& h
     return success;
 }
 
-void regression_tests(const Geometry& geom, MultiFab& hydrovs) {
+bool regression_test_LBM_timestep(const Geometry& geom,
+    MultiFab& fold,
+    MultiFab& gold,
+    MultiFab& fnew,
+    MultiFab& gnew,
+    MultiFab& hydrovs,
+    MultiFab& noise) {
+  bool success = true;
+
+  Box domain = geom.Domain();
+  BoxArray ba(domain);
+  DistributionMapping dm(ba);
+
+  MultiFab f_uschill(ba, dm, nvel, 2);
+  MultiFab g_uschill(ba, dm, nvel, 2);
+  MultiFab f_nkarthi(ba, dm, nvel, 2);
+  MultiFab g_nkarthi(ba, dm, nvel, 2);
+  MultiFab h_uschill(ba, dm, nvel, 2);
+  MultiFab h_nkarthi(ba, dm, nvel, 2);
+  MultiFab differences(ba, dm, 2*nvel, 2);
+
+  Copy(f_uschill, fold, 0, 0, nvel, 2);
+  Copy(g_uschill, gold, 0, 0, nvel, 2);
+  Copy(h_uschill, hydrovs, 0, 0, nvel, 2);
+
+  Copy(f_nkarthi, fold, 0, 0, nvel, 2);
+  Copy(g_nkarthi, gold, 0, 0, nvel, 2);
+  Copy(h_nkarthi, hydrovs, 0, 0, nvel, 2);
+
+  LBM_timestep(geom, f_uschill, g_uschill, fnew, gnew, h_uschill, noise);
+
+// f (15,15,15,17): 0.01893149618 vs 0.01977131306
+// g (15,15,15,17): -4.609928067e-05 vs -0.00036701694
+// h (15,15,15,17): 5.985718649e-05 vs 0.0001709103855
+// f (15,15,15,18): 0.0189725811 vs -0.007482225622
+// h (15,15,15,18): 4.961091345e-05 vs 0.0001280993211
+
+  nkarthi::LBM_timestep(geom, f_nkarthi, g_nkarthi, fnew, gnew, h_nkarthi, noise);
+
+  const auto & f_us = f_uschill.arrays();
+  const auto & f_nk = f_nkarthi.arrays();
+  const auto & g_us = g_uschill.arrays();
+  const auto & g_nk = g_nkarthi.arrays();
+  const auto & h_us = h_uschill.arrays();
+  const auto & h_nk = h_nkarthi.arrays();
+  const auto & diff = differences.arrays();
+
+  ParallelFor(f_uschill, IntVect(0), [=] AMREX_GPU_DEVICE(int nbx, int x, int y, int z) {
+    for (int i=0; i<nvel; i++) {
+      Real us, nk;
+      us = f_us[nbx](x,y,z,i);
+      nk = f_nk[nbx](x,y,z,i);
+      if (fabs(us-nk) > FLT_EPSILON) {
+        Print() << "f ("<<x<<","<<y<<","<<z<<","<<i<<"): "<<us<<" vs "<<nk<<std::endl;
+        diff[nbx](x,y,z) += fabs(us-nk);
+      }
+      us = g_us[nbx](x,y,z,i);
+      nk = g_nk[nbx](x,y,z,i);
+      if (fabs(us-nk) > FLT_EPSILON) {
+        Print() << "g ("<<x<<","<<y<<","<<z<<","<<i<<"): "<<us<<" vs "<<nk<<std::endl;
+        diff[nbx](x,y,z) += fabs(us-nk);
+      }
+      us = h_us[nbx](x,y,z,i);
+      nk = h_nk[nbx](x,y,z,i);
+      if (fabs(us-nk) > FLT_EPSILON) {
+        Print() << "h ("<<x<<","<<y<<","<<z<<","<<i<<"): "<<us<<" vs "<<nk<<std::endl;
+        diff[nbx](x,y,z) += fabs(us-nk);
+      }
+    }
+  });
+
+  if (differences.sum() > 0.0) {
+    success = false;
+  } else {
+    Print() << "OK: LBM timestep matches" << std::endl;
+  }
+
+  return success;
+}
+
+void regression_tests(const Geometry& geom,
+  MultiFab& fold,
+  MultiFab& gold,
+  MultiFab& fnew,
+  MultiFab& gnew,
+  MultiFab& hydrovs,
+  MultiFab& noise) {
     bool status = true;
     status &= regression_test_noise_covariance_matrix();
     status &= regression_test_cholesky();
     status &= regression_test_ifft(geom);
     status &= regression_test_correlated_fluctuations(geom, hydrovs);
     status &= regression_test_uncorrelated_fluctuations(geom, hydrovs);
+    status &= regression_test_LBM_timestep(geom, fold, gold, fnew, gnew, hydrovs, noise);
 }

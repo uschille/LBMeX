@@ -73,7 +73,7 @@ void main_driver(const char* argv) {
 
   unit_tests(geom, hydrovs);
 
-  regression_tests(geom, hydrovs);
+  regression_tests(geom, fold, gold, fnew, gnew, hydrovs, noise);
 
   // TIMESTEP
   for (int step=1; step <= nsteps; ++step) {
