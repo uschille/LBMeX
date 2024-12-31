@@ -186,6 +186,76 @@ bool regression_test_uncorrelated_fluctuations(const Geometry& geom, MultiFab& h
     return success;
 }
 
+bool regression_test_equilibria(const Geometry& geom, MultiFab& hydrovs) {
+  bool success = true;
+
+  Box domain = geom.Domain();
+  BoxArray ba(domain);
+  DistributionMapping dm(ba);
+
+  MultiFab differences(ba, dm, 1, 0);
+  differences.setVal(0.);
+
+  const auto & hv = hydrovs.arrays();
+  const auto & diff = differences.arrays();
+
+  ParallelFor(hydrovs, IntVect(0), [=] AMREX_GPU_DEVICE(int nbx, int x, int y, int z) {
+    const Array4<Real>& h = hv[nbx];
+
+    const Array1D<Real,0,2> fields = { h(x,y,z,0), h(x,y,z,1) };
+
+    const RealVect u = { h(x,y,z,2), h(x,y,z,3), h(x,y,z,4) };
+
+    const Array1D<RealVect,0,2> gradients = {
+      gradient(x,y,z,h,0),
+      gradient(x,y,z,h,1),
+    };
+
+    const Array1D<Real,0,2> laplacians = {
+      laplacian(x,y,z,h,0),
+      laplacian(x,y,z,h,1),
+    };
+
+    Array1D<Real,0,2> mu_uschill, mu_nkarthi;
+    Array1D<Real,0,nvel> f_uschill, g_uschill, f_nkarthi, g_nkarthi;
+
+    mu_uschill = chemical_potentials(fields, gradients, laplacians);
+    f_uschill = fequilibrium_moments(fields, gradients, laplacians, u);
+    g_uschill = gequilibrium_moments(fields, mu_uschill, u);
+
+    nkarthi::bulk_free_energy curr_state(h(x,y,z,0), h(x,y,z,1));
+    mu_nkarthi = nkarthi::chemical_potentials(curr_state, gradients, laplacians);
+    f_nkarthi = fequilibrium_moments(curr_state, gradients, laplacians, u);
+    g_nkarthi = gequilibrium_moments(curr_state, mu_nkarthi, u);
+
+    Real us, nk;
+    for (int i=0; i<nvel; ++i) {
+      us = f_uschill(i);
+      nk = f_nkarthi(i);
+      if (fabs(us-nk) > FLT_EPSILON) {
+        Print() << "f_eq ("<<x<<","<<y<<","<<z<<"): "<<us<<" vs "<<nk<<std::endl;
+        diff[nbx](x,y,z) += fabs(us-nk);
+      }
+      us = g_uschill(i);
+      nk = g_nkarthi(i);
+      if (fabs(us-nk) > FLT_EPSILON) {
+        Print() << "g_eq ("<<x<<","<<y<<","<<z<<"): "<<us<<" vs "<<nk<<std::endl;
+        diff[nbx](x,y,z) += fabs(us-nk);
+      }
+    }
+
+  });
+
+  if (differences.sum() > 0.0) {
+    Print() << "FAIL: Equilibria do not match" << std::endl;
+    success = false;
+  } else {
+    Print() << "OK: Equilibria match" << std::endl;
+  }
+
+  return success;
+}
+
 bool regression_test_LBM_timestep(const Geometry& geom,
     MultiFab& fold,
     MultiFab& gold,
@@ -279,5 +349,6 @@ void regression_tests(const Geometry& geom,
     status &= regression_test_ifft(geom);
     status &= regression_test_correlated_fluctuations(geom, hydrovs);
     status &= regression_test_uncorrelated_fluctuations(geom, hydrovs);
+    status &= regression_test_equilibria(geom, hydrovs);
     status &= regression_test_LBM_timestep(geom, fold, gold, fnew, gnew, hydrovs, noise);
 }
