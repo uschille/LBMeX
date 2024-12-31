@@ -177,9 +177,11 @@ GpuArray<GpuComplex<Real>,ndof> kspace_white_noise(int kx, int ky, int kz, const
           && ((kz == 0) || (kz == domain.length(2) - kz)) ) {
       // real Gaussian random variables with zero mean and variance 1
       r[i] = { RandomNormal(0., 1., engine), 0.0 };
+      r[i] = { 0.3456, 0.0 };
     } else {
       // complex Gaussian random variables with zero mean and variance 0.5
       r[i] = { RandomNormal(0., std::sqrt(0.5), engine), RandomNormal(0., std::sqrt(0.5), engine) };
+      r[i] = { 0.1234, 0.2345 };
     }
   }
   return r;
@@ -372,6 +374,7 @@ GpuArray<Real,ndof> uncorrelated_noise(const Real rho0, const Real phi0, const R
   // random white noise
   for (int i=ncons; i<ndof; ++i) {
     r[i] = RandomNormal(0., 1., engine);
+    r[i] = 0.4567;
   }
 
   // compute noise vector from Gaussian random variables

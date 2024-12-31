@@ -35,8 +35,8 @@ void main_driver(const char* argv) {
   int nx = 16; // 64;
 
   // default time stepping parameters
-  int nsteps = 100; // 50000;
-  int plot_int = 10; // 5000;
+  int nsteps = 0;
+  int plot_int = 0;
 
   // set up Box and Geomtry
   RealBox real_box({0.,0.,0.},{1.,1.,1.});
