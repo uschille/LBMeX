@@ -86,7 +86,7 @@ GpuArray<Real,ndof*ndof> noise_covariance_matrix(const Real rho0, const Real phi
   // p = rho*T - kappa*(rho*D2rho+phi*D2phi)
   // mu =  T/2*log(rho+phi) - T/2*log(rho-phi) - chi/2*phi/rho - kappa*D2phi
   const Real kT = temperature;
-  const Real c2 = T + kappa*k2*rho0; // p_rho => modified speed of sound
+  const Real cs2 = T + kappa*k2*rho0; // p_rho => modified speed of sound
   const Real p_phi = kappa*k2*phi0;
   const Real mu_rho = -T*phi0/(rho0*rho0-phi0*phi0) + chi/2*phi0/(rho0*rho0);
   const Real mu_phi = T*rho0/(rho0*rho0-phi0*phi0) - chi/2/rho0 + kappa*k2;
