@@ -323,9 +323,9 @@ inline void compute_ifft(const Geometry& geom,
 
     // number of sites for normalization of FFT
     long n_sites = domain.length(0)*domain.length(1)*domain.length(2);
-    realspace_noise_one.mult(1./n_sites);
-
+    realspace_noise_one.mult(1./std::sqrt(n_sites));
     // TODO Check whether square root needed [uschill 2024/12/29]
+
     // copy the real-space noise into the k-th component of the MultiFab
     realspace_noise.ParallelCopy(realspace_noise_one,0,k,1);
 
