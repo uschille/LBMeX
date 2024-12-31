@@ -427,12 +427,12 @@ void thermalize_moments(int x, int y, int z,
       const Array4<Real>& noise) {
   // diffusive moments 1,2,3 in noise at 5,6,7
   for (int i=1; i<=AMREX_SPACEDIM; ++i) {
-    mg(i) += (1. - 0.5/tau_p) * noise(x,y,z,i+1+AMREX_SPACEDIM);
+    mg(i) += noise(x,y,z,i+1+AMREX_SPACEDIM);
   }
   // nonconserved moments 4..18 in noise at 8..22 (f) and 23..37 (g)
   for (int i=1+AMREX_SPACEDIM; i<nvel; ++i) {
-    mf(i) += (1. - 0.5/tau_r) * noise(x,y,z,i+1+AMREX_SPACEDIM);
-    mg(i) += (1. - 0.5/tau_p) * noise(x,y,z,i+nvel);
+    mf(i) += noise(x,y,z,i+1+AMREX_SPACEDIM);
+    mg(i) += noise(x,y,z,i+nvel);
   }
 }
 
