@@ -428,10 +428,10 @@ inline void hydrovars(MultiFab& mf, MultiFab& mg, MultiFab& hydrovs) {
 inline void LBM_timestep(const Geometry& geom,
 			 MultiFab& fold, MultiFab& gold,
 			 MultiFab& fnew, MultiFab& gnew,
-			 MultiFab& hydrovs, MultiFab& noise, MultiFab& ref_params) {
+			 MultiFab& hydrovs, MultiFab& noise) {
 
   if (temperature == 0){noise.setVal(0.);}
-  else {generate_fluctuations(geom, hydrovs, noise, ref_params);}
+  else {generate_fluctuations(geom, hydrovs, noise, 1);}
   collide_stream(geom, fold, gold, fnew, gnew, hydrovs, noise);
 
   hydrovars(fold, gold, hydrovs);

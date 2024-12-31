@@ -121,7 +121,7 @@ bool regression_test_correlated_fluctuations(const Geometry& geom, MultiFab& hyd
     MultiFab differences(ba, dm, 2*nvel, 2);
 
     generate_correlated_fluctuations(geom, hydrovs, noise_uschill);
-    nkarthi::generate_fluctuations(geom, hydrovs, noise_nkarthi);
+    nkarthi::generate_fluctuations(geom, hydrovs, noise_nkarthi, 1);
 
     const auto & xi_uschill = noise_uschill.arrays();
     const auto & xi_nkarthi = noise_nkarthi.arrays();
@@ -159,7 +159,7 @@ bool regression_test_uncorrelated_fluctuations(const Geometry& geom, MultiFab& h
     MultiFab differences(ba, dm, 2*nvel, 2);
 
     generate_fluctuations(geom, hydrovs, noise_uschill);
-    nkarthi::generate_fluctuations(geom, hydrovs, noise_nkarthi);
+    nkarthi::generate_fluctuations(geom, hydrovs, noise_nkarthi, 0);
 
     const auto & xi_uschill = noise_uschill.arrays();
     const auto & xi_nkarthi = noise_nkarthi.arrays();

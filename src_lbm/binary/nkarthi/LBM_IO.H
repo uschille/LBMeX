@@ -30,7 +30,7 @@ namespace nkarthi {
 
 // // system temperature for fluctations
 // AMREX_GPU_MANAGED Real temperature = 0.0;
-AMREX_GPU_MANAGED int use_correlated_noise = 1;
+// AMREX_GPU_MANAGED int use_correlated_noise = 1;
 
 //trying to move all input params to one place to clean code up
 #if 0

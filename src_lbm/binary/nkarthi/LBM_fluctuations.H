@@ -537,7 +537,8 @@ inline void generate_realspace_noise(const Geometry& geom, MultiFab& hydrovs, Mu
 // LB thermalization procedure for spatially correlated, non-diagonal noise
 inline void generate_fluctuations(const Geometry& geom,
 				  MultiFab& hydrovs,
-				  MultiFab& noise) {
+				  MultiFab& noise,
+          const int use_correlated_noise) {
   BL_PROFILE_VAR("generate_fluctuations()",generate_fluctuations);
 
   // BoxArray ba = noise.boxArray();
