@@ -12,6 +12,32 @@ using namespace amrex;
 #include "LBM_fluctuations.H"
 #include "LBM_tests.H"
 
+// default grid parameters
+int nx = 16;
+
+// default time stepping parameters
+int nsteps = 10;
+
+inline void ReadInput() {
+  ParmParse pp;
+  /* grid parameters */
+  pp.query("nx", nx);
+
+  /* time stepping and output parameters */
+  pp.query("nsteps", nsteps);
+  pp.query("plot_int", plot_int);
+
+  /* binary fluid parameters */
+  pp.query("lambda", chi);
+  pp.query("T", T);
+  pp.query("kappa", kappa);
+  pp.query("gamma", Gamma);
+
+  /* noise parameters */
+  pp.query("temperature", temperature);
+
+}
+
 inline void WriteOutput(int step,
       const Geometry& geom,
 			const MultiFab& hydrovs,
@@ -29,13 +55,9 @@ void main_driver(const char* argv) {
 
   // store the current time so we can later compute total run time.
   Real strt_time = ParallelDescriptor::second();
-    
-  // default grid parameters
-  int nx = 16; // 64;
 
-  // default time stepping parameters
-  int nsteps = 100; // 50000;
-  int plot_int = 10; // 5000;
+  // read input parameters
+  ReadInput();
 
   // set up Box and Geomtry
   RealBox real_box({0.,0.,0.},{1.,1.,1.});
