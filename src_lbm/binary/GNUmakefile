@@ -31,10 +31,6 @@ include $(AMREX_HOME)/Src/Base/Make.package
 
 include $(AMREX_HOME)/Tools/GNUMake/Make.rules
 
-ifeq ($(findstring cgpu, $(HOST)), cgpu)
-  CXXFLAGS += $(FFTW)
-endif
-
 ifeq ($(USE_CUDA),TRUE)
   LIBRARIES += -lcufft
 else
