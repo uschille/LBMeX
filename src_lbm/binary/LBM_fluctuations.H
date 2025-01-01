@@ -232,10 +232,11 @@ inline void generate_kspace_noise(const Geometry& geom,
   // generate noise in whole box because of grid decomposition
   // (generating noise without grid decomposition may be faster)
   for (MFIter mfi(kspace_noise_real); mfi.isValid(); ++mfi) {
-    const Box& box = mfi.validbox();
+
     const Array4<Real>& xi_real = kspace_noise_real.array(mfi);
     const Array4<Real>& xi_imag = kspace_noise_imag.array(mfi);
-    // construct noise in k-space
+
+    const Box& box = mfi.fabbox();
     ParallelForRNG(box, [=] AMREX_GPU_DEVICE(int kx, int ky, int kz, RandomEngine const& engine) {
       if (kx <= domain.length(0)/2) { // need only half of k-space for c2r FFT
         GpuArray<GpuComplex<Real>,ndof> xi = {};
@@ -244,8 +245,24 @@ inline void generate_kspace_noise(const Geometry& geom,
 	      xi = correlated_noise(kx,ky,kz,domain,engine);
 
         for (int i=0; i<ndof; ++i) {
+
+          /* copy real and imaginary part into MultiFab */
           xi_real(kx,ky,kz,i) = xi[i].real();
           xi_imag(kx,ky,kz,i) = xi[i].imag();
+
+          // complex conjugate symmetries
+          int kxloc = (kx == 0) ? 0 : domain.length(0) - kx;
+          int kyloc = (ky == 0) ? 0 : domain.length(1) - ky;
+          int kzloc = (kz == 0) ? 0 : domain.length(2) - kz;
+          // Note ParallelFor loop order: x "fastest", z "slowest"
+          if  (    ( (ky > domain.length(1)/2) && (kz == kzloc) && (kx == kxloc) )
+                || ( (kz > domain.length(2)/2) && (kx == kxloc) ) ) {
+            // TODO: This could cause a problem with domain decomposition [uschill 2024/12/31]
+            // -> What if kxloc is in a different box than kx?
+            xi_real(kx,ky,kz,i) =  xi_real(kxloc,kyloc,kzloc,i);
+            xi_imag(kx,ky,kz,i) = -xi_imag(kxloc,kyloc,kzloc,i);
+          }
+
         }
       }
     });
@@ -287,32 +304,9 @@ inline void compute_ifft(const Geometry& geom,
 
       const Box& box = mfi.fabbox();
       ParallelFor(box, [=] AMREX_GPU_DEVICE (int kx, int ky, int kz) noexcept {
-        //xi(kx,ky,kz) = { xi_real(kx,ky,kz), xi_imag(kx,ky,kz) };
-        {
           // regular points
           xi(kx,ky,kz).m_real = xi_real(kx,ky,kz);
           xi(kx,ky,kz).m_imag = xi_imag(kx,ky,kz);
-          // symmetry points (corners of first quadrant) are purely real
-          //if (((kx == 0) || (kx == domain.length(0) - kx))
-          //	&& ((ky == 0) || (ky == domain.length(1) - ky))
-          //	&& ((kz == 0) || (kz == domain.length(2) - kz))) {
-          //  xi(kx,ky,kz).m_imag = 0;
-          //}
-          // complex conjugate symmetries
-          int kxloc = (kx == 0) ? 0 : domain.length(0) - kx;
-          int kyloc = (ky == 0) ? 0 : domain.length(1) - ky;
-          int kzloc = (kz == 0) ? 0 : domain.length(2) - kz;
-          if (kx > domain.length(0)/2) {
-            Print() << "This should never execute" << std::endl;
-            xi(kx,ky,kz).m_real =  xi_real(kxloc,kyloc,kzloc);
-            xi(kx,ky,kz).m_imag = -xi_imag(kxloc,kyloc,kzloc);
-          }
-          if  ( ( (ky > domain.length(1)/2) && (kx == kxloc) )
-          || ( (kz > domain.length(2)/2) && (ky == kyloc) && (kx == kxloc) ) ) {
-            xi(kx,ky,kz).m_real =  xi_real(kxloc,kyloc,kzloc);
-            xi(kx,ky,kz).m_imag = -xi_imag(kxloc,kyloc,kzloc);
-          }
-        }
       });
 
     }
