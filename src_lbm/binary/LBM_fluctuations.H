@@ -283,10 +283,9 @@ inline void compute_ifft(const Geometry& geom,
   MultiFab realspace_noise_one(ba, dm, 1, 0);
   MultiFab kspace_noise_real_one(ba, dm, 1, 0);
   MultiFab kspace_noise_imag_one(ba, dm, 1, 0);
+  FabArray<BaseFab<GpuComplex<Real>>> kspace_noise_one(ba, dm, 1, 0);
 
   FFT::R2C fft(domain);
-  auto const& [cba, cdm] = fft.getSpectralDataLayout();
-  FabArray<BaseFab<GpuComplex<Real>>> kspace_noise_one(cba, cdm, 1, 0);
 
   for (int k=0; k<ndof; ++k) {
 
