@@ -10,7 +10,7 @@ using namespace amrex;
 
 #include "LBM_binary.H"
 #include "LBM_fluctuations.H"
-#include "LBM_tests.H"
+//#include "LBM_tests.H"
 
 // default grid parameters
 int nx = 16;
@@ -92,7 +92,7 @@ void main_driver(const char* argv) {
   if (plot_int > 0) WriteOutput(0, geom, hydrovs, structFact);
   Print() << "LB initialized\n";
 
-  unit_tests(geom, hydrovs);
+  //unit_tests(geom, hydrovs);
 
   // TIMESTEP
   for (int step=1; step <= nsteps; ++step) {

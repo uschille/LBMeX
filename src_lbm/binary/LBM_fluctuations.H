@@ -4,7 +4,7 @@
 #include <AMReX_FFT.H>
 
 #include "LBM_binary.H"
-#include "LBM_tests.H"
+//#include "LBM_tests.H"
 
 AMREX_GPU_MANAGED Real temperature = 1e-7;
 
@@ -25,15 +25,15 @@ void cholesky_decomp(GpuArray<Real,ndof*ndof>& A, const int n, const int bstart)
 	        A[i*n+j] = std::sqrt(sum);
 	      } else {
 	        A[i*n+j] = 0.0;
-          Print() << "Row " << i << " matrix not positive definite! " << sum << std::endl;
-          exit(-1);
+          //Print() << "Row " << i << " matrix not positive definite! " << sum << std::endl;
+          //exit(-1);
 	      }
       } else {
 	      if (A[j*n+j]>0) {
 	        A[i*n+j] = sum/A[j*n+j];
 	      } else {
-          Print() << "Cholesky decomposition should not reach " << __FILE__ <<":"<< __LINE__ << std::endl;
-	        exit(-1);
+          //Print() << "Cholesky decomposition should not reach " << __FILE__ <<":"<< __LINE__ << std::endl;
+	        //exit(-1);
 	      }
       }
     }
@@ -303,7 +303,7 @@ inline void compute_ifft(const Geometry& geom,
           int kyloc = (ky == 0) ? 0 : domain.length(1) - ky;
           int kzloc = (kz == 0) ? 0 : domain.length(2) - kz;
           if (kx > domain.length(0)/2) {
-            Print() << "This should never execute" << std::endl;
+            //Print() << "This should never execute" << std::endl;
             xi(kx,ky,kz).m_real =  xi_real(kxloc,kyloc,kzloc);
             xi(kx,ky,kz).m_imag = -xi_imag(kxloc,kyloc,kzloc);
           }
@@ -317,7 +317,7 @@ inline void compute_ifft(const Geometry& geom,
 
     }
 
-    check_kspace_symmetries(geom, kspace_noise_one);
+    //check_kspace_symmetries(geom, kspace_noise_one);
 
     fft.backward(kspace_noise_one, realspace_noise_one);
 

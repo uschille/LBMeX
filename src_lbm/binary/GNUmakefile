@@ -11,8 +11,8 @@ COMP    = gnu
 
 USE_FFT   = TRUE
 USE_MPI   = TRUE
-USE_OMP   = FALSE
-USE_CUDA  = FALSE
+USE_OMP   = TRUE
+USE_CUDA  = TRUE
 USE_HIP   = FALSE
 
 include $(AMREX_HOME)/Tools/GNUMake/Make.defs
@@ -30,10 +30,6 @@ INCLUDE_LOCATIONS += $(FHDEX_HOME)/src_analysis/
 include $(AMREX_HOME)/Src/Base/Make.package
 
 include $(AMREX_HOME)/Tools/GNUMake/Make.rules
-
-ifeq ($(findstring cgpu, $(HOST)), cgpu)
-  CXXFLAGS += $(FFTW)
-endif
 
 ifeq ($(USE_CUDA),TRUE)
   LIBRARIES += -lcufft
