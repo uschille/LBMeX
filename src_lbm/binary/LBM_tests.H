@@ -171,73 +171,79 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz) {
 
 inline void check_kspace_symmetries(const Geometry& geom,
 				    FabArray<BaseFab<GpuComplex<Real>>>& kspace_noise) {
-  const Box domain = geom.Domain();
-  IntVect fft_size = domain.length();
-  fft_size[0] = fft_size[0]/2 + 1;
-  Box fft_box = Box(IntVect(0), fft_size - IntVect(1));
-  for (MFIter mfi(kspace_noise); mfi.isValid(); ++mfi) {
-    Array4<GpuComplex<Real>> xi = kspace_noise.array(mfi);
-    ParallelFor(fft_box, [=] AMREX_GPU_DEVICE(int kx, int ky, int kz) {
-      bool symmetric = true;
-      int kxloc = (kx == 0) ? 0 : domain.length(0) - kx;
-      int kyloc = (ky == 0) ? 0 : domain.length(1) - ky;
-      int kzloc = (kz == 0) ? 0 : domain.length(2) - kz;
-      // symmetry points are purely real
-      if (((kx == 0) || (kx == domain.length(0) - kx))
-	  && ((ky == 0) || (ky == domain.length(1) - ky))
-	  && ((kz == 0) || (kz == domain.length(2) - kz))) {
-	symmetric &= (xi(kx,ky,kz).imag() == 0);
-	if (!symmetric) {
-	  Print() << "symmetry violation 1! ("
-		  << kx << "," << ky << "," << kz << ") "
-		  << xi(kx,ky,kz).imag() << " "
-	          << symmetric << " " << (xi(kx,ky,kz).imag() == 0.)
-		  << std::endl;
-	  exit(0);
-	}
+
+  Box domain = geom.Domain();
+  BaseFab<GpuComplex<Real>> kspace_noise_whole(domain);
+  Array4<GpuComplex<Real> const> const& xi = kspace_noise_whole.const_array();
+
+  // we need the whole BaseFab for the global symmetry check
+  kspace_noise.copyTo(kspace_noise_whole, 0);
+
+  for (int kz=0; kz<domain.length(2); ++kz) {
+    for (int ky=0; ky<domain.length(1); ++ky) {
+      for (int kx=0; kx<domain.length(0); ++kx) {
+
+        bool symmetric = true;
+        int kxloc = (kx == 0) ? 0 : domain.length(0) - kx;
+        int kyloc = (ky == 0) ? 0 : domain.length(1) - ky;
+        int kzloc = (kz == 0) ? 0 : domain.length(2) - kz;
+        // symmetry points are purely real
+        if (((kx == 0) || (kx == domain.length(0) - kx))
+            && ((ky == 0) || (ky == domain.length(1) - ky))
+            && ((kz == 0) || (kz == domain.length(2) - kz))) {
+          symmetric &= (xi(kx,ky,kz).imag() == 0);
+          if (!symmetric) {
+            Print() << "symmetry violation 1! ("
+              << kx << "," << ky << "," << kz << ") "
+              << xi(kx,ky,kz).imag() << " "
+              << symmetric << " " << (xi(kx,ky,kz).imag() == 0.)
+              << std::endl;
+            exit(0);
+          }
+        }
+        if (kx > domain.length(0)/2) {
+          //Print() << "This should never execute" << std::endl;
+          symmetric &= ((xi(kx,ky,kz).real() ==  xi(kxloc,kyloc,kzloc).real())
+            && (xi(kx,ky,kz).imag() == -xi(kxloc,kyloc,kzloc).imag()));
+          if (!symmetric) {
+            Print() << "symmetry violation 2! ("
+              << kx << "," << ky << "," << kz << ")"
+              << std::endl;
+            exit(0);
+          }
+        } else {
+          if ((ky > domain.length(1)/2) && (kx == kxloc)) {
+            symmetric &= ((xi(kx,ky,kz).real() ==  xi(kxloc,kyloc,kzloc).real())
+              && (xi(kx,ky,kz).imag() == -xi(kxloc,kyloc,kzloc).imag()));
+            if (!symmetric) {
+              Print() << "symmetry violation 3a! ("
+                << kx << "," << ky << "," << kz << ") ("
+                << kxloc << "," << kyloc << "," << kzloc << ")"
+                << " " << xi(kx,ky,kz).real() << " " << xi(kxloc,kyloc,kzloc).real()
+                << " " << xi(kx,ky,kz).imag() << " " << xi(kxloc,kyloc,kzloc).imag()
+                << std::endl;
+              exit(0);
+            }
+          } else {
+            if ((kz > domain.length(2)/2) && (ky == kyloc) && (kx == kxloc)) {
+              symmetric &= ((xi(kx,ky,kz).real() ==  xi(kxloc,kyloc,kzloc).real())
+                && (xi(kx,ky,kz).imag() == -xi(kxloc,kyloc,kzloc).imag()));
+              if (!symmetric) {
+                Print() << "symmetry violation 3b! ("
+                  << kx << "," << ky << "," << kz << ") ("
+                  << kxloc << "," << kyloc << "," << kzloc << ")"
+                  << " " << xi(kx,ky,kz).real() << " " << xi(kxloc,kyloc,kzloc).real()
+                  << " " << xi(kx,ky,kz).imag() << " " << xi(kxloc,kyloc,kzloc).imag()
+                  << std::endl;
+                exit(0);
+              }
+            } // if ((kz > domain.length(2)/2) ...
+          } // if ((ky > domain.length(1)/2) ...
+        } // if ((kx > domain.length(0)/2) ...
       }
-      if (kx > domain.length(0)/2) {
-	Print() << "This should never execute" << std::endl;
-	symmetric &= ((xi(kx,ky,kz).real() ==  xi(kxloc,kyloc,kzloc).real())
-		   && (xi(kx,ky,kz).imag() == -xi(kxloc,kyloc,kzloc).imag()));
-	if (!symmetric) {
-	  Print() << "symmetry violation 2! ("
-		  << kx << "," << ky << "," << kz << ")"
-		  << std::endl;
-	  exit(0);
-	}
-      } else {
-	if ((ky > domain.length(1)/2) && (kx == kxloc)) {
-	  symmetric &= ((xi(kx,ky,kz).real() ==  xi(kxloc,kyloc,kzloc).real())
-		     && (xi(kx,ky,kz).imag() == -xi(kxloc,kyloc,kzloc).imag()));
-	  if (!symmetric) {
-	    Print() << "symmetry violation 3a! ("
-		    << kx << "," << ky << "," << kz << ") ("
-	            << kxloc << "," << kyloc << "," << kzloc << ")"
-	            << " " << xi(kx,ky,kz).real() << " " << xi(kxloc,kyloc,kzloc).real()
-		    << " " << xi(kx,ky,kz).imag() << " " << xi(kxloc,kyloc,kzloc).imag()
-		    << std::endl;
-	    exit(0);
-	  }
-	} else {
-	  if ((kz > domain.length(2)/2) && (ky == kyloc) && (kx == kxloc)) {
-	    symmetric &= ((xi(kx,ky,kz).real() ==  xi(kxloc,kyloc,kzloc).real())
-		       && (xi(kx,ky,kz).imag() == -xi(kxloc,kyloc,kzloc).imag()));
-	    if (!symmetric) {
-	      Print() << "symmetry violation 3b! ("
-		      << kx << "," << ky << "," << kz << ") ("
-		      << kxloc << "," << kyloc << "," << kzloc << ")"
-		      << " " << xi(kx,ky,kz).real() << " " << xi(kxloc,kyloc,kzloc).real()
-		      << " " << xi(kx,ky,kz).imag() << " " << xi(kxloc,kyloc,kzloc).imag()
-		      << std::endl;
-	      exit(0);
-	    }
-	  } // if ((kz > domain.length(2)/2) ...
-	} // if ((ky > domain.length(1)/2) ...
-      } // if ((kx > domain.length(0)/2) ...
-    });
+    }
   }
-  return;
+
 }
 
 GpuArray<Real,ndof*ndof> square_matrix(GpuArray<Real,ndof*ndof> const& L) {

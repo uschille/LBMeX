@@ -297,29 +297,40 @@ inline void compute_ifft(const Geometry& geom,
 
       const Box& box = mfi.fabbox();
       ParallelFor(box, [=] AMREX_GPU_DEVICE (int kx, int ky, int kz) noexcept {
-        // regular points
         xi(kx,ky,kz).m_real = xi_real(kx,ky,kz);
         xi(kx,ky,kz).m_imag = xi_imag(kx,ky,kz);
-
-        // complex conjugate symmetries
-        int kxloc = (kx == 0) ? 0 : domain.length(0) - kx;
-        int kyloc = (ky == 0) ? 0 : domain.length(1) - ky;
-        int kzloc = (kz == 0) ? 0 : domain.length(2) - kz;
-        if (kx > domain.length(0)/2) {
-          //Print() << "This should never execute" << std::endl;
-          xi(kx,ky,kz).m_real =  xi_real(kxloc,kyloc,kzloc);
-          xi(kx,ky,kz).m_imag = -xi_imag(kxloc,kyloc,kzloc);
-        }
-        if  (    ( (ky > domain.length(1)/2) && (kz == kzloc) && (kx == kxloc) )
-              || ( (kz > domain.length(2)/2) && (kx == kxloc) ) ) {
-          // TODO: This could cause a problem with domain decomposition [uschill 2024/12/31]
-          // -> What if kxloc is in a different box than kx?
-          xi(kx,ky,kz).m_real =  xi_real(kxloc,kyloc,kzloc);
-          xi(kx,ky,kz).m_imag = -xi_imag(kxloc,kyloc,kzloc);
-        }
-
       });
 
+    }
+
+    BaseFab<GpuComplex<Real>> kspace_noise_whole(domain);
+    Array4<GpuComplex<Real>> const& xi = kspace_noise_whole.array();
+
+    // TODO: check if this can be done for all components
+
+    // to set the conjugate symmetry we need the whole BaseFab
+    kspace_noise_one.copyTo(kspace_noise_whole, 0);
+
+    for (int kz=0; kz<domain.length(2); ++kz) {
+      for (int ky=0; ky<domain.length(1); ++ky) {
+        for (int kx=0; kx<domain.length(0); ++kx) {
+          // complex conjugate symmetries
+          int kxloc = (kx == 0) ? 0 : domain.length(0) - kx;
+          int kyloc = (ky == 0) ? 0 : domain.length(1) - ky;
+          int kzloc = (kz == 0) ? 0 : domain.length(2) - kz;
+          if (    ( (kz > domain.length(2)/2) )
+               || ( (ky > domain.length(1)/2) && (kz == kzloc) )
+               || ( (kx > domain.length(0)/2) && (kz == kzloc) && (ky == kyloc) ) ) {
+            xi(kx,ky,kz).m_real =  xi(kxloc,kyloc,kzloc).real();
+            xi(kx,ky,kz).m_imag = -xi(kxloc,kyloc,kzloc).imag();
+          }
+        }
+      }
+    }
+
+    // now distribute kspace_noise_whole back to kspace_noise_one
+    for (MFIter mfi(kspace_noise_one); mfi.isValid(); ++mfi) {
+      kspace_noise_one.get(mfi).copy(kspace_noise_whole, 0, 0, 1);
     }
 
     check_kspace_symmetries(geom, kspace_noise_one);
