@@ -286,8 +286,6 @@ inline void compute_ifft(const Geometry& geom,
     MultiFab& realspace_noise /* out */) {
 
   Box domain = geom.Domain();
-  BoxArray ba(domain);
-  DistributionMapping dm(ba);
 
   FFT::R2C fft(geom.Domain());
   //auto const& [cba, cdm] = fft.getSpectralDataLayout();
@@ -295,15 +293,12 @@ inline void compute_ifft(const Geometry& geom,
   // this currently conflicts with the symmetry check
   // for now, copy the whole domain, until global symmetry is sorted out in parallel
 
-  // MultiFabs for one of the ndof components
-  MultiFab realspace_noise_one(ba, dm, 1, 0);
-  FabArray<BaseFab<GpuComplex<Real>>> kspace_noise_one(ba, dm, 1, 0);
+  // TODO: Check if AMReX FFT can do fft per component [uschill 2025/01/01]
 
   for (int k=0; k<ndof; ++k) {
-
-    // first copy the k-th conponent of the noise
-    // may be faster to generate the noise here? [uschill 07/27/2022]
-    kspace_noise_one.ParallelCopy(kspace_noise,k,0,1);
+    // alias MultiFabs for one of the ndof components
+    MultiFab realspace_noise_one(realspace_noise, amrex::make_alias, k, 1);
+    FabArray<BaseFab<GpuComplex<Real>>> kspace_noise_one(kspace_noise, amrex::make_alias, k, 1);
 
     check_kspace_symmetries(geom, kspace_noise_one);
 
@@ -312,11 +307,6 @@ inline void compute_ifft(const Geometry& geom,
     // number of sites for normalization of FFT
     long n_sites = domain.length(0)*domain.length(1)*domain.length(2);
     realspace_noise_one.mult(1./std::sqrt(n_sites));
-    // TODO Check whether square root needed [uschill 2024/12/29]
-
-    // copy the real-space noise into the k-th component of the MultiFab
-    realspace_noise.ParallelCopy(realspace_noise_one,0,k,1);
-
   }
 
 }
