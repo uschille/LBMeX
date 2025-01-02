@@ -269,13 +269,17 @@ inline void compute_ifft(const Geometry& geom,
   BoxArray ba(domain);
   DistributionMapping dm(ba);
 
+  FFT::R2C fft(geom.Domain());
+  //auto const& [cba, cdm] = fft.getSpectralDataLayout();
+  // TODO: kspace noise is only needed in half domain for FFT::R2C
+  // this currently conflicts with the symmetry check
+  // for now, copy the whole domain, until global symmetry is sorted out in parallel
+
   // MultiFabs for one of the ndof components
   MultiFab realspace_noise_one(ba, dm, 1, 0);
   MultiFab kspace_noise_real_one(ba, dm, 1, 0);
   MultiFab kspace_noise_imag_one(ba, dm, 1, 0);
   FabArray<BaseFab<GpuComplex<Real>>> kspace_noise_one(ba, dm, 1, 0);
-
-  FFT::R2C fft(domain);
 
   for (int k=0; k<ndof; ++k) {
 
@@ -302,7 +306,7 @@ inline void compute_ifft(const Geometry& geom,
         int kyloc = (ky == 0) ? 0 : domain.length(1) - ky;
         int kzloc = (kz == 0) ? 0 : domain.length(2) - kz;
         if (kx > domain.length(0)/2) {
-          Print() << "This should never execute" << std::endl;
+          //Print() << "This should never execute" << std::endl;
           xi(kx,ky,kz).m_real =  xi_real(kxloc,kyloc,kzloc);
           xi(kx,ky,kz).m_imag = -xi_imag(kxloc,kyloc,kzloc);
         }
