@@ -72,6 +72,7 @@ bool regression_test_ifft(const Geometry& geom) {
     BoxArray ba(domain);
     DistributionMapping dm(ba);
 
+    cMultiFab kspace_noise(ba, dm, ndof, 0);
     MultiFab kspace_noise_real(ba, dm, ndof, 0);
     MultiFab kspace_noise_imag(ba, dm, ndof, 0);
     MultiFab noise_uschill(ba, dm, ndof, 0);
@@ -82,9 +83,19 @@ bool regression_test_ifft(const Geometry& geom) {
     kspace_noise_real.setVal(0.);
     kspace_noise_imag.setVal(0.);
 
-    generate_kspace_noise(geom, kspace_noise_real, kspace_noise_imag);
+    generate_kspace_noise(geom, kspace_noise);
 
-    compute_ifft(geom, kspace_noise_real, kspace_noise_imag, noise_uschill);
+    auto const& xi = kspace_noise.arrays();
+    auto const& xi_real = kspace_noise.arrays();
+    auto const& xi_imag = kspace_noise.arrays();
+    ParallelFor(kspace_noise, IntVect(0), [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) {
+      for (int c=0; c<ndof; ++c) {
+        xi_real[nbx](i,j,k,c) = xi[nbx](i,j,k,c).real();
+        xi_imag[nbx](i,j,k,c) = xi[nbx](i,j,k,c).imag();
+      }
+    });
+
+    compute_ifft(geom, kspace_noise, noise_uschill);
     nkarthi::compute_ifft(geom, noise_nkarthi, kspace_noise_real, kspace_noise_imag, ndof);
 
     auto const & xi_uschill = noise_uschill.arrays();

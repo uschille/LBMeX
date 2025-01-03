@@ -465,8 +465,9 @@ inline void compute_ifft(const Geometry& geom, MultiFab& realspace_noise,
               xi(kx,ky,kz).m_real =  xi_real(kxloc,kyloc,kzloc);
               xi(kx,ky,kz).m_imag = -xi_imag(kxloc,kyloc,kzloc);
             }
-            if  ( ( (ky > domain.length(1)/2) && (kz == kzloc) && (kx == kxloc) )
-            || ( (kz > domain.length(2)/2) && (kx == kxloc) ) ) { // mind ParallelFor loop order!
+            if (    ( (kz > domain.length(2)/2) )  // mind ParallelFor loop order!
+                 || ( (ky > domain.length(1)/2) && (kz == kzloc) )
+                 || ( (kx > domain.length(0)/2) && (kz == kzloc) && (ky == kyloc) ) ) {
               xi(kx,ky,kz).m_real =  xi_real(kxloc,kyloc,kzloc);
               xi(kx,ky,kz).m_imag = -xi_imag(kxloc,kyloc,kzloc);
             }
