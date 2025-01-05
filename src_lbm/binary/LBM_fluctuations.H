@@ -265,7 +265,7 @@ inline void generate_kspace_noise(const Geometry& geom,
           int kzloc = (kz == 0) ? 0 : domain.length(2) - kz;
           if (    ( (kz > domain.length(2)/2) )
                 || ( (ky > domain.length(1)/2) && (kz == kzloc) )
-                || ( (kx > domain.length(0)/2) && (kz == kzloc) && (ky == kyloc) ) ) {
+                || ( (kx > domain.length(0)/2) ) ) { // noise was generated for kx <= domain.length(0)/2
             xi(kx,ky,kz,i).m_real =  xi(kxloc,kyloc,kzloc,i).real();
             xi(kx,ky,kz,i).m_imag = -xi(kxloc,kyloc,kzloc,i).imag();
           }
