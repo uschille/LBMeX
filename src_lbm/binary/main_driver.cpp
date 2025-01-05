@@ -14,6 +14,7 @@ using namespace amrex;
 
 // default grid parameters
 int nx = 16;
+int max_grid_size_x = nx/2;
 
 // default time stepping parameters
 int nsteps = 10;
@@ -69,6 +70,7 @@ void main_driver(const char* argv) {
   Box domain(dom_lo, dom_hi);
   Geometry geom(domain, real_box, CoordSys::cartesian, periodicity);
   BoxArray ba(domain);
+  ba.maxSize(IntVect(max_grid_size_x)); // chop domain into boxes
   DistributionMapping dm(ba);
 
   // set up MultiFabs
