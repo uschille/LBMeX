@@ -223,18 +223,15 @@ GpuArray<GpuComplex<Real>,ndof> correlated_noise(int kx, int ky, int kz,
 // (this is to allow parallel generation of noise)
 // the symmetries are handled when copying to one whole grid
 inline void generate_kspace_noise(const Geometry& geom,
-				  MultiFab& kspace_noise_real,
-				  MultiFab& kspace_noise_imag) {
+          FabArray<BaseFab<GpuComplex<Real>>>& kspace_noise) {
   const Box domain = geom.Domain();
 
   // include density? [uschill 07/26/2022]
 
-  // generate noise in whole box because of grid decomposition
-  // (generating noise without grid decomposition may be faster)
-  for (MFIter mfi(kspace_noise_real); mfi.isValid(); ++mfi) {
+  // generate noise in all box arrays
+  for (MFIter mfi(kspace_noise); mfi.isValid(); ++mfi) {
 
-    const Array4<Real>& xi_real = kspace_noise_real.array(mfi);
-    const Array4<Real>& xi_imag = kspace_noise_imag.array(mfi);
+    const Array4<GpuComplex<Real>>& xi_complex = kspace_noise.array(mfi);
 
     const Box& box = mfi.fabbox();
     ParallelForRNG(box, [=] AMREX_GPU_DEVICE(int kx, int ky, int kz, RandomEngine const& engine) {
@@ -245,29 +242,50 @@ inline void generate_kspace_noise(const Geometry& geom,
 	      xi = correlated_noise(kx,ky,kz,domain,engine);
 
         for (int i=0; i<ndof; ++i) {
-          xi_real(kx,ky,kz,i) = xi[i].real();
-          xi_imag(kx,ky,kz,i) = xi[i].imag();
-
-          // We do not handle conjugate symmetries here because of the loop dependencies
-          // (in CUDA in particular it is not guaranteed that the required values have been computed)
-          // In compute_fft, the required values will be available such that it may work on single CPU
-          // (domain decomposition can still cause issues)
-          // TODO: Handle this as a a global operation outside ParallelFor
+          xi_complex(kx,ky,kz,i) = xi[i];
         }
       }
     });
   }
 
+  // to set the conjugate symmetry we need the whole BaseFab
+  BaseFab<GpuComplex<Real>> kspace_noise_whole(domain, ndof);
+  Array4<GpuComplex<Real>> const& xi = kspace_noise_whole.array();
+
+  kspace_noise.copyTo(kspace_noise_whole, 0, 0, ndof);
+
+  // now set the conjugate symmetry
+  for (int i=0; i<kspace_noise.nComp(); ++i) {
+    for (int kz=0; kz<domain.length(2); ++kz) {
+      for (int ky=0; ky<domain.length(1); ++ky) {
+        for (int kx=0; kx<domain.length(0); ++kx) {
+          // complex conjugate symmetries
+          int kxloc = (kx == 0) ? 0 : domain.length(0) - kx;
+          int kyloc = (ky == 0) ? 0 : domain.length(1) - ky;
+          int kzloc = (kz == 0) ? 0 : domain.length(2) - kz;
+          if (    ( (kz > domain.length(2)/2) )
+                || ( (ky > domain.length(1)/2) && (kz == kzloc) )
+                || ( (kx > domain.length(0)/2) && (kz == kzloc) && (ky == kyloc) ) ) {
+            xi(kx,ky,kz,i).m_real =  xi(kxloc,kyloc,kzloc,i).real();
+            xi(kx,ky,kz,i).m_imag = -xi(kxloc,kyloc,kzloc,i).imag();
+          }
+        }
+      }
+    }
+  }
+
+  // now distribute kspace_noise_whole back to kspace_noise
+  for (MFIter mfi(kspace_noise); mfi.isValid(); ++mfi) {
+    kspace_noise.get(mfi).copy<RunOn::Device>(kspace_noise_whole, 0, 0, ndof);
+  }
+
 }
 
 inline void compute_ifft(const Geometry& geom,
-    const MultiFab& kspace_noise_real, /* in */
-    const MultiFab& kspace_noise_imag, /* in */
+    const FabArray<BaseFab<GpuComplex<Real>>>& kspace_noise, /* in */
     MultiFab& realspace_noise /* out */) {
 
   Box domain = geom.Domain();
-  BoxArray ba(domain);
-  DistributionMapping dm(ba);
 
   FFT::R2C fft(geom.Domain());
   //auto const& [cba, cdm] = fft.getSpectralDataLayout();
@@ -275,52 +293,12 @@ inline void compute_ifft(const Geometry& geom,
   // this currently conflicts with the symmetry check
   // for now, copy the whole domain, until global symmetry is sorted out in parallel
 
-  // MultiFabs for one of the ndof components
-  MultiFab realspace_noise_one(ba, dm, 1, 0);
-  MultiFab kspace_noise_real_one(ba, dm, 1, 0);
-  MultiFab kspace_noise_imag_one(ba, dm, 1, 0);
-  FabArray<BaseFab<GpuComplex<Real>>> kspace_noise_one(ba, dm, 1, 0);
+  // TODO: Check if AMReX FFT can do fft per component [uschill 2025/01/01]
 
   for (int k=0; k<ndof; ++k) {
-
-    // first copy the k-th conponent of the noise
-    // may be faster to generate the noise here? [uschill 07/27/2022]
-    kspace_noise_real_one.ParallelCopy(kspace_noise_real,k,0,1);
-    kspace_noise_imag_one.ParallelCopy(kspace_noise_imag,k,0,1);
-
-    // copy real and imaginary part into the spectral MultiFab
-    for (MFIter mfi(kspace_noise_one); mfi.isValid(); ++mfi) {
-
-      const Array4<Real>& xi_real = kspace_noise_real_one.array(mfi);
-      const Array4<Real>& xi_imag = kspace_noise_imag_one.array(mfi);
-      Array4<GpuComplex<Real>> xi = kspace_noise_one.array(mfi);
-
-      const Box& box = mfi.fabbox();
-      ParallelFor(box, [=] AMREX_GPU_DEVICE (int kx, int ky, int kz) noexcept {
-        // regular points
-        xi(kx,ky,kz).m_real = xi_real(kx,ky,kz);
-        xi(kx,ky,kz).m_imag = xi_imag(kx,ky,kz);
-
-        // complex conjugate symmetries
-        int kxloc = (kx == 0) ? 0 : domain.length(0) - kx;
-        int kyloc = (ky == 0) ? 0 : domain.length(1) - ky;
-        int kzloc = (kz == 0) ? 0 : domain.length(2) - kz;
-        if (kx > domain.length(0)/2) {
-          //Print() << "This should never execute" << std::endl;
-          xi(kx,ky,kz).m_real =  xi_real(kxloc,kyloc,kzloc);
-          xi(kx,ky,kz).m_imag = -xi_imag(kxloc,kyloc,kzloc);
-        }
-        if  (    ( (ky > domain.length(1)/2) && (kz == kzloc) && (kx == kxloc) )
-              || ( (kz > domain.length(2)/2) && (kx == kxloc) ) ) {
-          // TODO: This could cause a problem with domain decomposition [uschill 2024/12/31]
-          // -> What if kxloc is in a different box than kx?
-          xi(kx,ky,kz).m_real =  xi_real(kxloc,kyloc,kzloc);
-          xi(kx,ky,kz).m_imag = -xi_imag(kxloc,kyloc,kzloc);
-        }
-
-      });
-
-    }
+    // alias MultiFabs for one of the ndof components
+    MultiFab realspace_noise_one(realspace_noise, amrex::make_alias, k, 1);
+    FabArray<BaseFab<GpuComplex<Real>>> kspace_noise_one(kspace_noise, amrex::make_alias, k, 1);
 
     //check_kspace_symmetries(geom, kspace_noise_one);
 
@@ -329,11 +307,6 @@ inline void compute_ifft(const Geometry& geom,
     // number of sites for normalization of FFT
     long n_sites = domain.length(0)*domain.length(1)*domain.length(2);
     realspace_noise_one.mult(1./std::sqrt(n_sites));
-    // TODO Check whether square root needed [uschill 2024/12/29]
-
-    // copy the real-space noise into the k-th component of the MultiFab
-    realspace_noise.ParallelCopy(realspace_noise_one,0,k,1);
-
   }
 
 }
@@ -344,23 +317,13 @@ inline void generate_correlated_fluctuations(const Geometry& geom,
 				  MultiFab& noise) {
   BoxArray ba = noise.boxArray();
   DistributionMapping dm = noise.DistributionMap();
-  MultiFab kspace_noise_real(ba, dm, ndof, 0);
-  MultiFab kspace_noise_imag(ba, dm, ndof, 0);
-
-  kspace_noise_real.setVal(0.);
-  kspace_noise_imag.setVal(0.);
-
-  // TODO: check if this takes care of ndof entries!?
+  FabArray<BaseFab<GpuComplex<Real>>> kspace_noise(ba, dm, ndof, 0);
 
   // generate noise in k-space
-  generate_kspace_noise(geom, kspace_noise_real, kspace_noise_imag);
-
-  // note that the k-space noise is generated without the required symmetries
-  // (this is to allow for parallel generation of noise)
-  // the k-space symmetries are handled when copying in compute_ifft
+  generate_kspace_noise(geom, kspace_noise);
 
   // inverse Fourier transform noise vector to real space
-  compute_ifft(geom, kspace_noise_real, kspace_noise_imag, noise);
+  compute_ifft(geom, kspace_noise, noise);
 
 }
 
