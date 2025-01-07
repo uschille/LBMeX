@@ -249,35 +249,31 @@ inline void generate_kspace_noise(const Geometry& geom,
   }
 
   // to set the conjugate symmetry we need the whole BaseFab
-  BaseFab<GpuComplex<Real>> kspace_noise_whole(domain, ndof);
-  Array4<GpuComplex<Real>> const& xi = kspace_noise_whole.array();
+  // cf. https://github.com/AMReX-Codes/amrex/discussions/4284
+  BoxArray ba(domain);
+  DistributionMapping dm(Vector<int>{0});
+  FabArray<BaseFab<GpuComplex<Real>>> kspace_noise_whole(ba, dm, ndof, 0);
+  kspace_noise_whole.ParallelCopy(kspace_noise);
 
-  kspace_noise.copyTo(kspace_noise_whole, 0, 0, ndof);
-
-  // now set the conjugate symmetry
-  for (int i=0; i<kspace_noise.nComp(); ++i) {
-    for (int kz=0; kz<domain.length(2); ++kz) {
-      for (int ky=0; ky<domain.length(1); ++ky) {
-        for (int kx=0; kx<domain.length(0); ++kx) {
-          // complex conjugate symmetries
-          int kxloc = (kx == 0) ? 0 : domain.length(0) - kx;
-          int kyloc = (ky == 0) ? 0 : domain.length(1) - ky;
-          int kzloc = (kz == 0) ? 0 : domain.length(2) - kz;
-          if (    ( (kz > domain.length(2)/2) )
-                || ( (ky > domain.length(1)/2) && (kz == kzloc) )
-                || ( (kx > domain.length(0)/2) ) ) { // noise was generated for kx <= domain.length(0)/2
-            xi(kx,ky,kz,i).m_real =  xi(kxloc,kyloc,kzloc,i).real();
-            xi(kx,ky,kz,i).m_imag = -xi(kxloc,kyloc,kzloc,i).imag();
-          }
-        }
+  auto const & xi_arrays = kspace_noise_whole.arrays();
+  ParallelFor(kspace_noise_whole, IntVect(0), [=] AMREX_GPU_DEVICE(int nbx, int kx, int ky, int kz) {
+    Array4<GpuComplex<Real>> const& xi = xi_arrays[nbx];
+    for (int i=0; i<ndof; ++i) {
+      // complex conjugate symmetries
+      int kxloc = (kx == 0) ? 0 : domain.length(0) - kx;
+      int kyloc = (ky == 0) ? 0 : domain.length(1) - ky;
+      int kzloc = (kz == 0) ? 0 : domain.length(2) - kz;
+      if (    ( (kz > domain.length(2)/2) )
+            || ( (ky > domain.length(1)/2) && (kz == kzloc) )
+            || ( (kx > domain.length(0)/2) ) ) { // noise was generated for kx <= domain.length(0)/2
+        xi(kx,ky,kz,i).m_real =  xi(kxloc,kyloc,kzloc,i).real();
+        xi(kx,ky,kz,i).m_imag = -xi(kxloc,kyloc,kzloc,i).imag();
       }
     }
-  }
+  });
 
   // now distribute kspace_noise_whole back to kspace_noise
-  for (MFIter mfi(kspace_noise); mfi.isValid(); ++mfi) {
-    kspace_noise.get(mfi).copy(kspace_noise_whole, 0, 0, ndof);
-  }
+  kspace_noise.ParallelCopy(kspace_noise_whole);
 
 }
 
