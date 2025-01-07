@@ -1,8 +1,8 @@
 #ifndef LBM_TESTS_H_
 #define LBM_TESTS_H_
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 void cholesky_decomp(GpuArray<Real,ndof*ndof>& A, const int n, const int bstart);
+void generate_kspace_noise(const Geometry& geom, FabArray<BaseFab<GpuComplex<Real>>>& kspace_noise);
 
 #if 0
 // generate a pure sine wave in k-space
@@ -169,8 +169,9 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz) {
 }
 #endif
 
-inline void check_kspace_symmetries(const Geometry& geom,
+inline bool check_kspace_symmetries(const Geometry& geom,
 				    FabArray<BaseFab<GpuComplex<Real>>>& kspace_noise) {
+  bool symmetric = true;
 
   Box domain = geom.Domain();
   BaseFab<GpuComplex<Real>> kspace_noise_whole(domain);
@@ -183,7 +184,6 @@ inline void check_kspace_symmetries(const Geometry& geom,
     for (int ky=0; ky<domain.length(1); ++ky) {
       for (int kx=0; kx<domain.length(0); ++kx) {
 
-        bool symmetric = true;
         int kxloc = (kx == 0) ? 0 : domain.length(0) - kx;
         int kyloc = (ky == 0) ? 0 : domain.length(1) - ky;
         int kzloc = (kz == 0) ? 0 : domain.length(2) - kz;
@@ -243,7 +243,32 @@ inline void check_kspace_symmetries(const Geometry& geom,
       }
     }
   }
+  return symmetric;
+}
 
+bool symmetry_test(Geometry const& geom) {
+  bool success = true;
+
+  Box domain = geom.Domain();
+  BoxArray ba(domain);
+  DistributionMapping dm(ba);
+  MultiFab realspace_noise(ba, dm, ndof, 0);
+  FabArray<BaseFab<GpuComplex<Real>>> kspace_noise(ba, dm, ndof, 0);
+
+  generate_kspace_noise(geom, kspace_noise);
+
+  for (int k=0; k<ndof; ++k) {
+    // alias MultiFabs for one of the ndof components
+    MultiFab realspace_noise_one(realspace_noise, amrex::make_alias, k, 1);
+    FabArray<BaseFab<GpuComplex<Real>>> kspace_noise_one(kspace_noise, amrex::make_alias, k, 1);
+
+    success &= check_kspace_symmetries(geom, kspace_noise_one);
+
+  }
+  if (success) {
+    Print() << "k-space symmetries of generated noise ok" << std::endl;
+  }
+  return success;
 }
 
 GpuArray<Real,ndof*ndof> square_matrix(GpuArray<Real,ndof*ndof> const& L) {
@@ -311,9 +336,10 @@ bool cholesky_test(const int ntrial) {
 
     if (status) {
         Print() << "Cholesky test ok, tested " << ntrial << " matrices." << std::endl;
+    } else {
+        Print() << "ERROR: Cholesky test failed" << std::endl;
+        ParallelDescriptor::Abort(-1, false);
     }
-    else
-        exit(-1);
 
     return status;
 }
@@ -383,6 +409,7 @@ bool unit_tests(const Geometry& geom, MultiFab& hydrovs) {
     bool status = true;
     status &= cholesky_test(100);
     status &= equilibrium_test(geom, hydrovs);
+    status &= symmetry_test(geom);
     return status;
 }
 
