@@ -14,6 +14,7 @@ using namespace amrex;
 
 // default grid parameters
 int nx = 16;
+int max_grid_size_x = nx/2;
 
 // default time stepping parameters
 int nsteps = 10;
@@ -69,6 +70,7 @@ void main_driver(const char* argv) {
   Box domain(dom_lo, dom_hi);
   Geometry geom(domain, real_box, CoordSys::cartesian, periodicity);
   BoxArray ba(domain);
+  ba.maxSize(IntVect(max_grid_size_x)); // chop domain into boxes
   DistributionMapping dm(ba);
 
   // set up MultiFabs
@@ -90,7 +92,7 @@ void main_driver(const char* argv) {
   // INITIALIZE
   LBM_init_mixture(fold, gold, hydrovs);
   if (plot_int > 0) WriteOutput(0, geom, hydrovs, structFact);
-  Print() << "LB initialized\n";
+  Print() << "LB initialized lattice " << domain <<"\n" << ba << dm << std::endl;
 
   //unit_tests(geom, hydrovs);
 
@@ -100,14 +102,16 @@ void main_driver(const char* argv) {
     structFact.FortStructure(hydrovs, geom);
     if (plot_int > 0 && step%plot_int ==0) {
       WriteOutput(step, geom, hydrovs, structFact);
-      Print() << "LB step " << step << "\n";
+      Print() << "LB step " << step << std::endl;
     }
   }
+
+  Print() << "LB completed " << nsteps << " time steps" << std::endl;
 
   // Call the timer again and compute the maximum difference between the start time 
   // and stop time over all processors
   Real stop_time = ParallelDescriptor::second() - strt_time;
   ParallelDescriptor::ReduceRealMax(stop_time);
-  amrex::Print() << "Run time = " << stop_time << " s" << std::endl;
+  amrex::Print() << "Run time = " << stop_time << " s (" << domain.numPts()*nsteps/stop_time << " LUP/s)" << std::endl;
   
 }
