@@ -24,42 +24,26 @@ void cholesky_decomp(GpuArray<Real,ndof*ndof>& A, const int n, const int bstart)
 	      sum -= A[i*n+k]*A[j*n+k];
       }
       if (i==j) {
-	      if (sum>=0) {
-	        A[i*n+j] = std::sqrt(sum);
-	      } else {
-	        A[i*n+j] = 0.0;
-          Print() << "Row " << i << " matrix not positive definite! " << sum << std::endl;
-          exit(-1);
-	      }
+	      A[i*n+j] = std::sqrt(sum);
       } else {
-	      if (A[j*n+j]>0) {
-	        A[i*n+j] = sum/A[j*n+j];
-	      } else {
-          Print() << "Cholesky decomposition should not reach " << __FILE__ <<":"<< __LINE__ << std::endl;
-	        exit(-1);
-	      }
+	      A[i*n+j] = sum/A[j*n+j];
       }
-    }
-  }
-  for (int i=0; i<n; ++i) {
-    for (int j=i+1; j<n; ++j) {
-      A[i*n+j] = 0.0;
     }
   }
 #else
   const char uplo = 'U'; // we store the matrix in row major order (C-style)
-  const int order = ndof-ncons;
-  const int lda = ndof;
-  const int offset = ncons*ndof + ncons; // offset to sub-matrix starting at (ncons,ncons)
+  const int order = n-bstart; // order of sub-matrix
+  const int lda = n; // leading dimension of entire matrix
+  const int offset = bstart*lda + bstart; // offset to sub-matrix starting at (bstart,bstart)
   int info = 0;
   LAPACK_dpotrf(&uplo, &order, A.data()+offset, &lda, &info);
+#endif
   // zero out the upper triangle (lower triangle in column major order)
-  for (int i=0; i<ndof; i++) {
+  for (int i=0; i<n; i++) {
     for (int j=0; j<i; j++) {
-      A[i+j*lda] = 0.;
+      A[i+j*n] = 0.;
     }
   }
-#endif
 
 }
 
