@@ -2,6 +2,7 @@
 #define LBM_FLUCTUATIONS_H_
 
 #include <AMReX_FFT.H>
+#include <lapack.h>
 
 #include "LBM_binary.H"
 #include "LBM_tests.H"
@@ -12,6 +13,8 @@ AMREX_GPU_MANAGED Real temperature = 1e-7;
 // result is stored in lower triangle of A
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 void cholesky_decomp(GpuArray<Real,ndof*ndof>& A, const int n, const int bstart) {
+
+#ifdef AMREX_USE_CUDA
   // Cholesky-Banachiewicz algorithm
   Real sum;
   for (int i=bstart; i<n; ++i) {
@@ -21,28 +24,27 @@ void cholesky_decomp(GpuArray<Real,ndof*ndof>& A, const int n, const int bstart)
 	      sum -= A[i*n+k]*A[j*n+k];
       }
       if (i==j) {
-	      if (sum>=0) {
-	        A[i*n+j] = std::sqrt(sum);
-	      } else {
-	        A[i*n+j] = 0.0;
-          //Print() << "Row " << i << " matrix not positive definite! " << sum << std::endl;
-          //exit(-1);
-	      }
+	      A[i*n+j] = std::sqrt(sum);
       } else {
-	      if (A[j*n+j]>0) {
-	        A[i*n+j] = sum/A[j*n+j];
-	      } else {
-          //Print() << "Cholesky decomposition should not reach " << __FILE__ <<":"<< __LINE__ << std::endl;
-	        //exit(-1);
-	      }
+	      A[i*n+j] = sum/A[j*n+j];
       }
     }
   }
-  for (int i=0; i<n; ++i) {
-    for (int j=i+1; j<n; ++j) {
-      A[i*n+j] = 0.0;
+#else
+  const char uplo = 'U'; // we store the matrix in row major order (C-style)
+  const int order = n-bstart; // order of sub-matrix
+  const int lda = n; // leading dimension of entire matrix
+  const int offset = bstart*lda + bstart; // offset to sub-matrix starting at (bstart,bstart)
+  int info = 0;
+  LAPACK_dpotrf(&uplo, &order, A.data()+offset, &lda, &info);
+#endif
+  // zero out the upper triangle (lower triangle in column major order)
+  for (int i=0; i<n; i++) {
+    for (int j=0; j<i; j++) {
+      A[i+j*n] = 0.;
     }
   }
+
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE

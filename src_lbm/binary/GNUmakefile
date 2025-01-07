@@ -35,4 +35,5 @@ ifeq ($(USE_CUDA),TRUE)
   LIBRARIES += -lcufft
 else
   LIBRARIES += $(shell pkg-config --libs fftw3)
+  LIBRARIES += $(shell pkg-config --libs lapack)
 endif
