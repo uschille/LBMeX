@@ -4,7 +4,7 @@
 #include <AMReX_FFT.H>
 
 #include "LBM_binary.H"
-//#include "LBM_tests.H"
+#include "LBM_tests.H"
 
 AMREX_GPU_MANAGED Real temperature = 1e-7;
 
@@ -296,7 +296,7 @@ inline void compute_ifft(const Geometry& geom,
     MultiFab realspace_noise_one(realspace_noise, amrex::make_alias, k, 1);
     FabArray<BaseFab<GpuComplex<Real>>> kspace_noise_one(kspace_noise, amrex::make_alias, k, 1);
 
-    //check_kspace_symmetries(geom, kspace_noise_one);
+    check_kspace_symmetries(geom, kspace_noise_one);
 
     fft.backward(kspace_noise_one, realspace_noise_one);
 

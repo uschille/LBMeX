@@ -169,21 +169,21 @@ GpuArray<Real,ndof*ndof> noise_covariance(int kx, int ky, int kz) {
 }
 #endif
 
+AMREX_GPU_MANAGED bool symmetric;
+
 inline void check_kspace_symmetries(const Geometry& geom,
 				    FabArray<BaseFab<GpuComplex<Real>>>& kspace_noise) {
 
   Box domain = geom.Domain();
-  BaseFab<GpuComplex<Real>> kspace_noise_whole(domain);
-  Array4<GpuComplex<Real> const> const& xi = kspace_noise_whole.const_array();
+  BoxArray ba(domain);
+  DistributionMapping dm(Vector<int>{0});
+  FabArray<BaseFab<GpuComplex<Real>>> kspace_noise_whole(ba, dm, 1, 0);
+  kspace_noise_whole.ParallelCopy(kspace_noise);
 
-  // we need the whole BaseFab for the global symmetry check
-  kspace_noise.copyTo(kspace_noise_whole, 0);
-
-  for (int kz=0; kz<domain.length(2); ++kz) {
-    for (int ky=0; ky<domain.length(1); ++ky) {
-      for (int kx=0; kx<domain.length(0); ++kx) {
-
-        bool symmetric = true;
+  const auto & xi_arrays = kspace_noise_whole.arrays();
+  ParallelFor(kspace_noise_whole, IntVect(0), [=] AMREX_GPU_DEVICE(int nbx, int kx, int ky, int kz) {
+        Array4<GpuComplex<Real>> const& xi = xi_arrays[nbx];
+        symmetric = true;
         int kxloc = (kx == 0) ? 0 : domain.length(0) - kx;
         int kyloc = (ky == 0) ? 0 : domain.length(1) - ky;
         int kzloc = (kz == 0) ? 0 : domain.length(2) - kz;
@@ -192,58 +192,59 @@ inline void check_kspace_symmetries(const Geometry& geom,
             && ((ky == 0) || (ky == domain.length(1) - ky))
             && ((kz == 0) || (kz == domain.length(2) - kz))) {
           symmetric &= (xi(kx,ky,kz).imag() == 0);
-          if (!symmetric) {
-            Print() << "symmetry violation 1! ("
-              << kx << "," << ky << "," << kz << ") "
-              << xi(kx,ky,kz).imag() << " "
-              << symmetric << " " << (xi(kx,ky,kz).imag() == 0.)
-              << std::endl;
-            exit(0);
-          }
+          // if (!symmetric) {
+          //   Print() << "symmetry violation 1! ("
+          //     << kx << "," << ky << "," << kz << ") "
+          //     << xi(kx,ky,kz).imag() << " "
+          //     << symmetric << " " << (xi(kx,ky,kz).imag() == 0.)
+          //     << std::endl;
+          //   exit(0);
+          // }
         }
         if (kx > domain.length(0)/2) {
           //Print() << "This should never execute" << std::endl;
           symmetric &= ((xi(kx,ky,kz).real() ==  xi(kxloc,kyloc,kzloc).real())
             && (xi(kx,ky,kz).imag() == -xi(kxloc,kyloc,kzloc).imag()));
-          if (!symmetric) {
-            Print() << "symmetry violation 2! ("
-              << kx << "," << ky << "," << kz << ")"
-              << std::endl;
-            exit(0);
-          }
+          // if (!symmetric) {
+          //   Print() << "symmetry violation 2! ("
+          //     << kx << "," << ky << "," << kz << ")"
+          //     << std::endl;
+          //   exit(0);
+          // }
         } else {
           if ((ky > domain.length(1)/2) && (kx == kxloc)) {
             symmetric &= ((xi(kx,ky,kz).real() ==  xi(kxloc,kyloc,kzloc).real())
               && (xi(kx,ky,kz).imag() == -xi(kxloc,kyloc,kzloc).imag()));
-            if (!symmetric) {
-              Print() << "symmetry violation 3a! ("
-                << kx << "," << ky << "," << kz << ") ("
-                << kxloc << "," << kyloc << "," << kzloc << ")"
-                << " " << xi(kx,ky,kz).real() << " " << xi(kxloc,kyloc,kzloc).real()
-                << " " << xi(kx,ky,kz).imag() << " " << xi(kxloc,kyloc,kzloc).imag()
-                << std::endl;
-              exit(0);
-            }
+            // if (!symmetric) {
+            //   Print() << "symmetry violation 3a! ("
+            //     << kx << "," << ky << "," << kz << ") ("
+            //     << kxloc << "," << kyloc << "," << kzloc << ")"
+            //     << " " << xi(kx,ky,kz).real() << " " << xi(kxloc,kyloc,kzloc).real()
+            //     << " " << xi(kx,ky,kz).imag() << " " << xi(kxloc,kyloc,kzloc).imag()
+            //     << std::endl;
+            //   exit(0);
+            // }
           } else {
             if ((kz > domain.length(2)/2) && (ky == kyloc) && (kx == kxloc)) {
               symmetric &= ((xi(kx,ky,kz).real() ==  xi(kxloc,kyloc,kzloc).real())
                 && (xi(kx,ky,kz).imag() == -xi(kxloc,kyloc,kzloc).imag()));
-              if (!symmetric) {
-                Print() << "symmetry violation 3b! ("
-                  << kx << "," << ky << "," << kz << ") ("
-                  << kxloc << "," << kyloc << "," << kzloc << ")"
-                  << " " << xi(kx,ky,kz).real() << " " << xi(kxloc,kyloc,kzloc).real()
-                  << " " << xi(kx,ky,kz).imag() << " " << xi(kxloc,kyloc,kzloc).imag()
-                  << std::endl;
-                exit(0);
-              }
-            } // if ((kz > domain.length(2)/2) ...
-          } // if ((ky > domain.length(1)/2) ...
-        } // if ((kx > domain.length(0)/2) ...
-      }
-    }
+              // if (!symmetric) {
+              //   Print() << "symmetry violation 3b! ("
+              //     << kx << "," << ky << "," << kz << ") ("
+              //     << kxloc << "," << kyloc << "," << kzloc << ")"
+              //     << " " << xi(kx,ky,kz).real() << " " << xi(kxloc,kyloc,kzloc).real()
+              //     << " " << xi(kx,ky,kz).imag() << " " << xi(kxloc,kyloc,kzloc).imag()
+              //     << std::endl;
+              //   exit(0);
+              // }
+            }
+          }
+        }
+  });
+  if (!symmetric) {
+    Print() << "ERROR: A symmetry violation occured" << std::endl;
+    ParallelDescriptor::Abort(-1, false);
   }
-
 }
 
 GpuArray<Real,ndof*ndof> square_matrix(GpuArray<Real,ndof*ndof> const& L) {
@@ -318,6 +319,7 @@ bool cholesky_test(const int ntrial) {
     return status;
 }
 
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 bool equilibrium_test(int x, int y, int z, const Array4<Real>& h) {
     bool test = true;
 
@@ -363,18 +365,20 @@ bool equilibrium_test(int x, int y, int z, const Array4<Real>& h) {
     return test;
 }
 
+AMREX_GPU_MANAGED bool sucess;
+
 bool equilibrium_test(const Geometry& geom, MultiFab& hydrovs) {
+    sucess = true;
     for (MFIter mfi(hydrovs); mfi.isValid(); ++mfi) {
         const Array4<Real>& h = hydrovs.array(mfi);
         const Box& valid_box = mfi.growntilebox(1);
         ParallelFor(valid_box, [=] AMREX_GPU_DEVICE(int x, int y, int z) {
-            bool test = true;
-            test = equilibrium_test(x, y, z, h);
-            if (!test) {
-                Print() << "equilibrium test failed!" << std::endl;
-                exit(-1);
-            }
+            sucess &= equilibrium_test(x, y, z, h);
         });
+    }
+    if (!sucess) {
+        Print() << "equilibrium test failed!" << std::endl;
+        ParallelDescriptor::Abort(-1, false);
     }
     return false;
 }
@@ -383,6 +387,7 @@ bool unit_tests(const Geometry& geom, MultiFab& hydrovs) {
     bool status = true;
     status &= cholesky_test(100);
     status &= equilibrium_test(geom, hydrovs);
+    if (status) Print() << "Unit tests successful" << std::endl;
     return status;
 }
 
