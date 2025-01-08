@@ -202,15 +202,15 @@ inline void check_kspace_symmetries(const Geometry& geom,
           }
         }
         if (kx > domain.length(0)/2) {
-          //Print() << "This should never execute" << std::endl;
-          symmetric &= ((xi(kx,ky,kz).real() ==  xi(kxloc,kyloc,kzloc).real())
-            && (xi(kx,ky,kz).imag() == -xi(kxloc,kyloc,kzloc).imag()));
-          if (!symmetric) {
-            Print() << "symmetry violation 2! ("
-              << kx << "," << ky << "," << kz << ")"
-              << std::endl;
-            exit(0);
-          }
+          // Print() << "This should never execute" << std::endl;
+          // symmetric &= ((xi(kx,ky,kz).real() ==  xi(kxloc,kyloc,kzloc).real())
+          //   && (xi(kx,ky,kz).imag() == -xi(kxloc,kyloc,kzloc).imag()));
+          // if (!symmetric) {
+          //   Print() << "symmetry violation 2! ("
+          //     << kx << "," << ky << "," << kz << ")"
+          //     << std::endl;
+          //   exit(0);
+          // }
         } else {
           if ((ky > domain.length(1)/2) && (kx == kxloc)) {
             symmetric &= ((xi(kx,ky,kz).real() ==  xi(kxloc,kyloc,kzloc).real())

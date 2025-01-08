@@ -220,62 +220,38 @@ GpuArray<GpuComplex<Real>,ndof> correlated_noise(int kx, int ky, int kz,
   return xi;
 }
 
-// generate k-space noise for all non-conserved moments
-// the required symmetries are not included here because of grid decomposition
-// (this is to allow parallel generation of noise)
-// the symmetries are handled when copying to one whole grid
+// generate k-space noise for all moments
+// the required symmetries for the c2r fft are generated here
+// kspace_noise needs to have 1D domain decomposition
 inline void generate_kspace_noise(const Geometry& geom,
           FabArray<BaseFab<GpuComplex<Real>>>& kspace_noise) {
   const Box domain = geom.Domain();
 
-  // include density? [uschill 07/26/2022]
-
-  // generate noise in all box arrays
+  // generate k-space noise in half-domain
+  // cf. https://github.com/AMReX-Codes/amrex/discussions/4284
   for (MFIter mfi(kspace_noise); mfi.isValid(); ++mfi) {
-
-    const Array4<GpuComplex<Real>>& xi_complex = kspace_noise.array(mfi);
-
-    const Box& box = mfi.fabbox();
-    ParallelForRNG(box, [=] AMREX_GPU_DEVICE(int kx, int ky, int kz, RandomEngine const& engine) {
-      if (kx <= domain.length(0)/2) { // need only half of k-space for c2r FFT
-        GpuArray<GpuComplex<Real>,ndof> xi = {};
-
-	      // compute correlated noise in k-space
-	      xi = correlated_noise(kx,ky,kz,domain,engine);
-
-        for (int i=0; i<ndof; ++i) {
-          xi_complex(kx,ky,kz,i) = xi[i];
+    auto const& xi_array = kspace_noise.array(mfi);
+    ParallelForRNG(mfi.validbox(), [=] AMREX_GPU_DEVICE(int kx, int ky, int kz, RandomEngine const& engine) {
+      int kxloc = (kx == 0) ? 0 : domain.length(0) - kx;
+      int kyloc = (ky == 0) ? 0 : domain.length(1) - ky;
+      int kzloc = (kz == 0) ? 0 : domain.length(2) - kz;
+      if (    ( (kx != kxloc) )
+           || ( (kz <= kzloc) && (ky <= kyloc) )
+           || ( (kz <= kzloc) && (kz != kzloc) ) ) {
+        // compute correlated noise in k-space
+        GpuArray<GpuComplex<Real>,ndof> xi = correlated_noise(kx,ky,kz,domain,engine);
+        for (int i=0; i<ndof; ++i) xi_array(kx,ky,kz,i) = xi[i];
+        if (    ( (kx == kxloc) && (ky <= kyloc) )
+             || ( (kx == kxloc) && (kz <= kzloc) ) ) {
+          for (int i=0; i<ndof; ++i) {
+            // set conjugate symmetry at special locations (forward copy to avoid race conditions)
+            xi_array(kxloc,kyloc,kzloc,i).m_real =  xi_array(kx,ky,kz,i).real();
+            xi_array(kxloc,kyloc,kzloc,i).m_imag = -xi_array(kx,ky,kz,i).imag();
+          }
         }
       }
     });
   }
-
-  // to set the conjugate symmetry we need the whole BaseFab
-  // cf. https://github.com/AMReX-Codes/amrex/discussions/4284
-  BoxArray ba(domain);
-  DistributionMapping dm(Vector<int>{0});
-  FabArray<BaseFab<GpuComplex<Real>>> kspace_noise_whole(ba, dm, ndof, 0);
-  kspace_noise_whole.ParallelCopy(kspace_noise);
-
-  auto const & xi_arrays = kspace_noise_whole.arrays();
-  ParallelFor(kspace_noise_whole, IntVect(0), [=] AMREX_GPU_DEVICE(int nbx, int kx, int ky, int kz) {
-    Array4<GpuComplex<Real>> const& xi = xi_arrays[nbx];
-    for (int i=0; i<ndof; ++i) {
-      // complex conjugate symmetries
-      int kxloc = (kx == 0) ? 0 : domain.length(0) - kx;
-      int kyloc = (ky == 0) ? 0 : domain.length(1) - ky;
-      int kzloc = (kz == 0) ? 0 : domain.length(2) - kz;
-      if (    ( (kz > domain.length(2)/2) )
-            || ( (ky > domain.length(1)/2) && (kz == kzloc) )
-            || ( (kx > domain.length(0)/2) ) ) { // noise was generated for kx <= domain.length(0)/2
-        xi(kx,ky,kz,i).m_real =  xi(kxloc,kyloc,kzloc,i).real();
-        xi(kx,ky,kz,i).m_imag = -xi(kxloc,kyloc,kzloc,i).imag();
-      }
-    }
-  });
-
-  // now distribute kspace_noise_whole back to kspace_noise
-  kspace_noise.ParallelCopy(kspace_noise_whole);
 
 }
 
@@ -313,9 +289,14 @@ inline void compute_ifft(const Geometry& geom,
 inline void generate_correlated_fluctuations(const Geometry& geom,
 				  MultiFab& hydrovs,
 				  MultiFab& noise) {
-  BoxArray ba = noise.boxArray();
-  DistributionMapping dm = noise.DistributionMap();
-  FabArray<BaseFab<GpuComplex<Real>>> kspace_noise(ba, dm, ndof, 0);
+
+  // k-space noise is generated in half domain with 1D domain decomposition
+  IntVect fft_size = geom.Domain().length();
+  fft_size[0] = fft_size[0]/2+1;
+  Box cdomain(IntVect(0), fft_size-1);
+  BoxArray cba = decompose(cdomain, ParallelDescriptor::NProcs(), {true,false,false});
+  DistributionMapping cdm(cba);
+  FabArray<BaseFab<GpuComplex<Real>>> kspace_noise(cba, cdm, ndof, 0);
 
   // generate noise in k-space
   generate_kspace_noise(geom, kspace_noise);
