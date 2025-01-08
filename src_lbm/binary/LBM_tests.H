@@ -1,7 +1,7 @@
 #ifndef LBM_TESTS_H_
 #define LBM_TESTS_H_
 
-void cholesky_decomp(GpuArray<Real,ndof*ndof>& A, const int n, const int bstart);
+AMREX_GPU_HOST_DEVICE void cholesky_decomp(GpuArray<Real,ndof*ndof>& A, const int n, const int bstart);
 void generate_kspace_noise(const Geometry& geom, FabArray<BaseFab<GpuComplex<Real>>>& kspace_noise);
 
 #if 0
