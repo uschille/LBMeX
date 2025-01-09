@@ -13,16 +13,25 @@ using namespace amrex;
 #include "LBM_tests.H"
 
 // default grid parameters
-int nx = 16;
-int max_grid_size_x = nx/2;
+IntVect domain_size(16);
+IntVect max_box_size(32);
 
 // default time stepping parameters
 int nsteps = 10;
 
 inline void ReadInput() {
   ParmParse pp;
+
   /* grid parameters */
-  pp.query("nx", nx);
+  pp.query("nx", domain_size[0]);
+  domain_size[2] = domain_size[1] = domain_size[0]; // default to cubic box
+  pp.query("ny", domain_size[1]);
+  pp.query("nz", domain_size[2]);
+
+  pp.query("max_grid_size_x", max_box_size[0]);
+  max_box_size[2] = max_box_size[1] = max_box_size[0]; // default to same maxSize in all directions
+  pp.query("max_grid_size_y", max_box_size[1]);
+  pp.query("max_grid_size_z", max_box_size[2]);
 
   /* time stepping and output parameters */
   pp.query("nsteps", nsteps);
@@ -63,14 +72,14 @@ void main_driver(const char* argv) {
   // set up Box and Geomtry
   RealBox real_box({0.,0.,0.},{1.,1.,1.});
   IntVect dom_lo(0, 0, 0);
-  IntVect dom_hi(nx-1, nx-1, nx-1);
+  IntVect dom_hi(domain_size-1);
   Array<int,3> periodicity({1,1,1});
   int nghost = 2; // need two halo layers for gradients
 
   Box domain(dom_lo, dom_hi);
   Geometry geom(domain, real_box, CoordSys::cartesian, periodicity);
   BoxArray ba(domain);
-  ba.maxSize(IntVect(max_grid_size_x)); // chop domain into boxes
+  ba.maxSize(max_box_size); // chop domain into boxes
   DistributionMapping dm(ba);
 
   // set up MultiFabs
