@@ -207,17 +207,17 @@ inline Vector<std::string> hydrovars_names(const int numVars) {
   std::string name;
   int cnt = 0;
   // rho, phi
-  if (cnt<numVars) var_names[cnt++] = "rho";
-  if (cnt<numVars) var_names[cnt++] = "phi";
+  if (cnt<numVars) var_names[cnt++] = "rhoA";
+  if (cnt<numVars) var_names[cnt++] = "rhoB";
   // u
   for (int d=0; d<AMREX_SPACEDIM && cnt<numVars; d++) {
-    name = "u";
+    name = "uA";
     name += (120+d);
     var_names[cnt++] = name;
   }
   // j
   for (int d=0; d<AMREX_SPACEDIM && cnt<numVars; d++) {
-    name = "j";
+    name = "uB";
     name += (120+d);
     var_names[cnt++] = name;
   }
@@ -242,9 +242,9 @@ void hydrovars(int x, int y, int z,
   const Array1D<Real,0,nvel> mg = moments(x,y,z,g);
   h(x,y,z,0) = mf(0);
   h(x,y,z,1) = mg(0);
-  for (int i=1; i<=AMREX_SPACEDIM; ++i) {     // momentum/diffusive flux i=1..3
-    h(x,y,z,i+1) = mf(i)/mf(0);               // f to be stored in 2..4
-    h(x,y,z,i+1+AMREX_SPACEDIM) = mg(i);      // g to be stored in 5..7
+  for (int i=1; i<=AMREX_SPACEDIM; ++i) {     // momentum/velocity i=1..3
+    h(x,y,z,i+1) = mf(i)/mf(0);               // u_f to be stored in 2..4
+    h(x,y,z,i+1+AMREX_SPACEDIM) = mg(i)/mg(0);// u_g to be stored in 5..7
   }
   for (int i=1+AMREX_SPACEDIM; i<nvel; ++i) { // remaining moments i=4..18
     h(x,y,z,i+1+AMREX_SPACEDIM) = mf(i);      // f to be stored in 8..22
