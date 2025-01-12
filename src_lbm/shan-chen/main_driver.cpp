@@ -18,6 +18,9 @@ IntVect max_box_size(32);
 // default time stepping parameters
 int nsteps = 10;
 
+// default output parameters
+int plot_SF = 0;
+
 inline void ReadInput() {
   ParmParse pp;
 
@@ -32,13 +35,19 @@ inline void ReadInput() {
   pp.query("max_grid_size_y", max_box_size[1]);
   pp.query("max_grid_size_z", max_box_size[2]);
 
-  /* time stepping and output parameters */
-  pp.query("nsteps", nsteps);
-  pp.query("plot_int", plot_int);
+  // initial condition
+  init_cond = "droplet";
+  pp.query("init_cond", init_cond);
+  pp.query("init_frac", init_frac);
 
   // thermodynamic parameters
   pp.query("G", G);
   pp.query("temperature", temperature);
+
+  /* time stepping and output parameters */
+  pp.query("nsteps", nsteps);
+  pp.query("plot_int", plot_int);
+  pp.query("plot_SF", plot_SF);
 
 }
 
@@ -48,10 +57,10 @@ inline void WriteOutput(int step,
       StructFact& structFact) {
   // set up variable names for output
   const int zero_avg = 1;
-  const Vector<std::string> var_names = hydrovars_names(2*nvel);
+  const Vector<std::string> var_names = hydrovars_names(hydrovs.nComp());
   const std::string& pltfile = amrex::Concatenate("plt",step,5);
   WriteSingleLevelPlotfile(pltfile, hydrovs, var_names, geom, Real(step), step);
-  structFact.WritePlotFile(step, static_cast<Real>(step), geom, "plt_SF", zero_avg);
+  if (plot_SF > 0) structFact.WritePlotFile(step, static_cast<Real>(step), geom, "plt_SF", zero_avg);
 }
 
 void main_driver(const char* argv) {
@@ -92,7 +101,7 @@ void main_driver(const char* argv) {
   StructFact structFact(ba, dm, var_names, var_scaling, pairA, pairB);
 
   // INITIALIZE
-  LBM_init_mixture(fold, gold, hydrovs);
+  LBM_init(geom, fold, gold, hydrovs);
   if (plot_int > 0) WriteOutput(0, geom, hydrovs, structFact);
   Print() << "LB initialized lattice " << domain <<"\n" << ba << dm << std::endl;
 
@@ -101,7 +110,7 @@ void main_driver(const char* argv) {
   // TIMESTEP
   for (int step=1; step <= nsteps; ++step) {
     LBM_timestep(geom, fold, gold, fnew, gnew, hydrovs);
-    structFact.FortStructure(hydrovs, geom);
+    if (plot_SF > 0) structFact.FortStructure(hydrovs, geom);
     if (plot_int > 0 && step%plot_int ==0) {
       WriteOutput(step, geom, hydrovs, structFact);
       Print() << "LB step " << step << std::endl;

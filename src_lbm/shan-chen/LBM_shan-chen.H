@@ -3,12 +3,18 @@
 
 #include "LBM_d3q19.H"
 
+// default initial condition
+std::string init_cond = "mixture";
+
 AMREX_GPU_MANAGED Real G = 1.5;
-AMREX_GPU_MANAGED Real rhoA = 2.3; // values reported by Belardinelli et al. [Phys. Rev. E 91, 023313 (2015)]
-AMREX_GPU_MANAGED Real rhoB = 0.06;
-AMREX_GPU_MANAGED Real kappa = 0.174;
+AMREX_GPU_MANAGED Real rho_hi = 2.3; // values reported by Belardinelli et al. [Phys. Rev. E 91, 023313 (2015)]
+AMREX_GPU_MANAGED Real rho_lo = 0.06;
+AMREX_GPU_MANAGED Real sigma = 0.174; // interfacial tension
+AMREX_GPU_MANAGED Real alpha = 6; // interface width
 
 AMREX_GPU_MANAGED Real temperature = 1e-5;
+
+AMREX_GPU_MANAGED Real init_frac = 0.5; // fractional size of droplet or stripe
 
 AMREX_GPU_CONSTANT Real lambda_d = 1.0;
 AMREX_GPU_CONSTANT Real lambda_b = 1.0;
@@ -279,7 +285,7 @@ inline void LBM_timestep(const Geometry& geom,
 inline void LBM_init_mixture(MultiFab& mf,
 			     MultiFab& mg,
 			     MultiFab& hydrovs) {
-  const Real rho = 0.5*(rhoA+rhoB);
+  const Real rho = 0.5*(::rho_hi+::rho_lo);
   for (MFIter mfi(mf); mfi.isValid(); ++mfi) {
     const Array4<Real>& f = mf.array(mfi);
     const Array4<Real>& g = mg.array(mfi);
@@ -295,77 +301,63 @@ inline void LBM_init_mixture(MultiFab& mf,
 }
 
 // flat interface between C1 and C2
-inline void LBM_init_flat_interface(const Geometry& geom,
+inline void LBM_init_stripe(const Real frac,
+            const Geometry& geom,
 				    MultiFab& mf,
 				    MultiFab& mg,
 				    MultiFab& hydrovs) {
+  GpuArray<Real,3> dx = geom.CellSizeArray();
   const IntVect box = geom.Domain().length();
-
+  const Real rho_t = ::rho_hi + ::rho_lo;
+  const Real pos_lo = -0.5*frac;
+  const Real pos_hi = 0.5*frac;
   auto const & f = mf.arrays();
   auto const & g = mg.arrays();
-  GpuArray<Real,3> dx = geom.CellSizeArray();
   ParallelFor(mf, IntVect(0), [=] AMREX_GPU_DEVICE(int nbx, int x, int y, int z) {
-    const Real rx = x-box[0]/2;
-    const Real ry = y-box[1]/2;
-#if (AMREX_SPACEDIM == 2)
-    const Real r2 = rx*rx+ry*ry;
-#elif (AMREX_SPACEDIM == 3)
-    const Real rz = z-box[0]/2;
-    const Real r2 = rx*rx+ry*ry+rz*rz;
-#endif
-
-    const Real rho=1.0;
-    Real phi;
-
-    if (rx < 0.) {
-      phi = 0.5;
-    } else {
-      phi = -0.5;
-    }
-
+    const Real pos = z-box[2]/2;
+    const Real rho =  (::rho_hi-::rho_lo)*0.5*(std::tanh((pos-pos_lo)/std::sqrt(alpha)) + std::tanh((pos_hi-pos)/std::sqrt(alpha))) + ::rho_lo;
     for (int i=0; i<nvel; i++) {
       f[nbx](x,y,z,i) = w[i]*rho;
-      g[nbx](x,y,z,i) = w[i]*phi;
+      g[nbx](x,y,z,i) = w[i]*(rho_t-rho);
     }
-
   });
   hydrovars(mf, mg, hydrovs);
 }
 
 // binary droplet of C1 and C2
-inline void LBM_init_droplet(const Real r,
+inline void LBM_init_droplet(const Real dfrac,
 			     const Geometry& geom,
 			     MultiFab& mf,
 			     MultiFab& mg,
 			     MultiFab& hydrovs) {
+  GpuArray<Real,3> dx = geom.CellSizeArray();
   const IntVect box = geom.Domain().length();
-  const Real R = r*box[0];
-
+  const Real R = 0.5*dfrac*box[0];
+  const Real rho_t = ::rho_hi + ::rho_lo;
   auto const & f = mf.arrays();
   auto const & g = mg.arrays();
-  GpuArray<Real,3> dx = geom.CellSizeArray();
   ParallelFor(mf, IntVect(0), [=] AMREX_GPU_DEVICE(int nbx, int x, int y, int z) {
     const Real rx = x-box[0]/2;
     const Real ry = y-box[1]/2;
-#if (AMREX_SPACEDIM == 2)
-    const Real r2 = rx*rx+ry*ry;
-#elif (AMREX_SPACEDIM == 3)
-    const Real rz = z-box[0]/2;
-    const Real r2 = rx*rx+ry*ry+rz*rz;
-#endif
-    const Real r = sqrt(r2);
-
-    const Real rho = 1.0;
-    const Real phi0 = 0.5;
-    const Real phi = phi0*tanh((R-r)/sqrt(kappa));
-
+    const Real rz = z-box[2]/2;
+    const Real r = std::sqrt(rx*rx+ry*ry+rz*rz);
+    const Real rho = (::rho_hi-::rho_lo)*0.5*(1.+std::tanh((R-r)/std::sqrt(alpha))) + ::rho_lo;
     for (int i=0; i<nvel; i++) {
       f[nbx](x,y,z,i) = w[i]*rho;
-      g[nbx](x,y,z,i) = w[i]*phi;
+      g[nbx](x,y,z,i) = w[i]*(rho_t-rho);
     }
-
   });
   hydrovars(mf, mg, hydrovs);
+}
+
+inline void LBM_init(const Geometry& geom, MultiFab& mf, MultiFab& mg, MultiFab& hydrovs) {
+  if (init_cond == "mixture") LBM_init_mixture(mf, mg, hydrovs);
+  else if (init_cond == "stripe") LBM_init_stripe(init_frac, geom, mf, mg, hydrovs);
+  else if (init_cond == "droplet") LBM_init_droplet(init_frac, geom, mf, mg, hydrovs);
+  else {
+    Print() << "ERROR: Unkown init_cond";
+    ParallelDescriptor::Abort(-1, false);
+  }
 }
 
 #endif
