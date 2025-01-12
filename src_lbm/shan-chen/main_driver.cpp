@@ -47,8 +47,7 @@ inline void WriteOutput(int step,
       StructFact& structFact) {
   // set up variable names for output
   const int zero_avg = 1;
-  const int nvars = 5;
-  const Vector<std::string> var_names = hydrovars_names(nvars);
+  const Vector<std::string> var_names = hydrovars_names(2*nvel);
   const std::string& pltfile = amrex::Concatenate("plt",step,5);
   WriteSingleLevelPlotfile(pltfile, hydrovs, var_names, geom, Real(step), step);
   structFact.WritePlotFile(step, static_cast<Real>(step), geom, "plt_SF", zero_avg);

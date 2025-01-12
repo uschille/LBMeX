@@ -282,8 +282,8 @@ inline void LBM_init_mixture(MultiFab& mf,
     const Array4<Real>& f = mf.array(mfi);
     const Array4<Real>& g = mg.array(mfi);
     ParallelForRNG(valid_box, [=] AMREX_GPU_DEVICE(int x, int y, int z, RandomEngine const& engine) {
+      const Real noise = RandomNormal(0., 1.e-6, engine);
       for (int i=0; i<nvel; i++) {
-        const Real noise = RandomNormal(0., temperature, engine);
         f(x,y,z,i) = w[i]*(rho1 + noise);
         g(x,y,z,i) = w[i]*(rho2 - noise);
       }
