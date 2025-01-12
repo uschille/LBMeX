@@ -61,24 +61,24 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 Array1D<Real,0,nvel> force_moments(const Real& rho, const RealVect& v, const RealVect& a) {
   Array1D<Real,0,nvel> phi;
 
-  Real av[3][3];
-  av[0][0] = a[0]*v[0];
-  av[1][1] = a[1]*v[1];
-  av[2][2] = a[2]*v[2];
-  av[0][1] = a[0]*v[1];
-  av[1][2] = a[1]*v[2];
-  av[2][0] = a[2]*v[0];
+  /* density mode */
+  phi(0) = 0.0;
 
-  for (int i=0; i<nvel; ++i) {
-    phi(i)  = 3.*w[i]*(a[0]*c[i][0]+a[1]*c[i][1]+a[2]*c[i][2]);
-    phi(i) += 9./2.*w[i]*((av[0][0]*c[i][0]+2.*av[0][1]*c[i][1])*c[i][0]
-		                     +(av[1][1]*c[i][1]+2.*av[1][2]*c[i][2])*c[i][1]
-		                     +(av[2][2]*c[i][2]+2.*av[2][0]*c[i][0])*c[i][2]);
-    phi(i) -= 3./2.*w[i]*(av[0][0]+av[1][1]+av[2][2]);
-    phi(i) *= rho;
-  }
+  /* momentum modes */
+  phi(1) = rho*a[0];
+  phi(2) = rho*a[1];
+  phi(3) = rho*a[2];
 
-  phi = moments(phi);
+  /* stress modes */
+  phi(4) = rho*(a[0]*v[0] + a[1]*v[1] + a[2]*v[2]);
+  phi(5) = rho*(2.*a[0]*v[0] - a[1]*v[1] - a[2]*v[2]);
+  phi(6) = rho*(a[1]*v[1] - a[2]*v[2]);
+  phi(7) = 0.5*rho*(a[0]*v[1]+a[1]*v[0]);
+  phi(8) = 0.5*rho*(a[1]*v[2]+a[2]*v[1]);
+  phi(9) = 0.5*rho*(a[2]*v[0]+a[0]*v[2]);
+
+  /* kinetic modes  */
+  for (int i=10; i<nvel; ++i) phi(i) = 0.0;
 
   return phi;
 }
