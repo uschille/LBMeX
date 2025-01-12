@@ -3,11 +3,12 @@
 
 #include "LBM_d3q19.H"
 
-AMREX_GPU_MANAGED Real kappa = 0.01;
+AMREX_GPU_MANAGED Real G = 1.5;
+AMREX_GPU_MANAGED Real rhoA = 2.3; // values reported by Belardinelli et al. [Phys. Rev. E 91, 023313 (2015)]
+AMREX_GPU_MANAGED Real rhoB = 0.06;
+AMREX_GPU_MANAGED Real kappa = 0.174;
 
-AMREX_GPU_MANAGED Real G = 0.4;
-
-AMREX_GPU_MANAGED Real temperature = 0.0;
+AMREX_GPU_MANAGED Real temperature = 1e-5;
 
 AMREX_GPU_CONSTANT Real lambda_d = 1.0;
 AMREX_GPU_CONSTANT Real lambda_b = 1.0;
@@ -119,19 +120,22 @@ void collide(int x, int y, int z,
   Array1D<Real,0,nvel> mf, mg, mfEq, mgEq;
   Array1D<Real,0,nvel> phif, phig;
   Array1D<Real,0,2*nvel> xi;
+  Array<Real,2> rho;
+  Array<RealVect,2> v, a;
+  RealVect v_b, a_b;
 
   mf = moments(x,y,z,f);
   mg = moments(x,y,z,g);
 
-  const Array<Real,2> rho = { mf(0), mg(0) };
-  Array<RealVect,2> v, a;
-  v[0] = { mf(1), mf(2), mf(3) };
-  v[1] = { mg(1), mg(2), mg(3) };
+  rho[0] = mf(0);
+  rho[1] = mg(0);
 
-  a[0] = -G*cs2*gradient(x,y,z,h,0);
-  a[1] = -G*cs2*gradient(x,y,z,h,1);
+  v[0] = RealVect(mf(1), mf(2), mf(3))/mf(0);
+  v[1] = RealVect(mg(1), mg(2), mg(3))/mg(0);
 
-  RealVect v_b, a_b;
+  a[0] = -G*cs2*gradient(x,y,z,h,1);
+  a[1] = -G*cs2*gradient(x,y,z,h,0);
+
   v_b = (rho[0]*v[0]+rho[1]*v[1])/(rho[0]+rho[1]);
   a_b = (rho[0]*a[0]+rho[1]*a[1])/(rho[0]+rho[1]);
 
@@ -275,17 +279,15 @@ inline void LBM_timestep(const Geometry& geom,
 inline void LBM_init_mixture(MultiFab& mf,
 			     MultiFab& mg,
 			     MultiFab& hydrovs) {
-  const Real rho1 = 0.5;
-  const Real rho2 = 0.5;
+  const Real rho = 0.5*(rhoA+rhoB);
   for (MFIter mfi(mf); mfi.isValid(); ++mfi) {
-    const Box& valid_box = mfi.validbox();
     const Array4<Real>& f = mf.array(mfi);
     const Array4<Real>& g = mg.array(mfi);
-    ParallelForRNG(valid_box, [=] AMREX_GPU_DEVICE(int x, int y, int z, RandomEngine const& engine) {
-      const Real noise = RandomNormal(0., 1.e-6, engine);
+    ParallelForRNG(mfi.validbox(), [=] AMREX_GPU_DEVICE(int x, int y, int z, RandomEngine const& engine) {
+      const Real noise = 0.01*RandomNormal(0., 1., engine);
       for (int i=0; i<nvel; i++) {
-        f(x,y,z,i) = w[i]*(rho1 + noise);
-        g(x,y,z,i) = w[i]*(rho2 - noise);
+        f(x,y,z,i) = w[i]*(rho + noise);
+        g(x,y,z,i) = w[i]*(rho - noise);
       }
     });
   }

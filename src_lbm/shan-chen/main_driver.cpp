@@ -37,6 +37,7 @@ inline void ReadInput() {
   pp.query("plot_int", plot_int);
 
   // thermodynamic parameters
+  pp.query("G", G);
   pp.query("temperature", temperature);
 
 }
