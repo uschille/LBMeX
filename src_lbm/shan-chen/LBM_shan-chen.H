@@ -136,8 +136,8 @@ void collide(int x, int y, int z,
   rho[0] = mf(0);
   rho[1] = mg(0);
 
-  v[0] = RealVect(mf(1), mf(2), mf(3))/mf(0);
-  v[1] = RealVect(mg(1), mg(2), mg(3))/mg(0);
+  v[0] = (mf(0) > FLT_EPSILON) ? RealVect(mf(1), mf(2), mf(3))/mf(0) : RealVect(0.);
+  v[1] = (mg(0) > FLT_EPSILON) ? RealVect(mg(1), mg(2), mg(3))/mg(0) : RealVect(0.);
 
   a[0] = -G*cs2*gradient(x,y,z,h,1);
   a[1] = -G*cs2*gradient(x,y,z,h,0);
