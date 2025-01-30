@@ -65,29 +65,45 @@ Real laplacian(int x, int y, int z, const Array4<Real>& field, int icomp) {
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-Array1D<Real,0,nvel> force_moments(const Real& rho, const RealVect& v, const RealVect& a) {
-  Array1D<Real,0,nvel> phi;
+Array<Array1D<Real,0,nvel>,2> force_moments(const Array<Real,2>& rhoa, Array<RealVect,2>& va, const Array<RealVect,2>& aa, const Array1D<Real, 0, 2*nvel>& xia) {
+  Array<Array1D<Real,0,nvel>,2> phia;
 
-  /* density mode */
-  phi(0) = 0.0;
+  for (int i=0; i<2; ++i) {
+    int j = (i+1)%2;
 
-  /* momentum modes */
-  phi(1) = rho*a[0];
-  phi(2) = rho*a[1];
-  phi(3) = rho*a[2];
+    RealVect xi;
+    for (int k=0; k<AMREX_SPACEDIM; ++k) xi[0] = xia(i*nvel+k+1);
 
-  /* stress modes */
-  phi(4) = rho*(a[0]*v[0] + a[1]*v[1] + a[2]*v[2]);
-  phi(5) = rho*(2.*a[0]*v[0] - a[1]*v[1] - a[2]*v[2]);
-  phi(6) = rho*(a[1]*v[1] - a[2]*v[2]);
-  phi(7) = 0.5*rho*(a[0]*v[1]+a[1]*v[0]);
-  phi(8) = 0.5*rho*(a[1]*v[2]+a[2]*v[1]);
-  phi(9) = 0.5*rho*(a[2]*v[0]+a[0]*v[2]);
+    // express v, v' in terms of v̄, v̄' [Belardinelli et al. Eq. (71)]
+    va[i] = va[i] + 0.5*( aa[i] + lambda_d*rhoa[j]/(rhoa[i]+rhoa[j])*(va[i]-va[j]+0.5*(aa[i]-aa[j])) + (1-0.5*lambda_d)*xi[i]/rhoa[i] );
 
-  /* kinetic modes  */
-  for (int i=10; i<nvel; ++i) phi(i) = 0.0;
+    Array1D<Real,0,nvel>& phi = phia[i];
+    Real const& rho = rhoa[i];
+    RealVect const& v = va[i];
+    RealVect const& a = aa[i];
 
-  return phi;
+    /* density mode */
+    phi(0) = 0.0;
+
+    /* momentum modes */
+    phi(1) = rho*a[0];
+    phi(2) = rho*a[1];
+    phi(3) = rho*a[2];
+
+    /* stress modes */
+    phi(4) = rho*(a[0]*v[0] + a[1]*v[1] + a[2]*v[2]);
+    phi(5) = rho*(2.*a[0]*v[0] - a[1]*v[1] - a[2]*v[2]);
+    phi(6) = rho*(a[1]*v[1] - a[2]*v[2]);
+    phi(7) = 0.5*rho*(a[0]*v[1]+a[1]*v[0]);
+    phi(8) = 0.5*rho*(a[1]*v[2]+a[2]*v[1]);
+    phi(9) = 0.5*rho*(a[2]*v[0]+a[0]*v[2]);
+
+    /* kinetic modes  */
+    for (int i=10; i<nvel; ++i) phi(i) = 0.0;
+
+  }
+
+  return phia;
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
@@ -124,7 +140,7 @@ void collide(int x, int y, int z,
        const Array4<Real>& h,
        const RandomEngine& engine) {
   Array1D<Real,0,nvel> mf, mg, mfEq, mgEq;
-  Array1D<Real,0,nvel> phif, phig;
+  Array<Array1D<Real,0,nvel>,2> phi;
   Array1D<Real,0,2*nvel> xi;
   Array<Real,2> rho;
   Array<RealVect,2> v, a;
@@ -148,10 +164,11 @@ void collide(int x, int y, int z,
   mfEq = equilibrium_moments(rho[0], v_b+0.5*a_b);
   mgEq = equilibrium_moments(rho[1], v_b+0.5*a_b);
 
-  phif = force_moments(rho[0], v[0], a[0]);
-  phig = force_moments(rho[1], v[1], a[1]);
-
   xi = thermal_noise(rho, engine);
+
+  phi = force_moments(rho, v, a, xi);
+  Array1D<Real,0,nvel> const& phif = phi[0];
+  Array1D<Real,0,nvel> const& phig = phi[1];
 
   for (int i=0; i<nvel; ++i) {
     mf(i) = mf(i) - lambda_f[i] * (mf(i) - mfEq(i)) + (1.-0.5*lambda_f[i])*phif(i) + xi(i);
