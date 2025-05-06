@@ -331,14 +331,15 @@ GpuArray<Real,ndof> uncorrelated_noise(const Real rho0, const Real phi0, const R
 }
 
 // generate real-space noise for all non-conserved moments
-inline void generate_fluctuations(const Geometry& geom, MultiFab& hydrovs, MultiFab& noise) {
+inline void generate_fluctuations(const Geometry& geom, MultiFab& hydrovs, MultiFab& refstate, MultiFab& noise) {
   for (MFIter mfi(noise); mfi.isValid(); ++mfi) {
     const Box& box = mfi.validbox();
     const Array4<Real>& xi = noise.array(mfi);
     const Array4<Real>& h = hydrovs.array(mfi);
+    const Array4<Real>& ref = refstate.array(mfi);
     ParallelForRNG(box, [=] AMREX_GPU_DEVICE(int x, int y, int z, RandomEngine const& engine) {
-      const Real rho0 = h(x,y,z,0);
-      const Real phi0 = h(x,y,z,1);
+      const Real rho0 = ref(x,y,z,0);
+      const Real phi0 = ref(x,y,z,1);
       GpuArray<Real,ndof> r = uncorrelated_noise(rho0,phi0,engine);
       for (int i=0; i<ndof; ++i) {
         xi(x,y,z,i) = r[i];
@@ -417,7 +418,7 @@ void collide_stream(int x, int y, int z,
 inline void collide_stream(const Geometry& geom,
 			   MultiFab& fold, MultiFab& gold,
 			   MultiFab& fnew, MultiFab& gnew,
-			   MultiFab& hydrovs, MultiFab& noise) {
+			   MultiFab& hydrovs, MultiFab& refstate, MultiFab& noise) {
   const int halo = 1; // need to push from first halo layer into domain
   fold.FillBoundary(geom.periodicity());
   gold.FillBoundary(geom.periodicity());
@@ -443,13 +444,13 @@ inline void collide_stream(const Geometry& geom,
 inline void LBM_timestep(const Geometry& geom,
 			 MultiFab& fold, MultiFab& gold,
 			 MultiFab& fnew, MultiFab& gnew,
-			 MultiFab& hydrovs, MultiFab& noise) {
+			 MultiFab& hydrovs, MultiFab& refstate, MultiFab& noise) {
 #if UNCORRELATED_NOISE
     generate_fluctuations(geom, hydrovs, noise);
 #else
     generate_correlated_fluctuations(geom, hydrovs, noise);
 #endif
-  collide_stream(geom, fold, gold, fnew, gnew, hydrovs, noise);
+  collide_stream(geom, fold, gold, fnew, gnew, hydrovs, refstate, noise);
   hydrovars(fold, gold, hydrovs);
 }
 
