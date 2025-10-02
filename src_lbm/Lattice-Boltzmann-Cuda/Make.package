@@ -1,0 +1,11 @@
+CEXE_headers += LBM_d3q19.H
+CEXE_headers += LBM_binary.H
+CEXE_headers += Debug.H
+CEXE_headers += AMReX_FileIO.H
+
+#CEXE_headers += LBM_hydrovs.H
+#CEXE_headers += externlib.H
+#CEXE_headers += AMReX_Analysis.H
+#CEXE_headers += AMReX_DFT.H
+
+CEXE_sources += main_driver.cpp #CodingNote_FFT.cpp
