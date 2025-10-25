@@ -3,7 +3,12 @@
 
 const int nvel = 19;
 
-const Real cs2 = 1./3.;
+AMREX_GPU_MANAGED Real cs2 = 1./3.;
+AMREX_GPU_MANAGED Real cs4 = (1./3.) * (1./3.);
+//AMREX_GPU_MANAGED Real local_mass = T/cs2;//0.;
+
+AMREX_GPU_MANAGED Real kBT = 1e-5;//0.;//cs2*local_mass;
+
 
 AMREX_GPU_MANAGED IntVect c[19] = {
   {  0,  0,  0 },
@@ -27,51 +32,29 @@ AMREX_GPU_MANAGED IntVect c[19] = {
   { -1,  0,  1 }
 };
 
-AMREX_GPU_MANAGED Real e[19][19] = {
-  { 1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1 }, // 1
-  { 0,  1, -1,  0,  0,  0,  0,  1, -1,  1, -1,  0,  0,  0,  0,  1, -1,  1, -1 }, // cx
-  { 0,  0,  0,  1, -1,  0,  0,  1, -1, -1,  1,  1, -1,  1, -1,  0,  0,  0,  0 }, // cy
-  { 0,  0,  0,  0,  0,  1, -1,  0,  0,  0,  0,  1, -1, -1,  1,  1, -1, -1,  1 }, // cz
-  { -1, 0,  0,  0,  0,  0,  0,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1 }, // c2-1
-  { 0,  2,  2, -1, -1, -1, -1,  1,  1,  1,  1, -2, -2, -2, -2,  1,  1,  1,  1 }, // 3*cx2-c2
-  { 0,  0,  0,  1,  1, -1, -1,  1,  1,  1,  1,  0,  0,  0,  0, -1, -1, -1, -1 }, // cy2-cz2
-  { 0,  0,  0,  0,  0,  0,  0,  1,  1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0 }, // cx*cy
-  { 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  1, -1, -1,  0,  0,  0,  0 }, // cy*cz
-  { 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  1, -1, -1 }, // cz*cx
-  { 0, -2,  2,  0,  0,  0,  0,  1, -1,  1, -1,  0,  0,  0,  0,  1, -1,  1, -1 }, // (3*c2-5)*cx
-  { 0,  0,  0, -2,  2,  0,  0,  1, -1, -1,  1,  1, -1,  1, -1,  0,  0,  0,  0 }, // (3*c2-5)*cy
-  { 0,  0,  0,  0,  0, -2,  2,  0,  0,  0,  0,  1, -1, -1,  1,  1, -1, -1,  1 }, // (3*c2-5)*cz
-  { 0,  0,  0,  0,  0,  0,  0,  1, -1,  1, -1,  0,  0,  0,  0,  0,  0,  0,  0 }, // (cy2-cz2)*cx
-  { 0,  0,  0,  0,  0,  0,  0, -1,  1,  1, -1,  1, -1,  1, -1,  0,  0,  0,  0 }, // (cz2-cx2)*cy
-  { 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, -1,  1,  1, -1,  1, -1, -1,  1 }, // (cx2-cy2)*cz
-  { 1, -2, -2, -2, -2, -2, -2,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1 }, // 3*c4-6*c2+1
-  { 0, -2, -2,  1,  1,  1,  1,  1,  1,  1,  1, -2, -2, -2, -2,  1,  1,  1,  1 }, // (2*c2-3)*(3cx2-c2)
-  { 0,  0,  0, -1, -1,  1,  1,  1,  1,  1,  1,  0,  0,  0,  0, -1, -1, -1, -1 }  // (2*c2-3)*(cy2-cz2)
-};
-
 AMREX_GPU_MANAGED Real w[19] = {
-  1./3.,
-  1./18.,
-  1./18.,
-  1./18.,
-  1./18.,
-  1./18.,
-  1./18.,
-  1./36.,
-  1./36.,
-  1./36.,
-  1./36.,
-  1./36.,
-  1./36.,
-  1./36.,
-  1./36.,
-  1./36.,
-  1./36.,
-  1./36.,
-  1./36.
+  1./3.,  //0
+  1./18., //1
+  1./18., //2
+  1./18., //3
+  1./18., //4
+  1./18., //5
+  1./18., //6
+  1./36., //7
+  1./36., //8
+  1./36., //9
+  1./36., //10
+  1./36., //11
+  1./36., //12
+  1./36., //13
+  1./36., //14
+  1./36., //15
+  1./36., //16
+  1./36., //17                              
+  1./36.  //18
 };
 
-AMREX_GPU_MANAGED Real b[19] = {
+AMREX_GPU_MANAGED Real b[19] = { // basis vectors' norm
   1.0,
   1./3.,
   1./3.,
@@ -93,7 +76,7 @@ AMREX_GPU_MANAGED Real b[19] = {
   4./9.
 };
 
-AMREX_GPU_MANAGED Real wg[19][3][3] = {
+AMREX_GPU_MANAGED Real wg[19][3][3] = { 
   { {      0., 0., 0. }, { 0.,     0.,  0. }, { 0., 0.,     0.  } },
   { {  5./36., 0., 0. }, { 0., -1./9.,  0. }, { 0., 0., -1./9.  } },
   { {  5./36., 0., 0. }, { 0., -1./9.,  0. }, { 0., 0., -1./9.  } },
@@ -120,7 +103,7 @@ Array1D<Real,0,nvel> moments(const Array1D<Real,0,nvel>& fsite) {
   Real f;
   Real mc0, mc1, mc2;
   Real mx1, my1, mz1, mx2, my2, mz2, mx3, my3, mz3;
-  Real mxy, mxz, myz, mxx1, myy1, mzz1, mxx2, myy2, mzz2;
+  Real mxy, mxz, myz, mxx1, myy1, mzz1, mxx2, myy2, mzz2; 
   Array1D<Real,0,nvel> m;
 
   f = fsite( 0); mc0  = f;
@@ -130,10 +113,10 @@ Array1D<Real,0,nvel> moments(const Array1D<Real,0,nvel>& fsite) {
   f = fsite( 4); my1 -= f; myy1 += f;
   f = fsite( 5); mz1  = f; mzz1  = f;
   f = fsite( 6); mz1 -= f; mzz1 += f;
-  f = fsite( 7); mx2  = f; my3  = f; mxy  = f; mxx2  = f;
+  f = fsite( 7); mx2  = f; my3  = f; mxy  = f; mxx2  = f;   // mx[k], k used to label the grid groups used in the following expression, same for my,mz;
   f = fsite( 8); mx2 -= f; my3 -= f; mxy += f; mxx2 += f;
   f = fsite( 9); mx2 += f; my3 -= f; mxy -= f; mxx2 += f;
-  f = fsite(10); mx2 -= f; my3 += f; mxy -= f; mxx2 += f;
+  f = fsite(10); mx2 -= f; my3 += f; mxy -= f; mxx2 += f;    // subscript xy means cix*ciy
   f = fsite(11); my2  = f; mz3  = f; myz  = f; myy2  = f;
   f = fsite(12); my2 -= f; mz3 -= f; myz += f; myy2 += f;
   f = fsite(13); my2 += f; mz3 -= f; myz -= f; myy2 += f;
@@ -146,18 +129,22 @@ Array1D<Real,0,nvel> moments(const Array1D<Real,0,nvel>& fsite) {
   mc1 = mxx1 + myy1 + mzz1;
   mc2 = mxx2 + myy2 + mzz2;
 
+  // see "LATTICE BOLTZMANN SIMULATIONS OF SOFT MATTER SYSTEMS, Dunweg..."
   m( 0) = mc0 + mc1 + mc2;
   m( 1) = mx1 + mx2 + mx3;
   m( 2) = my1 + my2 + my3;
   m( 3) = mz1 + mz2 + mz3;
-  m( 4) = mc2 - mc0;
-  m( 5) = 3.*mxx1 - mc1 + mc2 - 3.*myy2;
-  m( 6) = myy1 - mzz1 + mxx2 - mzz2;
+  m( 4) = mc2 - mc0; // sum_i [fi*cix^2+fi*ciy^2+fi*ciz^2 - fi] = (mxx1+mxx2+mzz2)+(myy1+myy2+mxx2)+(mzz1+mzz2+myy2) - m(0) = mc1 + 2mc2 - m(0) = mc2 - mc0 
+  m( 5) = 3.*mxx1 - mc1 + mc2 - 3.*myy2; // sum_i [3cix^2 - ci^2] = 2(mxx1+mxx2+mzz2)-(myy1+myy2+mxx2)-(mzz1+mzz2+myy2) = (2mxx1-myy1-mzz1) + (mxx2+mzz2-2myy2)
+                                                                //= 3mxx1 - mc1 + mc2 - 3myy2
+  m( 6) = myy1 - mzz1 + mxx2 - mzz2; //  sum_i [ciy^2-ciz^2] = (myy1+myy2+mxx2)-(mzz1+mzz2+myy2)
   m( 7) = mxy;
   m( 8) = myz;
   m( 9) = mxz;
-  m(10) = m(1) - 3.*mx1;
-  m(11) = m(2) - 3.*my1;
+  m(10) = m(1) - 3.*mx1; // sum_i (3ci^2-5)cix*fi = 3fi*cix^3+3fi*ciy^2*cix+3fi*ciz^2*cix - 5fi*cix
+                          //                      = 3fi*cix(grids on which cix!=0) + 3fi*cix(grid 7,8,9,10 only) + 3fi*cix(grid 15,16,17,18 only)  - 5fi*cix
+                          //                      = -2m(1) + 3mx2 + 3mx3 = -2mx1 + mx2 + mx3 = m(1) - 3mx1
+  m(11) = m(2) - 3.*my1;  // sum_i (3ci^2-5)ciy*fi = 3my3 + 3m(2) + 3my2 - 5m(2) = -2my1 + my2 + my3 = m(2) - 3my1 
   m(12) = m(3) - 3.*mz1;
   m(13) = mx2 - mx3;
   m(14) = my2 - my3;
@@ -206,7 +193,8 @@ Array1D<Real,0,nvel> populations(const Array1D<Real,0,nvel>& mom) {
   m(17) = mom(17) / 48.;
   m(18) = mom(18) / 16.;
 
-  mc0 = 12.*(m(0) - m(4) + m(16));
+  // see "LATTICE BOLTZMANN SIMULATIONS OF SOFT MATTER SYSTEMS, Dunweg..."
+  mc0 = 12.*(m(0) - m(4) + m(16)); // ocefficients are (including sign) q^ci/omega_k (in paper); 1/3/(1, -2/3, 2) = (1/3, -1/2, 1/6);
   mc1 =  2.*(m(0) - 2.*m(16));
   mc2 = m(0) + m(4) + m(16);
 
@@ -234,8 +222,10 @@ Array1D<Real,0,nvel> populations(const Array1D<Real,0,nvel>& mom) {
   myz = m(8);
   mxz = m(9);
 
+  // f_i = q_ci \sum_k 1/w_k*e_ki*m_k, Eq(130) in paper; q_ci is w[i] in the code, w_k denotes the normalizing factor in Table 1;
+  // e_ki is basic vector's value for index k (moments) and i (population);
   f( 0) = mc0;
-  f( 1) = mxx1 + mx1;
+  f( 1) = mxx1 + mx1; // 1/6[mom(1)-mom(10)] + 1/18[mom(0)-mom(16)] + 1/12[mom(5)-mom(17)];  
   f( 2) = mxx1 - mx1;
   f( 3) = myy1 + my1;
   f( 4) = myy1 - my1;
@@ -267,9 +257,9 @@ Array1D<Real,0,nvel> populations(int x, int y, int z, const Array4<Real>& fsite,
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-Array1D<Real,0,nvel> hydrovars(const Array1D<Real,0,nvel>& m) {
+Array1D<Real,0,nvel> hydrovars(const Array1D<Real,0,nvel>& m) { // here "m" is the moment;
   Array1D<Real,0,nvel> h;
-
+  // Here are dimensionless variables with velocity unit to be "c:=b/h";
   h(0) = m(0); // rho
   h(1) = m(1); // jx
   h(2) = m(2); // jy
@@ -296,62 +286,35 @@ Array1D<Real,0,nvel> hydrovars(const Array1D<Real,0,nvel>& m) {
   return h;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-Array1D<Real,0,nvel> equilibrium(const Real& rho, const RealVect& u) {
-  Array1D<Real,0,nvel> fEq;
-
-  Real ruu[3][3];
-  ruu[0][0] = rho*u[0]*u[0];
-  ruu[1][1] = rho*u[1]*u[1];
-  ruu[2][2] = rho*u[2]*u[2];
-  ruu[0][1] = rho*u[0]*u[1];
-  ruu[1][2] = rho*u[1]*u[2];
-  ruu[2][0] = rho*u[2]*u[0];
-
-  Real fi;
-  for (int i=0; i<nvel; ++i) {
-    fi  = w[i]*rho;
-    fi += 3.*w[i]*rho*(u[0]*c[i][0]+u[1]*c[i][1]+u[2]*c[i][2]);
-    fi += 9./2.*w[i]*((ruu[0][0]*c[i][0]+2.*ruu[0][1]*c[i][1])*c[i][0]
-		     +(ruu[1][1]*c[i][1]+2.*ruu[1][2]*c[i][2])*c[i][1]
-		     +(ruu[2][2]*c[i][2]+2.*ruu[2][0]*c[i][0])*c[i][2]);
-    fi -= 3./2.*w[i]*(ruu[0][0]+ruu[1][1]+ruu[2][2]);
-    fEq(i) = fi;
-  }
-
-  return fEq;
-}
-
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-Array1D<Real,0,nvel> equilibrium_moments(const Real& rho, const RealVect& u) {
-  Array1D<Real,0,nvel> mEq;
+inline Array<Real,nvel> mequilibrium(const Real& rho, const RealVect& u) {
+  Array<Real,nvel> mEq;
 
   /* mass density */
-  mEq(0) = rho;
+  mEq[0] = rho;
 
   /* momentum density */
-  mEq(1) = rho*u[0];
-  mEq(2) = rho*u[1];
-  mEq(3) = rho*u[2];
+  mEq[1] = rho*u[0];
+  mEq[2] = rho*u[1];
+  mEq[3] = rho*u[2];
 
   /* equilibrium part of the stress modes */
-  mEq(4) = (u[0]*u[0] + u[1]*u[1] + u[2]*u[2])*rho;
-  mEq(5) = (2.*u[0]*u[0] - u[1]*u[1] - u[2]*u[2])*rho;
-  mEq(6) = (u[1]*u[1] - u[2]*u[2])*rho;
-  mEq(7) = u[0]*u[1]*rho;
-  mEq(8) = u[1]*u[2]*rho;
-  mEq(9) = u[2]*u[0]*rho;
+  mEq[4] = (u[0]*u[0] + u[1]*u[1] + u[2]*u[2])*rho;
+  mEq[5] = (2.*u[0]*u[0] - u[1]*u[1] - u[2]*u[2])*rho;
+  mEq[6] = (u[1]*u[1] - u[2]*u[2])*rho;
+  mEq[7] = u[0]*u[1]*rho;
+  mEq[8] = u[1]*u[2]*rho;
+  mEq[9] = u[2]*u[0]*rho;
 
   /* ghost modes have no equilibrium part due to orthogonality */
-  for (int i=10; i<nvel; ++i) mEq(i) = 0.0;
+  for (int i=10; i<nvel; ++i) mEq[i] = 0.0;
 
   return mEq;
 }
 
-inline Array1D<Real,0,nvel> mequilibrium(int x, int y, int z, const Array4<Real>& m) {
+inline Array<Real,nvel> mequilibrium(int x, int y, int z, const Array4<Real>& m) {
   const Real rho = m(x,y,z,0);
   const RealVect j = { m(x,y,z,1), m(x,y,z,2), m(x,y,z,3) };
-  return equilibrium_moments(rho, j/rho);
+  return mequilibrium(rho, j/rho);
 }
 
 #endif
