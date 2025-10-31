@@ -1,5 +1,5 @@
-AMREX_HOME ?= ../../../amrex
-FHDEX_HOME ?= ../../../FHDeX
+AMREX_HOME ?= ../../../Code/amrex
+FHDEX_HOME ?= ../../../Code/FHDeX
 
 DEFINES += -DMAX_SPECIES=2
 
@@ -12,7 +12,7 @@ COMP    = gnu
 USE_FFT   = TRUE
 USE_MPI   = FALSE
 USE_OMP   = FALSE
-USE_CUDA  = TRUE
+USE_CUDA  = FALSE
 USE_HIP   = FALSE
 
 include $(AMREX_HOME)/Tools/GNUMake/Make.defs

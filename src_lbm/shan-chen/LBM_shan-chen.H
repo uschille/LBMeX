@@ -3,18 +3,20 @@
 
 #include "LBM_d3q19.H"
 
+const IntVect print_grid(0, 0, 0); // grid to print out
+
 // default initial condition
 std::string init_cond = "mixture";
 
 AMREX_GPU_MANAGED Real G = 1.5;
-AMREX_GPU_MANAGED Real rho_hi = 2.3; // values reported by Belardinelli et al. [Phys. Rev. E 91, 023313 (2015)]
-AMREX_GPU_MANAGED Real rho_lo = 0.06;
+AMREX_GPU_MANAGED Real rho_hi = 3.0; // values reported by Belardinelli et al. [Phys. Rev. E 91, 023313 (2015)]
+AMREX_GPU_MANAGED Real rho_lo = 0.0;
 AMREX_GPU_MANAGED Real sigma = 0.174; // interfacial tension
 AMREX_GPU_MANAGED Real alpha = 6; // interface width
 
 AMREX_GPU_MANAGED Real temperature = 1e-5;
 
-AMREX_GPU_MANAGED Real init_frac = 0.5; // fractional size of droplet or stripe
+AMREX_GPU_MANAGED Real init_frac = 0.4; // fractional size of droplet or stripe
 
 AMREX_GPU_CONSTANT Real const lambda_d = 1.0;
 AMREX_GPU_CONSTANT Real const lambda_b = 1.0;
@@ -92,7 +94,8 @@ Array<Array1D<Real,0,nvel>,2> thermal_noise(const Array<Real,2>& rho, const Rand
 }
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE
-Array<RealVect,2> transform_velocity(Array<Real,2> const& rho, Array<RealVect,2> const& v, Array<RealVect,2> const& a, Array<Array1D<Real,0,nvel>,2> const& xia) {
+Array<RealVect,2> transform_velocity(Array<Real,2> const& rho, Array<RealVect,2> const& v, Array<RealVect,2> const& a, Array<Array1D<Real,0,nvel>,2> const& xia,
+  bool if_print_detail=false) {
   Array<RealVect, 2> vr;
   RealVect xi;
 
@@ -101,7 +104,13 @@ Array<RealVect,2> transform_velocity(Array<Real,2> const& rho, Array<RealVect,2>
   for (int i=0; i<2; ++i) {
     int j = (i+1)%2;
     for (int k=0; k<AMREX_SPACEDIM; ++k) xi[k] = xia[i](1+k);
-    vr[i] = v[i] + 0.5*(a[i] - lambda_d*rho[j]/(rho[i]+rho[j])*(v[i]-v[j]+0.5*(a[i]-a[j])) + xi/rho[i]);
+    vr[i] = v[i] + 0.5*(a[i] - lambda_d*rho[j]/(rho[i]+rho[j])*(v[i]-v[j]+0.5*(a[i]-a[j])) + ((std::abs(rho[i]) > FLT_EPSILON) ? xi/rho[i] : RealVect(0.)));
+  }
+  if(if_print_detail) {
+    printf("xi in transform_velocity() = %f\t%f\n", xi[0], xi[1]);
+    printf("density in transform_velocity() = %f\t%f\n", rho[0], rho[1]);
+    printf("velocity in transform_velocity() = vf=(%f,%f,%f),\tvg=(%f,%f,%f)\n", vr[0][0], vr[0][1], vr[0][2], vr[1][0], vr[1][1], vr[1][2]);
+    printf("acceleration in transform_velocity() = af=(%f,%f,%f),\tag=(%f,%f,%f)\n", a[0][0], a[0][1], a[0][2], a[1][0], a[1][1], a[1][2]);
   }
 
   return vr;
@@ -160,7 +169,7 @@ void collide(int x, int y, int z,
   rho_ref[0] = ref(x,y,z,0);
   rho_ref[1] = ref(x,y,z,1);
 
-  xi = thermal_noise(rho_ref, engine);
+  // xi = thermal_noise(rho_ref, engine);
   Array1D<Real,0,nvel> const& xif = xi[0];
   Array1D<Real,0,nvel> const& xig = xi[1];
 
@@ -170,13 +179,19 @@ void collide(int x, int y, int z,
   rho[0] = mf(0);
   rho[1] = mg(0);
 
+  xi = thermal_noise(rho, engine); // using current densities
+
   v[0] = (mf(0) > FLT_EPSILON) ? RealVect(mf(1), mf(2), mf(3))/mf(0) : RealVect(0.);
   v[1] = (mg(0) > FLT_EPSILON) ? RealVect(mg(1), mg(2), mg(3))/mg(0) : RealVect(0.);
 
   a[0] = -G*cs2*gradient(x,y,z,h,1);
   a[1] = -G*cs2*gradient(x,y,z,h,0);
 
-  vr = transform_velocity(rho, v, a, xi);
+  if(x==print_grid[0] && y==print_grid[1] && z==print_grid[2]){
+    vr = transform_velocity(rho, v, a, xi , true);
+  }else{
+    vr = transform_velocity(rho, v, a, xi);
+  }
 
   v_b = (rho[0]*v[0]+rho[1]*v[1])/(rho[0]+rho[1]);
   a_b = (rho[0]*a[0]+rho[1]*a[1])/(rho[0]+rho[1]);
@@ -184,7 +199,15 @@ void collide(int x, int y, int z,
   mfEq = equilibrium_moments(rho[0], v_b+0.5*a_b);
   mgEq = equilibrium_moments(rho[1], v_b+0.5*a_b);
 
-  phi = force_moments(rho, vr, a);
+  /*if(x==print_grid[0] && y==print_grid[1] && z==print_grid[2]){
+    //printf("fluid f,g velocity in collide() = \n");
+    printf("xi before force_moments = %f\t%f\t%f\n", xi[0](0), xi[0](1), xi[0](2));
+    phi = force_moments(rho, vr, a);
+    printf("\n");
+  }else{*/
+    phi = force_moments(rho, vr, a);
+  //}
+  
   Array1D<Real,0,nvel> const& phif = phi[0];
   Array1D<Real,0,nvel> const& phig = phi[1];
 
@@ -450,9 +473,11 @@ void LBM_init_droplet(const Real dfrac,
 void LBM_init(const Geometry& geom, MultiFab& mf, MultiFab& mg, MultiFab& hydrovs, MultiFab& refstate) {
   if (init_cond == "mixture") LBM_init_mixture(geom, mf, mg, hydrovs, refstate);
   else if (init_cond == "stripe") LBM_init_stripe(init_frac, geom, mf, mg, hydrovs, refstate);
-  else if (init_cond == "droplet") LBM_init_droplet(init_frac, geom, mf, mg, hydrovs, refstate);
-  else {
-    Print() << "ERROR: Unkown init_cond";
+  else if (init_cond == "droplet") {
+    LBM_init_droplet(init_frac, geom, mf, mg, hydrovs, refstate);
+    Print() << "Initialized droplet with frac radius = " << init_frac/2.0 << "\n";
+  } else {
+    Print() << "ERROR: Unknown init_cond";
     ParallelDescriptor::Abort(-1, false);
   }
 }
