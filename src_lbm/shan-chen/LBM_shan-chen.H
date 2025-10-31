@@ -65,32 +65,34 @@ Real laplacian(int x, int y, int z, const Array4<Real>& field, int icomp) {
 }
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE
-Array1D<Real,0,2*nvel> thermal_noise(const Array<Real,2>& rho, const RandomEngine& engine) {
-  Array1D<Real,0,2*nvel> xi = {};
+Array<Array1D<Real,0,nvel>,2> thermal_noise(const Array<Real,2>& rho, const RandomEngine& engine) {
+  Array<Array1D<Real,0,nvel>,2> xi;
+  Array1D<Real,0,nvel> & xif = xi[0];
+  Array1D<Real,0,nvel> & xig = xi[1];
 
   // densities are conserved
-  xi(0) = xi(nvel) = 0.0;
+  xif(0) = xig(0) = 0.0;
 
   // fluxes are anticorrelated (total momentum is conserved)
   for (int i=1; i<=AMREX_SPACEDIM; ++i ) {
     const Real pref = (2.-lambda_d)*lambda_d*temperature*rho[0]*rho[1]/(rho[0]+rho[1]);
-    xi(i) = RandomNormal(0., std::sqrt(pref), engine);
-    xi(i+nvel) = - xi(i);
+    xif(i) = RandomNormal(0., std::sqrt(pref), engine);
+    xig(i) = - xif(i);
   }
 
   // remaining modes
   for (int i=AMREX_SPACEDIM+1; i<nvel; ++i) {
     const Real pref = (2.-lambda_f[i])*lambda_f[i]*b[i]*temperature/cs2*rho[0];
     const Real preg = (2.-lambda_g[i])*lambda_g[i]*b[i]*temperature/cs2*rho[1];
-    xi(i) = RandomNormal(0., std::sqrt(pref), engine);
-    xi(i+nvel) = RandomNormal(0., std::sqrt(preg), engine);
+    xif(i) = RandomNormal(0., std::sqrt(pref), engine);
+    xig(i) = RandomNormal(0., std::sqrt(preg), engine);
   }
 
   return xi;
 }
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE
-Array<RealVect,2> transform_velocity(Array<Real,2> const& rho, Array<RealVect,2> const& v, Array<RealVect,2> const& a, Array1D<Real,0,2*nvel> const& xia) {
+Array<RealVect,2> transform_velocity(Array<Real,2> const& rho, Array<RealVect,2> const& v, Array<RealVect,2> const& a, Array<Array1D<Real,0,nvel>,2> const& xia) {
   Array<RealVect, 2> vr;
   RealVect xi;
 
@@ -98,7 +100,7 @@ Array<RealVect,2> transform_velocity(Array<Real,2> const& rho, Array<RealVect,2>
   // [uschill 2025/05/04: xi is the lattice noise, hence the prefactor (1-0.5*lambda_d) is absorbed]
   for (int i=0; i<2; ++i) {
     int j = (i+1)%2;
-    for (int k=0; k<AMREX_SPACEDIM; ++k) xi[k] = xia(i*nvel+1+k);
+    for (int k=0; k<AMREX_SPACEDIM; ++k) xi[k] = xia[i](1+k);
     vr[i] = v[i] + 0.5*(a[i] - lambda_d*rho[j]/(rho[i]+rho[j])*(v[i]-v[j]+0.5*(a[i]-a[j])) + xi/rho[i]);
   }
 
@@ -106,7 +108,7 @@ Array<RealVect,2> transform_velocity(Array<Real,2> const& rho, Array<RealVect,2>
 }
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE
-Array<Array1D<Real,0,nvel>,2> force_moments(const Array<Real,2>& rhoa, Array<RealVect,2>& va, const Array<RealVect,2>& aa, const Array1D<Real, 0, 2*nvel>& xia) {
+Array<Array1D<Real,0,nvel>,2> force_moments(const Array<Real,2>& rhoa, Array<RealVect,2>& va, const Array<RealVect,2>& aa) {
   Array<Array1D<Real,0,nvel>,2> phia;
 
   for (int i=0; i<2; ++i) {
@@ -149,7 +151,7 @@ void collide(int x, int y, int z,
        const RandomEngine& engine) {
   Array1D<Real,0,nvel> mf, mg, mfEq, mgEq;
   Array<Array1D<Real,0,nvel>,2> phi;
-  Array1D<Real,0,2*nvel> xi;
+  Array<Array1D<Real,0,nvel>,2> xi;
   Array<Real,2> rho, rho_ref;
   Array<RealVect,2> v, a, vr;
   RealVect v_b, a_b;
@@ -159,6 +161,8 @@ void collide(int x, int y, int z,
   rho_ref[1] = ref(x,y,z,1);
 
   xi = thermal_noise(rho_ref, engine);
+  Array1D<Real,0,nvel> const& xif = xi[0];
+  Array1D<Real,0,nvel> const& xig = xi[1];
 
   mf = moments(x,y,z,f);
   mg = moments(x,y,z,g);
@@ -180,13 +184,13 @@ void collide(int x, int y, int z,
   mfEq = equilibrium_moments(rho[0], v_b+0.5*a_b);
   mgEq = equilibrium_moments(rho[1], v_b+0.5*a_b);
 
-  phi = force_moments(rho, vr, a, xi);
+  phi = force_moments(rho, vr, a);
   Array1D<Real,0,nvel> const& phif = phi[0];
   Array1D<Real,0,nvel> const& phig = phi[1];
 
   for (int i=0; i<nvel; ++i) {
-    mf(i) = mf(i) - lambda_f[i] * (mf(i) - mfEq(i)) + (1.-0.5*lambda_f[i])*phif(i) + xi(i);
-    mg(i) = mg(i) - lambda_g[i] * (mg(i) - mgEq(i)) + (1.-0.5*lambda_g[i])*phig(i) + xi(i+nvel);
+    mf(i) = mf(i) - lambda_f[i] * (mf(i) - mfEq(i)) + (1.-0.5*lambda_f[i])*phif(i) + xif(i);
+    mg(i) = mg(i) - lambda_g[i] * (mg(i) - mgEq(i)) + (1.-0.5*lambda_g[i])*phig(i) + xig(i);
   }
 
   populations(x,y,z,f,mf);
@@ -302,7 +306,7 @@ void hydrovars(int x, int y, int z,
   const Array<Real,2> rho_ref = { ref(x,y,z,0), ref(x,y,z,1) };
   const Array1D<Real,0,nvel> mf = moments(x,y,z,f);
   const Array1D<Real,0,nvel> mg = moments(x,y,z,g);
-  const Array1D<Real,0,2*nvel> xi = thermal_noise(rho_ref, engine);
+  const Array<Array1D<Real,0,nvel>,2> xi = thermal_noise(rho_ref, engine);
   Array<Real,2> rho;
   Array<RealVect,2> v, a, vr;
 
