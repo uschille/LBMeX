@@ -2,6 +2,7 @@
 #define LBM_H_
 
 #include "LBM_d3q19.H"
+#include "LBM_Debug.H"
 
 const IntVect print_grid(0, 0, 0); // grid to print out
 

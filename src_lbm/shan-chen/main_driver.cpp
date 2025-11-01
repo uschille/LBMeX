@@ -12,11 +12,11 @@ using namespace amrex;
 #include "LBM_tests.H"
 
 // default grid parameters
-IntVect domain_size(16);
-IntVect max_box_size(32);
+IntVect domain_size(32);
+IntVect max_box_size(16);
 
 // default time stepping parameters
-int nsteps = 10;
+int nsteps;
 int plot_start = nsteps/10*6;
 
 // default output parameters
@@ -103,6 +103,7 @@ int main(int argc, char* argv[]) {
   StructFact structFact(ba, dm, var_names, var_scaling, pairA, pairB);
 
   // INITIALIZE
+  Print() << "Total time steps N = " << nsteps << "\n";
   LBM_init(geom, fold, gold, hydrovs, refstate);
   if (plot_int > 0) WriteOutput(0, geom, hydrovs, structFact);
   Print() << "LB initialized lattice " << domain <<"\n" << ba << dm << std::endl;
@@ -120,6 +121,7 @@ int main(int argc, char* argv[]) {
   for (int step=1; step <= nsteps; ++step) {
     Print() << "LB step " << step << std::endl;
     LBM_timestep(geom, fold, gold, fnew, gnew, hydrovs, refstate);
+    PrintMFComponent(hydrovs, 0, 0); // print density component 
     if (plot_SF > 0) structFact.FortStructure(hydrovs);
     if (plot_int > 0 && step%plot_int ==0) {
       if(step >= plot_start) {
