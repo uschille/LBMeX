@@ -68,7 +68,7 @@ Real laplacian(int x, int y, int z, const Array4<Real>& field, int icomp) {
 }
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE
-Array<Array1D<Real,0,nvel>,2> thermal_noise(const Array<Real,2>& rho, const RandomEngine& engine) {
+Array<Array1D<Real,0,nvel>,2> thermal_noise(const Array<Real,2>& rho, const RandomEngine& engine, bool if_print_detail=false) {
   Array<Array1D<Real,0,nvel>,2> xi;
   Array1D<Real,0,nvel> & xif = xi[0];
   Array1D<Real,0,nvel> & xig = xi[1];
@@ -79,7 +79,10 @@ Array<Array1D<Real,0,nvel>,2> thermal_noise(const Array<Real,2>& rho, const Rand
   // fluxes are anticorrelated (total momentum is conserved)
   for (int i=1; i<=AMREX_SPACEDIM; ++i ) {
     const Real pref = (2.-lambda_d)*lambda_d*temperature*rho[0]*rho[1]/(rho[0]+rho[1]);
-    xif(i) = RandomNormal(0., std::sqrt(pref), engine);
+    /*if(if_print_detail) {
+      printf("pref for flux mode %d = %f\n and sqrt(pref) = %f\n", i, pref, std::sqrt(pref));
+    }*/
+    xif(i) = RandomNormal(0., std::sqrt(std::abs(pref)), engine);
     xig(i) = - xif(i);
   }
 
@@ -87,8 +90,21 @@ Array<Array1D<Real,0,nvel>,2> thermal_noise(const Array<Real,2>& rho, const Rand
   for (int i=AMREX_SPACEDIM+1; i<nvel; ++i) {
     const Real pref = (2.-lambda_f[i])*lambda_f[i]*b[i]*temperature/cs2*rho[0];
     const Real preg = (2.-lambda_g[i])*lambda_g[i]*b[i]*temperature/cs2*rho[1];
-    xif(i) = RandomNormal(0., std::sqrt(pref), engine);
-    xig(i) = RandomNormal(0., std::sqrt(preg), engine);
+    xif(i) = RandomNormal(0., std::sqrt(std::abs(pref)), engine);
+    xig(i) = RandomNormal(0., std::sqrt(std::abs(preg)), engine);
+  }
+
+  if(if_print_detail) {
+    printf("xi_f in thermal_noise() = ");
+    for (int i=0; i<nvel; ++i) {
+      printf("%f\t", xif(i));
+    }
+    printf("\n");
+    printf("xi_g in thermal_noise() = ");
+    for (int i=0; i<nvel; ++i) {
+      printf("%f\t", xig(i));
+    }
+    printf("\n");
   }
 
   return xi;
@@ -180,7 +196,11 @@ void collide(int x, int y, int z,
   rho[0] = mf(0);
   rho[1] = mg(0);
 
-  xi = thermal_noise(rho, engine); // using current densities
+  if(x==print_grid[0] && y==print_grid[1] && z==print_grid[2]){
+    xi = thermal_noise(rho, engine, true);  // use current densities for noise calculation
+  }else{
+    xi = thermal_noise(rho, engine);
+  }
 
   v[0] = (mf(0) > FLT_EPSILON) ? RealVect(mf(1), mf(2), mf(3))/mf(0) : RealVect(0.);
   v[1] = (mg(0) > FLT_EPSILON) ? RealVect(mg(1), mg(2), mg(3))/mg(0) : RealVect(0.);
