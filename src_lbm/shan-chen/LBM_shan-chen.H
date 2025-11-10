@@ -15,7 +15,7 @@ AMREX_GPU_MANAGED Real rho_lo = 0.0;
 AMREX_GPU_MANAGED Real sigma = 0.174; // interfacial tension
 AMREX_GPU_MANAGED Real alpha = 6; // interface width
 
-AMREX_GPU_MANAGED Real temperature = 1e-5;
+AMREX_GPU_MANAGED Real temperature = 0.;//1e-5;
 
 AMREX_GPU_MANAGED Real init_frac = 0.4; // fractional size of droplet or stripe
 
@@ -197,7 +197,7 @@ void collide(int x, int y, int z,
   rho[1] = mg(0);
 
   if(x==print_grid[0] && y==print_grid[1] && z==print_grid[2]){
-    xi = thermal_noise(rho, engine, true);  // use current densities for noise calculation
+    xi = thermal_noise(rho, engine /*, true*/);  // use current densities for noise calculation
   }else{
     xi = thermal_noise(rho, engine);
   }
@@ -209,7 +209,7 @@ void collide(int x, int y, int z,
   a[1] = -G*cs2*gradient(x,y,z,h,0);
 
   if(x==print_grid[0] && y==print_grid[1] && z==print_grid[2]){
-    vr = transform_velocity(rho, v, a, xi , true);
+    vr = transform_velocity(rho, v, a, xi /*, true*/);
   }else{
     vr = transform_velocity(rho, v, a, xi);
   }
@@ -354,7 +354,7 @@ void hydrovars(int x, int y, int z,
   Array<Real,2> rho;
   Array<RealVect,2> v, a, vr;
 
-  rho[0] = mf(0);
+  rho[0] = mf(0); 
   rho[1] = mg(0);
 
   v[0] = (mf(0) > FLT_EPSILON) ? RealVect(mf(1), mf(2), mf(3))/mf(0) : RealVect(0.);
