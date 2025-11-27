@@ -8,14 +8,15 @@ const IntVect print_grid(0, 0, 0); // grid to print out
 
 // default initial condition
 std::string init_cond = "mixture";
+const bool use_SC_pseudo = true; // false: use density field directly; true: use SC pseudopotentials;
 
-AMREX_GPU_MANAGED Real G = 1.5;
-AMREX_GPU_MANAGED Real rho_hi = 3.0; // values reported by Belardinelli et al. [Phys. Rev. E 91, 023313 (2015)]
+AMREX_GPU_MANAGED Real G = 0.24; //1.5;
+AMREX_GPU_MANAGED Real rho_hi = 0.7; //3.0; // values reported by Belardinelli et al. [Phys. Rev. E 91, 023313 (2015)]
 AMREX_GPU_MANAGED Real rho_lo = 0.0;
 AMREX_GPU_MANAGED Real sigma = 0.174; // interfacial tension
-AMREX_GPU_MANAGED Real alpha = 6; // interface width
+AMREX_GPU_MANAGED Real alpha = 1.; // interface width
 
-AMREX_GPU_MANAGED Real temperature = 0.;//1e-5;
+AMREX_GPU_MANAGED Real temperature = 0.; //1e-5;
 
 AMREX_GPU_MANAGED Real init_frac = 0.4; // fractional size of droplet or stripe
 
@@ -48,8 +49,9 @@ RealVect gradient(int x, int y, int z, const Array4<Real>& field, int icomp) {
     int xp = x + c[i][0];
     int yp = y + c[i][1];
     int zp = z + c[i][2];
+    Real SC_pseudo_neighbor = use_SC_pseudo ? ::rho_hi*(1.-exp(-field(xp,yp,zp,icomp)/::rho_hi)) : field(xp,yp,zp,icomp);
     for (int dir=0; dir<3; dir++) {
-      gradient[dir] += w[i]/cs2*field(xp,yp,zp,icomp)*c[i][dir];
+      gradient[dir] += w[i]/cs2*SC_pseudo_neighbor*c[i][dir];
     }
   }
   return gradient;
@@ -58,11 +60,13 @@ RealVect gradient(int x, int y, int z, const Array4<Real>& field, int icomp) {
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE
 Real laplacian(int x, int y, int z, const Array4<Real>& field, int icomp) {
   Real laplacian = 0.0;
+  Real SC_pseudo_center = use_SC_pseudo ? ::rho_hi*(1.-exp(-field(x,y,z,icomp)/::rho_hi)) : field(x,y,z,icomp);
   for (int i=0; i<nvel; i++) {
     int xp = x + c[i][0];
     int yp = y + c[i][1];
     int zp = z + c[i][2];
-    laplacian += 2.*w[i]/cs2*(field(xp,yp,zp,icomp)-field(x,y,z,icomp));
+    Real SC_pseudo_neighbor = use_SC_pseudo ? ::rho_hi*(1.-exp(-field(xp,yp,zp,icomp)/::rho_hi)) : field(xp,yp,zp,icomp);
+    laplacian += 2.*w[i]/cs2*(SC_pseudo_neighbor-SC_pseudo_center);
   }
   return laplacian;
 }
@@ -205,8 +209,10 @@ void collide(int x, int y, int z,
   v[0] = (mf(0) > FLT_EPSILON) ? RealVect(mf(1), mf(2), mf(3))/mf(0) : RealVect(0.);
   v[1] = (mg(0) > FLT_EPSILON) ? RealVect(mg(1), mg(2), mg(3))/mg(0) : RealVect(0.);
 
-  a[0] = -G*cs2*gradient(x,y,z,h,1);
-  a[1] = -G*cs2*gradient(x,y,z,h,0);
+  Real SC_pseudo_rho = use_SC_pseudo ? ::rho_hi*(1.-exp(-rho[0]/::rho_hi)) : rho[0];
+  Real SC_pseudo_phi = use_SC_pseudo ? ::rho_hi*(1.-exp(-rho[1]/::rho_hi)) : rho[1];
+  a[0] = (std::abs(rho[0]) > FLT_EPSILON)? -G*cs2*SC_pseudo_rho*gradient(x,y,z,h,1)/rho[0] : RealVect(0.);
+  a[1] = (std::abs(rho[1]) > FLT_EPSILON)? -G*cs2*SC_pseudo_phi*gradient(x,y,z,h,0)/rho[1] : RealVect(0.);
 
   if(x==print_grid[0] && y==print_grid[1] && z==print_grid[2]){
     vr = transform_velocity(rho, v, a, xi /*, true*/);

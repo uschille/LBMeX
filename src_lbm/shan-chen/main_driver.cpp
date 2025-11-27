@@ -17,10 +17,11 @@ IntVect max_box_size(16);
 
 // default time stepping parameters
 int nsteps;
-int plot_start = nsteps/10*6;
+int plot_print = 100;
 
 // default output parameters
 int plot_SF = 0;
+
 
 inline void ReadInput() {
   ParmParse pp;
@@ -68,9 +69,10 @@ int main(int argc, char* argv[]) {
   amrex::Initialize(argc, argv);
   // store the current time so we can later compute total run time.
   Real strt_time = ParallelDescriptor::second();
-
+  amrex::InitRandom(12345);
   // read input parameters
   ReadInput();
+  int plot_start = 0;//nsteps/10*6;
 
   // set up Box and Geomtry
   RealBox real_box({0.,0.,0.},{1.,1.,1.});
@@ -105,6 +107,7 @@ int main(int argc, char* argv[]) {
   // INITIALIZE
   Print() << "Total time steps N = " << nsteps << "\n";
   LBM_init(geom, fold, gold, hydrovs, refstate);
+  PrintMFComponent(fold, 0, 0);
   if (plot_int > 0) WriteOutput(0, geom, hydrovs, structFact);
   Print() << "LB initialized lattice " << domain <<"\n" << ba << dm << std::endl;
 
@@ -119,9 +122,11 @@ int main(int argc, char* argv[]) {
   Print() << "Steps >= " << plot_start << " will be output \n";
   Print() << plot_int << " is the plot interval \n";
   for (int step=1; step <= nsteps; ++step) {
-    Print() << "LB step " << step << std::endl;
+    if(step%plot_print==0){
+      Print() << "LB step " << step << std::endl;
+    }
     LBM_timestep(geom, fold, gold, fnew, gnew, hydrovs, refstate);
-    PrintMFComponent(hydrovs, 0, 0); // print density component 
+    PrintMFComponent(fold, 0, 0); // print density component
     if (plot_SF > 0) structFact.FortStructure(hydrovs);
     if (plot_int > 0 && step%plot_int ==0) {
       if(step >= plot_start) {
