@@ -446,7 +446,8 @@ inline void LBM_timestep(const Geometry& geom,
 			 MultiFab& fnew, MultiFab& gnew,
 			 MultiFab& hydrovs, MultiFab& refstate, MultiFab& noise) {
 #if UNCORRELATED_NOISE
-    generate_fluctuations(geom, hydrovs, noise);
+    ParallelCopy(refstate, hydrovs, 0, 0, 2);
+    generate_fluctuations(geom, hydrovs, refstate, noise);
 #else
     generate_correlated_fluctuations(geom, hydrovs, noise);
 #endif
