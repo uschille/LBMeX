@@ -102,7 +102,8 @@ void main_driver(const char* argv) {
   // INITIALIZE
   LBM_init_mixture(fold, gold, hydrovs);
   if (plot_int > 0) WriteOutput(0, geom, hydrovs, structFact);
-  Print() << "LB initialized lattice " << domain <<"\n" << ba << dm << std::endl;
+  Print() << "Initializing LBMeX (" << std::string(LBMEX_GIT_VERSION) << ")..." << std::endl;
+  Print() << "Initialized lattice " << domain <<"\n" << ba << dm << std::endl;
 
   ParallelCopy(refstate, hydrovs, 0, 0, 2);
 

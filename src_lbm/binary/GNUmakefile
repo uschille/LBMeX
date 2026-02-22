@@ -1,6 +1,9 @@
 AMREX_HOME ?= ../../../amrex
 FHDEX_HOME ?= ../../../FHDeX
 
+LBMEX_GIT_VERSION := $(shell git describe --abbrev=12 --dirty --always --tags)
+DEFINES += -DLBMEX_GIT_VERSION=\"$(LBMEX_GIT_VERSION)\"
+
 DEFINES += -DMAX_SPECIES=2
 
 DEBUG	= FALSE
